@@ -649,7 +649,7 @@ def build_registry(pos_mult=1.0):
                 import logging; logging.getLogger("strat").warning("bot module %s failed: %s", mod.name, e)
     return reg
 
-LADDER_BOTS = ("ladder", "ladder_model", "touch_model")
+LADDER_BOTS = ("ladder", "ladder_model", "touch_model", "xarb")
 
 
 class Bonereaper(LastCallHold):

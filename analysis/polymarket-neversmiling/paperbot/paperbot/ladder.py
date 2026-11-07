@@ -265,3 +265,69 @@ class LadderTouch:
             else: self.stats["vanished"] += 1; continue
             if o and o.filled > 0: self.stats["trades"] += 1; self.done.add(m.slug); log.info("touch_model %s %s model %.2f", o.side, m.slug, pm)
     def snapshot(self): return {"stats": dict(self.stats)}
+
+
+class XArb:
+    """Cross-window arbitrage (bot 64). Every Up/Down window (5m, 15m, 1h) that ends at instant T settles on the
+    same 60-second index average as the hourly strikes expiring at T. Each is an 'above K' contract: Up = above the
+    window's price-to-beat, strike leg = above X. If K_a <= K_b then contract a pays whenever b pays, so a must be
+    worth at least b. Whenever bid(b) exceeds ask(a) by more than both fees, buy a and sell b: a locked profit of
+    the premium at settlement whatever the price does. Checked every second on live books; ladder legs verified on
+    their live book before any fill."""
+    name = "xarb"
+    MIN_EDGE = 0.01; MAX_SETS = 10.0; MAX_REPEATS = 3
+    def __init__(self, account, mf, lf):
+        self.acct = account; self.mf = mf; self.lf = lf; self.stats = collections.Counter(); self.opps = collections.deque(maxlen=50); self.repeats = collections.Counter()
+
+    def contracts(self, now):
+        groups = collections.defaultdict(list)
+        for m in list(self.mf.markets.values()):
+            if m.kind == "updown" and m.p2b is not None and m.end - now > 8 and m.book_ts > now - 5:
+                groups[int(m.end)].append((m.p2b, m, "live"))
+        if now - self.lf.last_discover > 60:
+            try: self.lf.discover()
+            except Exception as e: log.warning("xarb discover: %s", e)
+        for m in list(self.lf.legs.values()):
+            if m.market_type.endswith("ABOVE_BELOW") and m.strike is not None and int(m.end) in groups and m.end - now > 8:
+                groups[int(m.end)].append((m.strike, m, "list"))
+        return groups
+
+    def quotes(self, m, src):
+        if src == "live": return m.best_bid, m.best_ask, (m.bids[0][1] if m.bids else 0), (m.offers[0][1] if m.offers else 0)
+        return m.list_bid, m.list_ask, None, None
+
+    def scan(self, now):
+        theta = self.acct.theta
+        for T, items in self.contracts(now).items():
+            if len(items) < 2: continue
+            self.stats["groups"] += 1
+            items.sort(key=lambda x: x[0])
+            for i, (Ka, a, sa) in enumerate(items):
+                for Kb, b, sb in items[i + 1:]:
+                    if a.slug == b.slug: continue
+                    bid_a, ask_a, _, _ = self.quotes(a, sa); bid_b, ask_b, _, _ = self.quotes(b, sb)
+                    if ask_a is None or bid_b is None: continue
+                    prem = bid_b - ask_a - theta * ask_a * (1 - ask_a) - theta * bid_b * (1 - bid_b)
+                    if prem < self.MIN_EDGE: continue
+                    key = (a.slug, b.slug)
+                    if self.repeats[key] >= self.MAX_REPEATS: continue
+                    self.stats["candidates"] += 1
+                    # verify ladder legs on their live book
+                    ok = True
+                    for m, src in ((a, sa), (b, sb)):
+                        if src == "list" and (now - m.book_ts > 3) and not self.lf.fetch_book(m): ok = False
+                    if not ok: self.stats["no_live_book"] += 1; continue
+                    ask_a = a.best_ask; bid_b = b.best_bid
+                    if ask_a is None or bid_b is None: self.stats["no_live_quote"] += 1; continue
+                    prem = bid_b - ask_a - theta * ask_a * (1 - ask_a) - theta * bid_b * (1 - bid_b)
+                    depth = min(a.offers[0][1], b.bids[0][1])
+                    self.opps.appendleft({"ts": now, "T": T, "buy": a.slug, "K_a": Ka, "ask_a": ask_a, "sell": b.slug, "K_b": Kb, "bid_b": bid_b, "prem": round(prem, 4), "depth": round(depth, 2)})
+                    if prem < self.MIN_EDGE: self.stats["vanished"] += 1; continue
+                    n = min(self.MAX_SETS, depth)
+                    if n < 0.01: continue
+                    o1 = self.acct.take(a, "buy", n, limit=ask_a, tag=f"xarb-buy K{Ka:.0f}")
+                    o2 = self.acct.take(b, "sell", n, limit=bid_b, tag=f"xarb-sell K{Kb:.0f}")
+                    if (o1 and o1.filled > 0) or (o2 and o2.filled > 0):
+                        self.stats["trades"] += 1; self.repeats[key] += 1
+                        log.info("xarb T=%d buy %s (K %.2f) @%.2f sell %s (K %.2f) @%.2f prem %.3f x %.2f", T, a.slug, Ka, ask_a, b.slug, Kb, bid_b, prem, n)
+    def snapshot(self): return {"stats": dict(self.stats), "recent": list(self.opps)[:10]}
