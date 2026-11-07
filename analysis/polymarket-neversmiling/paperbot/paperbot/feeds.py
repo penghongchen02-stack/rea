@@ -178,7 +178,7 @@ class IndexFeed:
         rets = [math.log(items[i][1] / items[i - step][1]) for i in range(step, len(items)) if items[i][0] - items[i - step][0] == step and items[i - step][1] > 0]
         if len(rets) < 30: return 2e-4
         m = sum(rets) / len(rets); var = sum((r - m) ** 2 for r in rets) / (len(rets) - 1)
-        return max((var / step) ** 0.5, 1.5e-5)
+        return max((var / step) ** 0.5, 4e-5)
 
 
 class SpotFeed:

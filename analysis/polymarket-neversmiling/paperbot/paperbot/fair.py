@@ -23,6 +23,9 @@ def p_up(market, index_feed, spot_feed, now=None):
         n = min(n, 60); future = 60 - n                                   # unpublished seconds (lag) plus the seconds still to come
         mean = (known_mean * n + future * S) / 60.0 if n else S
         var = sig * sig * (future ** 3) / (3 * 3600.0) if future > 0 else 1e-12
-    sd = math.sqrt(max(var, 1e-12)); z = (mean - K) / sd
+    n_known = 0 if tau > 60 else n
+    # the published index is quantized (XRP to 1e-5, SOL to 1e-4): never claim more precision than two index ticks
+    quant = 2 * 10 ** (-getattr(market, "decimals", 2))
+    sd = max(math.sqrt(max(var, 1e-12)), quant, 3e-5 * S * math.sqrt(max(60 - n_known, 1) / 60.0)); z = (mean - K) / sd
     p = phi(z)
-    return p, {"S": round(S, 5), "S_index": S_idx, "K": K, "tau": round(tau, 1), "sd": round(sd, 2), "mean": round(mean, 2), "sigma_1s": round(sig, 3), "index_age": round(now - its, 1)}
+    return p, {"S": round(S, 5), "S_index": S_idx, "K": K, "tau": round(tau, 1), "sd": round(sd, 5), "mean": round(mean, 5), "sigma_1s": round(sig, 5), "index_age": round(now - its, 1), "n_known": n_known, "z": round(z, 2)}

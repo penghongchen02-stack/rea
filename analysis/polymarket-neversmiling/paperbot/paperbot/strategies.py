@@ -125,8 +125,8 @@ class FinalMinute(Base):
         if st.get("done") or rem > 60 or rem < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
         bb, ba = market.best_bid, market.best_ask
         p, det = p_up(market, ctx["index"], ctx["spot"], now)
-        if p is None or det.get("sd") is None: return
-        z = (det["mean"] - det["K"]) / max(det["sd"], 1e-9)
+        if p is None or det.get("sd") is None or det.get("n_known", 0) < 25: return   # most of the settlement minute must be published
+        z = det["z"]
         theta = self.acct.theta
         if z >= self.Z_MIN and ba is not None and ba <= self.MAX_PRICE:
             edge = 1.0 - ba - theta * ba * (1 - ba)             # win pays $1
