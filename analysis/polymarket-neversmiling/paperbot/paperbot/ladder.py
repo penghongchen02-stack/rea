@@ -205,6 +205,7 @@ class LadderModel:
             cb_now, cb_ts = self.spot.last(asset); cb_then = self.spot.at(asset, its) if cb_now else None
             S = S_idx * (cb_now / cb_then) if cb_now and cb_then else S_idx
             sig = self.index.sigma(asset)
+            if end - now > 6 * 3600: sig = max(sig, 1.0e-4)   # daily ladders: same long-horizon volatility floor
             for m in legs:
                 if m.slug in self.done or m.list_ask is None: continue
                 pm = self.prob_yes(m, S, sig, now); ask = m.list_ask
@@ -250,7 +251,8 @@ class LadderTouch:
             if S_idx is None: continue
             cb_now, cb_ts = self.spot.last(m.asset); cb_then = self.spot.at(m.asset, its) if cb_now else None
             S = S_idx * (cb_now / cb_then) if cb_now and cb_then else S_idx
-            pm = self.prob_touch(m, S, self.index.sigma(m.asset), now)
+            sig = max(self.index.sigma(m.asset), 1.0e-4)      # weeks-long horizon: one-second index moves understate real volatility (~55%/yr)
+            pm = self.prob_touch(m, S, sig, now)
             buy = m.list_ask is not None and m.list_ask <= 0.97 and pm - m.list_ask - theta * m.list_ask * (1 - m.list_ask) > self.EDGE
             sell = m.list_bid is not None and m.list_bid >= 0.03 and m.list_bid - pm - theta * m.list_bid * (1 - m.list_bid) > self.EDGE
             if not (buy or sell): continue
