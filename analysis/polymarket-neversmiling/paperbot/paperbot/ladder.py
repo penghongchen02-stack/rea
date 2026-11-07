@@ -56,7 +56,9 @@ class LadderFeed:
             for m in self.legs.values(): g[(m.asset, m.end)].append(m)
         return g
 
-    def fetch_book(self, m):
+    def fetch_book(self, m, max_age=4.0):
+        """Live book for a leg; a snapshot younger than max_age is reused (the universes share the leg objects)."""
+        if time.time() - m.book_ts < max_age: return True
         d = feeds.get_json(f"{feeds.GATEWAY}/v1/markets/{m.slug}/book")
         if d and d.get("marketData"): m.apply_book(d["marketData"]); return True
         return False
@@ -197,7 +199,7 @@ class LadderModel:
 
     def scan(self, now):
         if now - self.last_scan < 20: return
-        self.last_scan = now; theta = self.acct.theta
+        self.last_scan = now; theta = self.acct.theta; budget = 6
         for (asset, end), legs in self.feed.ladders().items():
             if end - now < 120: continue
             its, S_idx = self.index.last(asset)
@@ -213,6 +215,8 @@ class LadderModel:
                 longshot = 0.01 <= ask <= 0.10 and pm >= 2 * ask + 0.02
                 if not (near_sure or longshot): continue
                 self.stats["candidates"] += 1
+                if budget <= 0: break
+                budget -= 1
                 if not self.feed.fetch_book(m) or m.best_ask is None: self.stats["no_live_quote"] += 1; continue
                 ask = m.best_ask
                 if not ((0.90 <= ask <= 0.99 and pm >= 0.995) or (0.01 <= ask <= 0.10 and pm >= 2 * ask + 0.02)): self.stats["vanished"] += 1; continue
@@ -244,7 +248,7 @@ class LadderTouch:
         if now - getattr(self.feed, "last_touch_discover", 0) > 600:
             try: self.stats["legs"] = self.feed.discover_touch()
             except Exception as e: log.warning("touch discover: %s", e)
-        theta = self.acct.theta
+        theta = self.acct.theta; budget = 4
         for m in list(getattr(self.feed, "touch_legs", {}).values()):
             if m.slug in self.done or m.end - now < 3600: continue
             its, S_idx = self.index.last(m.asset)
@@ -257,6 +261,8 @@ class LadderTouch:
             sell = m.list_bid is not None and m.list_bid >= 0.03 and m.list_bid - pm - theta * m.list_bid * (1 - m.list_bid) > self.EDGE
             if not (buy or sell): continue
             self.stats["candidates"] += 1
+            if budget <= 0: break
+            budget -= 1
             if not self.feed.fetch_book(m): self.stats["no_live_quote"] += 1; continue
             if buy and m.best_ask is not None and pm - m.best_ask - theta * m.best_ask * (1 - m.best_ask) > self.EDGE:
                 n = min(self.MAX_PER_LEG, m.offers[0][1]); o = self.acct.take(m, "buy", n, limit=m.best_ask, tag=f"touch-buy p{pm:.2f}")
@@ -297,7 +303,7 @@ class XArb:
         return m.list_bid, m.list_ask, None, None
 
     def scan(self, now):
-        theta = self.acct.theta
+        theta = self.acct.theta; budget = 6
         for T, items in self.contracts(now).items():
             if len(items) < 2: continue
             self.stats["groups"] += 1
@@ -312,6 +318,8 @@ class XArb:
                     key = (a.slug, b.slug)
                     if self.repeats[key] >= self.MAX_REPEATS: continue
                     self.stats["candidates"] += 1
+                    if budget <= 0: break
+                    budget -= 1
                     # verify ladder legs on their live book
                     ok = True
                     for m, src in ((a, sa), (b, sb)):
