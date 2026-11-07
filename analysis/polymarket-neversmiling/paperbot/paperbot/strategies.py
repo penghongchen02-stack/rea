@@ -589,3 +589,42 @@ class Crouch(LastCallHold):
         elif 0.80 <= 1 - bb <= 0.93 and z <= -1.5:
             o = acct.take(market, "sell", self.clip, limit=bb, tag=f"crouch-down {1-bb:.2f} z{z:.1f}")
             if o and o.filled > 0: st["done"] = True
+
+
+def build_registry(pos_mult=1.0):
+    """Every bot in the competition, as name -> factory(account) (ladder bots are built by the engine, they need
+    the feeds). Add a bot here, or drop a module in paperbot/bots/ that defines REGISTRY = {name: factory}, and it
+    appears in every universe/dashboard automatically."""
+    def scaled(cls, *a, **k):
+        def f(acct):
+            st = cls(acct, *a, **k); st.max_pos *= pos_mult; return st
+        return f
+    reg = {
+        "old": scaled(OldModel), "improved": scaled(Improved), "final": scaled(FinalMinute), "whiskas": scaled(WhiskasReplica),
+        "lastcall": scaled(LastCall), "lastcall_tilt": scaled(LastCallTilt), "lastcall_hold": scaled(LastCallHold),
+        "lastcall_rest": scaled(LastCallRest), "lastcall_early": scaled(LastCallEarly),
+    }
+    for k, v in SWEEP.items(): reg[k] = (lambda k=k, v=v: scaled(Param, k, *v))()
+    reg["follow80"] = scaled(MarketFollow, "follow80"); reg["follow80_model"] = scaled(MarketFollow, "follow80_model", z_min=1.0)
+    for k, (kind, params, label) in RANDOM_BOTS.items():
+        if kind == "model": reg[k] = (lambda k=k, params=params: scaled(Param, k, params["t_lo"], params["t_hi"], params["z_min"], params["max_price"], params["entry"], params["durs"], params["assets"], 0, clip=params["clip"]))()
+        else: reg[k] = (lambda k=k, params=params: scaled(MarketFollow, k, params["t_lo"], params["t_hi"], params["p_lo"], params["p_hi"], params["z_min"]))()
+    reg["pickoff"] = scaled(PickOff)
+    reg["hourly_last"] = scaled(Param, "hourly_last", 30, 120, 2.5, 0.90, "take", (3600,), ("btc", "eth"), 0)
+    reg["hourly_rest"] = scaled(Param, "hourly_rest", 30, 120, 2.5, 0.90, "rest", (3600,), ("btc", "eth"), 0)
+    reg["hourly_follow80"] = scaled(MarketFollow, "hourly_follow80", 60, 180, 0.75, 0.85, None, durs=(3600,))
+    reg["scalper_with"] = scaled(Scalper, "scalper_with", fade=False); reg["scalper_fade"] = scaled(Scalper, "scalper_fade", fade=True)
+    reg["burst_lean"] = scaled(BurstLean); reg["fair_value"] = scaled(FairValue); reg["crouch"] = scaled(Crouch)
+    # drop-in bots: paperbot/bots/*.py with REGISTRY = {name: factory(account)}
+    import os, importlib, pkgutil
+    bots_dir = os.path.join(os.path.dirname(__file__), "bots")
+    if os.path.isdir(bots_dir):
+        for mod in pkgutil.iter_modules([bots_dir]):
+            try:
+                m = importlib.import_module(f"paperbot.bots.{mod.name}")
+                for k, f in getattr(m, "REGISTRY", {}).items(): reg[k] = f
+            except Exception as e:
+                import logging; logging.getLogger("strat").warning("bot module %s failed: %s", mod.name, e)
+    return reg
+
+LADDER_BOTS = ("ladder", "ladder_model")

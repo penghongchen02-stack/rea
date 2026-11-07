@@ -25,8 +25,10 @@ class Position:
 
 
 class Account:
-    def __init__(self, name, cash=100.0, theta=0.095):
+    def __init__(self, name, cash=100.0, theta=0.095, size_mode="contracts", size_min=0.1, size_max=10.0, seed=7):
+        import random
         self.name = name; self.cash = cash; self.start_cash = cash; self.theta = theta
+        self.size_mode = size_mode; self.size_min = size_min; self.size_max = size_max; self.rng = random.Random(seed + hash(name) % 1000)
         self.positions = collections.defaultdict(Position); self.orders = {}; self.fills = []; self.settlements = []
         self.fees = 0.0; self.maker_fills = 0; self.taker_fills = 0; self.rejected = 0; self.events = collections.deque(maxlen=200)
 
@@ -67,8 +69,16 @@ class Account:
         return e
 
     # ---- orders -------------------------------------------------------
+    def size_for(self, price, qty):
+        """Dollar mode: ignore the strategy's contract count and size each order to a random dollar amount
+        (log-uniform between size_min and size_max) at the order price."""
+        if self.size_mode != "dollar": return qty
+        import math
+        d = math.exp(self.rng.uniform(math.log(self.size_min), math.log(self.size_max)))
+        return round(d / max(price, 0.01), 2)
+
     def place(self, market, side, price, qty, post_only=False, tag=""):
-        price = round(max(0.01, min(0.99, price)), 2); qty = round(qty, 2)
+        price = round(max(0.01, min(0.99, price)), 2); qty = round(self.size_for(price, qty), 2)
         if qty < market.min_qty: return None
         need = qty * (price if side == "buy" else 1 - price)
         if need > self.buying_power() + 1e-9:
@@ -91,7 +101,7 @@ class Account:
         px = market.best_ask if side == "buy" else market.best_bid
         if px is None: return None
         if limit is not None and ((side == "buy" and px > limit) or (side == "sell" and px < limit)): return None
-        o = Order(market.slug, side, limit if limit is not None else px, round(qty, 2), False, tag)
+        o = Order(market.slug, side, limit if limit is not None else px, round(self.size_for(px, qty), 2), False, tag)
         if o.qty < market.min_qty: return None
         need = o.qty * (o.price if side == "buy" else 1 - o.price)
         if need > self.buying_power() + 1e-9: self.rejected += 1; return None
