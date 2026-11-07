@@ -50,7 +50,8 @@ class OldModel(Base):
                 side = "sell" if ba >= 0.5 else "buy"; tag = "late-hedge"         # cheap trailing side
             else:
                 side = self.rng.choice(["buy", "sell"]); tag = "take"
-            if (side == "buy" and q < self.max_pos) or (side == "sell" and q > -self.max_pos):
+            # the original traded 1-cent books; do not cross spreads it never saw (thin windows here can quote 0.31 / 0.90)
+            if ba - bb <= (0.10 if late else 0.05) and ((side == "buy" and q < self.max_pos) or (side == "sell" and q > -self.max_pos)):
                 self.acct.take(market, side, self.size(), tag=tag)
 
 
