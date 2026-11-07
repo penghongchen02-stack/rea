@@ -9,6 +9,7 @@ import os, sys, time, json, threading, logging, sqlite3, http.server, socketserv
 from . import feeds
 from .sim import Account
 from .strategies import build_registry, LADDER_BOTS
+from .arbs import ARB_BOTS, make_arbs
 from .ladder import LadderFeed, LadderArb, LadderModel, LadderTouch, XArb
 from .fair import p_up
 
@@ -51,13 +52,14 @@ class Universe:
         self.cash = cfg.get("cash", START_CASH)
         mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0))
         reg = build_registry(cfg.get("pos_mult", 1.0))
-        self.accounts = {k: mk(k) for k in list(reg) + list(LADDER_BOTS)}
+        self.accounts = {k: mk(k) for k in list(reg) + list(LADDER_BOTS) + list(ARB_BOTS)}
         active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
         self.active = list(self.accounts) if active == ["all"] else active
         self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
         self.ladder = LadderArb(self.accounts["ladder"], engine.lf); self.ladder_model = LadderModel(self.accounts["ladder_model"], engine.lf, engine.idx, engine.spot)
         self.touch_model = LadderTouch(self.accounts["touch_model"], engine.lf, engine.idx, engine.spot)
         self.xarb = XArb(self.accounts["xarb"], engine.mf, engine.lf)
+        self.arbs = make_arbs(self.accounts, engine)
         self.equity_hist = collections.deque(maxlen=20000); self.last_state = {}; self.started = time.time()
         self.labels = {}
         try:
@@ -111,7 +113,7 @@ class Universe:
             "accounts": {n: a.snapshot(engine.mf.markets) for n, a in self.accounts.items()}, "markets": mk, "index": idx, "spot": spot,
             "feeds": {"index_age": round(now - engine.idx.last_ok, 1) if engine.idx.last_ok else None, "coinbase_connected": engine.spot.connected, "coinbase_msgs": engine.spot.msgs,
                       "books_polled": len(engine.mf.markets), "brti_crosscheck": engine.crosscheck},
-            "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot(), "ladder_model": self.ladder_model.snapshot(), "touch_model": self.touch_model.snapshot(), "xarb": self.xarb.snapshot(),
+            "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot(), "ladder_model": self.ladder_model.snapshot(), "touch_model": self.touch_model.snapshot(), "xarb": self.xarb.snapshot(), "arbs": {k: v.snapshot() for k, v in self.arbs.items()},
             "config": {"universe": self.name, "size_mode": self.cfg["size_mode"], "size_range": [self.cfg.get("size_min"), self.cfg.get("size_max")], "active": self.active, "labels": self.labels,
                        "start_cash": self.cash, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
 
@@ -207,6 +209,10 @@ class Engine:
                         if "ladder_model" in u.active: u.ladder_model.scan(now)
                         if "touch_model" in u.active: u.touch_model.scan(now)
                         if "xarb" in u.active: u.xarb.scan(now)
+                        for name, sc in u.arbs.items():
+                            if name in u.active:
+                                try: sc.scan(now)
+                                except Exception as e: self.errors += 1; log.exception("[%s] arb %s: %s", u.name, name, e)
                         for a in u.accounts.values():
                             for slug, pos in a.positions.items():
                                 if not pos.closed and abs(pos.qty) > 1e-9 and slug not in self.mf.markets:

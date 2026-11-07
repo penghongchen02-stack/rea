@@ -25,3 +25,17 @@ resting orders fill only when the book trades through their price or printed vol
 their price exceeds the size that was queued ahead of them when placed; takers pay the
 Tier 1 fee (0.095 × qty × p × (1−p)); no rebates. Settlement uses the market's published
 `settlementPrice` and falls back to the 60-second index average.
+
+## Bots and universes (current)
+
+74 paper accounts now run on one engine in three universes: `std` (port 8080, fixed contract
+clips, $100 each), `dollar` (8081, every order a random $0.10-$10) and `dollar30` (8082,
+$0.10-$30 with $1,000 each). The dashboard names every bot (1-74). Bots 31, 64-74 form the
+arbitrage family (`paperbot/ladder.py`, `paperbot/arbs.py`): they trade only relations fixed
+by the settlement rules (dominance between contracts sharing a settlement instant, bucket
+tiling, mutual exclusion, one-touch versus strike, and the bounded 60-second average in the
+final seconds), with every leg sized equally and verified on live books.
+
+Data notes: the gateway sits behind a 30-second public cache, so every request carries a
+unique query parameter (otherwise books arrive up to 30 s stale), and requests use a plain
+client user agent (the default Python agent is throttled far below the documented limit).

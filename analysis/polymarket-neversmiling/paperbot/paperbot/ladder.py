@@ -74,13 +74,13 @@ class LadderArb:
        (c) complement: ask(above X) + sum of asks of buckets entirely below X < 1 -> buy both (one side pays $1)
     Trades only when the locked profit per set clears fees plus a margin; size = min depth, capped."""
     name = "ladder"
-    MIN_EDGE = 0.02; MAX_SETS = 5.0
+    MIN_EDGE = 0.02; MAX_SETS = 5.0; SCAN_EVERY = 30
 
     def __init__(self, account, feed):
         self.acct = account; self.feed = feed; self.stats = collections.Counter(); self.last_scan = 0.0; self.opportunities = collections.deque(maxlen=200); self.done = set()
 
     def scan(self, now):
-        if now - self.last_scan < 30: return
+        if now - self.last_scan < self.SCAN_EVERY: return
         self.last_scan = now
         if now - self.feed.last_discover > 120:
             try: n = self.feed.discover(); self.stats["legs"] = n
@@ -129,10 +129,10 @@ class LadderArb:
         theta = self.acct.theta; prem = y.best_bid - x.best_ask - leg_fee(theta, y.best_bid) - leg_fee(theta, x.best_ask)
         self.opportunities.appendleft({"ts": now, "kind": "pair", "asset": asset, "legs": [x.slug, y.slug], "est": round(prem_est, 4), "live": round(prem, 4), "depth": round(min(x.offers[0][1], y.bids[0][1]), 2)})
         if prem <= self.MIN_EDGE: self.stats["vanished_on_live_book"] += 1; return
-        n = min(self.MAX_SETS, x.offers[0][1], y.bids[0][1])
+        n = min(self.acct.size_for(x.best_ask, self.MAX_SETS), x.offers[0][1], y.bids[0][1])
         if n < 0.01: return
-        o1 = self.acct.take(x, "buy", n, limit=x.best_ask, tag=f"ladder-pair-buy {x.strike:.0f}")
-        o2 = self.acct.take(y, "sell", n, limit=y.best_bid, tag=f"ladder-pair-sell {y.strike:.0f}")
+        o1 = self.acct.take(x, "buy", n, limit=x.best_ask, tag=f"ladder-pair-buy {x.strike:.0f}", fixed=True)
+        o2 = self.acct.take(y, "sell", n, limit=y.best_bid, tag=f"ladder-pair-sell {y.strike:.0f}", fixed=True)
         if o1 or o2: self.stats["trades"] += 1; self.done.add(key); log.info("ladder pair %s: buy above %s @%.2f, sell above %s @%.2f, premium %.3f x %.2f", asset, x.strike, x.best_ask, y.strike, y.best_bid, prem, n)
 
     def try_buckets(self, asset, end, buckets, side, edge_est, now):
@@ -143,15 +143,15 @@ class LadderArb:
         theta = self.acct.theta
         if side == "buy":
             if any(b.best_ask is None for b in buckets): self.stats["no_live_quote"] += 1; return
-            s = sum(b.best_ask for b in buckets); edge = 1 - s - sum(leg_fee(theta, b.best_ask) for b in buckets); n = min([self.MAX_SETS] + [b.offers[0][1] for b in buckets])
+            s = sum(b.best_ask for b in buckets); edge = 1 - s - sum(leg_fee(theta, b.best_ask) for b in buckets); n = min([self.acct.size_for(buckets[0].best_ask, self.MAX_SETS)] + [b.offers[0][1] for b in buckets])
         else:
             if any(b.best_bid is None for b in buckets): self.stats["no_live_quote"] += 1; return
-            s = sum(b.best_bid for b in buckets); edge = s - 1 - sum(leg_fee(theta, b.best_bid) for b in buckets); n = min([self.MAX_SETS] + [b.bids[0][1] for b in buckets])
+            s = sum(b.best_bid for b in buckets); edge = s - 1 - sum(leg_fee(theta, b.best_bid) for b in buckets); n = min([self.acct.size_for(buckets[0].best_bid, self.MAX_SETS)] + [b.bids[0][1] for b in buckets])
         self.opportunities.appendleft({"ts": now, "kind": f"buckets-{side}", "asset": asset, "legs": [b.slug for b in buckets][:3] + ["..."], "est": round(edge_est, 4), "live": round(edge, 4), "depth": round(n, 2)})
         if edge <= self.MIN_EDGE or n < 0.01: self.stats["vanished_on_live_book"] += 1; return
         filled = 0
         for b in buckets:
-            o = self.acct.take(b, side, n, limit=b.best_ask if side == "buy" else b.best_bid, tag=f"ladder-buckets-{side}")
+            o = self.acct.take(b, side, n, limit=b.best_ask if side == "buy" else b.best_bid, tag=f"ladder-buckets-{side}", fixed=True)
             if o and o.filled > 0: filled += 1
         if filled: self.stats["trades"] += 1; self.done.add(key); log.info("ladder buckets %s %s: %d legs, edge %.3f x %.2f", asset, side, filled, edge, n)
 
@@ -162,12 +162,12 @@ class LadderArb:
         legs = [x] + below
         if not self._verify(legs): return
         if any(m.best_ask is None for m in legs): self.stats["no_live_quote"] += 1; return
-        theta = self.acct.theta; s = sum(m.best_ask for m in legs); edge = 1 - s - sum(leg_fee(theta, m.best_ask) for m in legs); n = min([self.MAX_SETS] + [m.offers[0][1] for m in legs])
+        theta = self.acct.theta; s = sum(m.best_ask for m in legs); edge = 1 - s - sum(leg_fee(theta, m.best_ask) for m in legs); n = min([self.acct.size_for(x.best_ask, self.MAX_SETS)] + [m.offers[0][1] for m in legs])
         self.opportunities.appendleft({"ts": now, "kind": "complement", "asset": asset, "legs": [x.slug] + [b.slug for b in below][:2] + ["..."], "est": round(edge_est, 4), "live": round(edge, 4), "depth": round(n, 2)})
         if edge <= self.MIN_EDGE or n < 0.01: self.stats["vanished_on_live_book"] += 1; return
         filled = 0
         for m in legs:
-            o = self.acct.take(m, "buy", n, limit=m.best_ask, tag=f"ladder-complement {x.strike:.0f}")
+            o = self.acct.take(m, "buy", n, limit=m.best_ask, tag=f"ladder-complement {x.strike:.0f}", fixed=True)
             if o and o.filled > 0: filled += 1
         if filled: self.stats["trades"] += 1; self.done.add(key); log.info("ladder complement %s above %s + %d buckets, edge %.3f x %.2f", asset, x.strike, len(below), edge, n)
 
@@ -333,10 +333,10 @@ class XArb:
                     depth = min(a.offers[0][1], b.bids[0][1])
                     self.opps.appendleft({"ts": now, "T": T, "asset": asset, "buy": a.slug, "K_a": Ka, "ask_a": ask_a, "sell": b.slug, "K_b": Kb, "bid_b": bid_b, "prem": round(prem, 4), "depth": round(depth, 2)})
                     if prem < self.MIN_EDGE: self.stats["vanished"] += 1; continue
-                    n = min(self.MAX_SETS, depth)
+                    n = min(self.acct.size_for(ask_a, self.MAX_SETS), depth)
                     if n < 0.01: continue
-                    o1 = self.acct.take(a, "buy", n, limit=ask_a, tag=f"xarb-buy K{Ka:.0f}")
-                    o2 = self.acct.take(b, "sell", n, limit=bid_b, tag=f"xarb-sell K{Kb:.0f}")
+                    o1 = self.acct.take(a, "buy", n, limit=ask_a, tag=f"xarb-buy K{Ka:.0f}", fixed=True)
+                    o2 = self.acct.take(b, "sell", n, limit=bid_b, tag=f"xarb-sell K{Kb:.0f}", fixed=True)
                     if (o1 and o1.filled > 0) or (o2 and o2.filled > 0):
                         self.stats["trades"] += 1; self.repeats[key] += 1
                         log.info("xarb T=%d buy %s (K %.2f) @%.2f sell %s (K %.2f) @%.2f prem %.3f x %.2f", T, a.slug, Ka, ask_a, b.slug, Kb, bid_b, prem, n)

@@ -77,8 +77,9 @@ class Account:
         d = math.exp(self.rng.uniform(math.log(self.size_min), math.log(self.size_max)))
         return round(d / max(price, 0.01), 2)
 
-    def place(self, market, side, price, qty, post_only=False, tag=""):
-        price = round(max(0.01, min(0.99, price)), 2); qty = round(self.size_for(price, qty), 2)
+    def place(self, market, side, price, qty, post_only=False, tag="", fixed=False):
+        """fixed=True keeps the caller's contract count (arbitrage legs must match); otherwise dollar universes resize."""
+        price = round(max(0.01, min(0.99, price)), 2); qty = round(qty if fixed else self.size_for(price, qty), 2)
         if qty < market.min_qty: return None
         need = qty * (price if side == "buy" else 1 - price)
         if need > self.buying_power() + 1e-9:
@@ -96,12 +97,12 @@ class Account:
         o.queue_ahead = lvl.get(price, 0.0); self.orders[o.id] = o
         return o
 
-    def take(self, market, side, qty, limit=None, tag=""):
-        """Immediate-or-cancel against the current book."""
+    def take(self, market, side, qty, limit=None, tag="", fixed=False):
+        """Immediate-or-cancel against the current book. fixed=True keeps the caller's contract count."""
         px = market.best_ask if side == "buy" else market.best_bid
         if px is None: return None
         if limit is not None and ((side == "buy" and px > limit) or (side == "sell" and px < limit)): return None
-        o = Order(market.slug, side, limit if limit is not None else px, round(self.size_for(px, qty), 2), False, tag)
+        o = Order(market.slug, side, limit if limit is not None else px, round(qty if fixed else self.size_for(px, qty), 2), False, tag)
         if o.qty < market.min_qty: return None
         need = o.qty * (o.price if side == "buy" else 1 - o.price)
         if need > self.buying_power() + 1e-9: self.rejected += 1; return None
