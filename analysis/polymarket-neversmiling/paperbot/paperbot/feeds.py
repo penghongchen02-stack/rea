@@ -10,15 +10,23 @@ _CTX = ssl.create_default_context(cafile=CA) if CA else ssl.create_default_conte
 
 
 class RateLimiter:
+    """Adaptive: the gateway limit (25/s) is shared per source IP, so the real budget is unknown. Start at per_sec,
+    halve on every 429 (floor 2/s), and recover 10% every 30 s without one."""
     def __init__(self, per_sec):
-        self.min_gap = 1.0 / per_sec; self.last = 0.0; self.lock = threading.Lock()
+        self.base = per_sec; self.rate = per_sec; self.last = 0.0; self.lock = threading.Lock(); self.last_429 = 0.0; self.last_recover = time.monotonic()
     def wait(self):
         with self.lock:
-            now = time.monotonic(); gap = now - self.last
-            if gap < self.min_gap: time.sleep(self.min_gap - gap)
+            now = time.monotonic()
+            if now - self.last_recover > 30 and now - self.last_429 > 30:
+                self.rate = min(self.base, self.rate * 1.1); self.last_recover = now
+            gap = now - self.last; min_gap = 1.0 / self.rate
+            if gap < min_gap: time.sleep(min_gap - gap)
             self.last = time.monotonic()
+    def hit_429(self):
+        with self.lock:
+            self.rate = max(2.0, self.rate / 2); self.last_429 = time.monotonic()
 
-_rl = RateLimiter(16)
+_rl = RateLimiter(10)
 RATE_LIMITED = [0]
 
 def get_json(url, timeout=15, retries=3):
@@ -31,9 +39,10 @@ def get_json(url, timeout=15, retries=3):
         except urllib.error.HTTPError as e:
             if e.code == 404: return None
             if e.code == 429:
-                RATE_LIMITED[0] += 1
-                if RATE_LIMITED[0] % 20 == 1: log.warning("429 rate limited (%d so far) on %s", RATE_LIMITED[0], url[:90])
-                time.sleep(1 + i); continue
+                RATE_LIMITED[0] += 1; _rl.hit_429()
+                if RATE_LIMITED[0] % 20 == 1: log.warning("429 rate limited (%d so far, limiter now %.1f/s) on %s", RATE_LIMITED[0], _rl.rate, url[:90])
+                if i == 0: time.sleep(0.3); continue
+                return None
             log.warning("HTTP %s %s", e.code, url); time.sleep(0.5 + i)
         except Exception as e:
             log.warning("GET failed %s: %s", url, e); time.sleep(0.5 + i)
@@ -157,9 +166,10 @@ class MarketFeed:
             if m.end < now - 5 or m.start > now + 20: continue
             # request budget: 5-minute books every second, 15-minute/hourly every 3 s, held ladder legs every 30 s,
             # and the final 20 s of any window every second
-            if getattr(m, "kind", "updown") != "updown": interval = 30
-            elif m.dur <= 300 or m.end - now < 20: interval = 0
-            else: interval = 3
+            if getattr(m, "kind", "updown") != "updown": interval = 60
+            elif m.end - now < 20: interval = 0.9
+            elif m.dur <= 300: interval = 2
+            else: interval = 6
             if now - m.book_ts < interval: continue
             d = get_json(f"{GATEWAY}/v1/markets/{m.slug}/book")
             if d and d.get("marketData"): m.apply_book(d["marketData"])

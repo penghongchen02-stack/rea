@@ -80,9 +80,9 @@ class LadderArb:
         self.acct = account; self.feed = feed; self.stats = collections.Counter(); self.last_scan = 0.0; self.opportunities = collections.deque(maxlen=200); self.done = set()
 
     def scan(self, now):
-        if now - self.last_scan < 8: return
+        if now - self.last_scan < 30: return
         self.last_scan = now
-        if now - self.feed.last_discover > 60:
+        if now - self.feed.last_discover > 120:
             try: n = self.feed.discover(); self.stats["legs"] = n
             except Exception as e: log.warning("ladder discover: %s", e)
         theta = self.acct.theta
@@ -198,8 +198,8 @@ class LadderModel:
         return _phi((hi - S) / sd) - _phi((lo - S) / sd)
 
     def scan(self, now):
-        if now - self.last_scan < 20: return
-        self.last_scan = now; theta = self.acct.theta; budget = 6
+        if now - self.last_scan < 60: return
+        self.last_scan = now; theta = self.acct.theta; budget = 2
         for (asset, end), legs in self.feed.ladders().items():
             if end - now < 120: continue
             its, S_idx = self.index.last(asset)
@@ -248,7 +248,7 @@ class LadderTouch:
         if now - getattr(self.feed, "last_touch_discover", 0) > 600:
             try: self.stats["legs"] = self.feed.discover_touch()
             except Exception as e: log.warning("touch discover: %s", e)
-        theta = self.acct.theta; budget = 4
+        theta = self.acct.theta; budget = 2
         for m in list(getattr(self.feed, "touch_legs", {}).values()):
             if m.slug in self.done or m.end - now < 3600: continue
             its, S_idx = self.index.last(m.asset)
@@ -303,7 +303,7 @@ class XArb:
         return m.list_bid, m.list_ask, None, None
 
     def scan(self, now):
-        theta = self.acct.theta; budget = 6
+        theta = self.acct.theta; budget = 2
         for T, items in self.contracts(now).items():
             if len(items) < 2: continue
             self.stats["groups"] += 1
