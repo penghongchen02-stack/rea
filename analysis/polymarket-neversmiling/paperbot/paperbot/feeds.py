@@ -70,7 +70,7 @@ class Market:
     """One Up/Down window. Prices refer to the YES ("Up") instrument."""
     def __init__(self, raw):
         self.slug = raw["slug"]; self.update(raw)
-        self.bids = []; self.offers = []; self.book_ts = 0.0; self.state = None
+        self.bids = []; self.offers = []; self.book_ts = 0.0; self.state = None; self.book_src = "rest"
         self.last_px = None; self.last_qty = 0.0; self.shares_traded = 0.0; self.last_trade_ts = 0.0
         self.tape = collections.deque(maxlen=2000)   # (ts, price, qty) inferred from stats deltas
         self.stats = {}
@@ -178,8 +178,9 @@ class MarketFeed:
             elif m.dur <= 300: interval = 2
             else: interval = 6
             if now - m.book_ts < interval: continue
+            if m.book_src == "ws" and now - m.book_ts < 15: continue          # streamed book is live; REST only as a fallback
             d = get_json(f"{GATEWAY}/v1/markets/{m.slug}/book")
-            if d and d.get("marketData"): m.apply_book(d["marketData"])
+            if d and d.get("marketData"): m.apply_book(d["marketData"]); m.book_src = "rest"
 
     def retire(self, slug):
         with self.lock:

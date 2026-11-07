@@ -64,6 +64,7 @@ function render(){const f=S.feeds;const ck=f.brti_crosscheck||{};$('#chips').inn
 `<span class="chip ${f.index_age!=null&&f.index_age<15?'ok':'bad'}">Index feed ${f.index_age==null?'down':f.index_age+'s old'}</span>`,
 `<span class="chip ${f.coinbase_connected?'ok':'bad'}">Coinbase ${f.coinbase_connected?'live · '+f.coinbase_msgs+' ticks':'down'}</span>`,
 `<span class="chip ok">Books polled: ${f.books_polled}</span>`,
+`<span class="chip ${(f.stream||{}).connected?'ok':''}">Stream: ${!(f.stream||{}).enabled?'off (no API key)':((f.stream.connected?'live · '+f.stream.msgs+' msgs · '+f.stream.subscribed+' markets':'reconnecting'))}</span>`,
 `<span class="chip ${ck.ok?'ok':''}">BRTI vs cfbenchmarks.com: ${ck.ok?(ck.compared+' s compared, max diff $'+(ck.max_abs_diff??'–')):'pending'}</span>`,
 `<span class="chip">BTC ${fmt(S.index.btc.value)} · ETH ${fmt(S.index.eth.value)} · SOL ${fmt(S.index.sol.value)} · XRP ${fmt(S.index.xrp.value,4)}</span>`,
 `<span class="chip">Up ${hms(S.uptime)} · loop ${S.loop} · errors ${S.errors}</span>`].join('');

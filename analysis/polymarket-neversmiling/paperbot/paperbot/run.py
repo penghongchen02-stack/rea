@@ -10,6 +10,7 @@ from . import feeds
 from .sim import Account
 from .strategies import build_registry, LADDER_BOTS
 from .arbs import ARB_BOTS, make_arbs
+from .ws import WSBooks
 from .ladder import LadderFeed, LadderArb, LadderModel, LadderTouch, XArb
 from .fair import p_up
 
@@ -112,7 +113,7 @@ class Universe:
         self.last_state = {"ts": now, "started": self.started, "uptime": round(now - engine.started), "loop": engine.loop_count, "errors": engine.errors,
             "accounts": {n: a.snapshot(engine.mf.markets) for n, a in self.accounts.items()}, "markets": mk, "index": idx, "spot": spot,
             "feeds": {"index_age": round(now - engine.idx.last_ok, 1) if engine.idx.last_ok else None, "coinbase_connected": engine.spot.connected, "coinbase_msgs": engine.spot.msgs,
-                      "books_polled": len(engine.mf.markets), "brti_crosscheck": engine.crosscheck},
+                      "books_polled": len(engine.mf.markets), "brti_crosscheck": engine.crosscheck, "stream": engine.ws.status()},
             "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot(), "ladder_model": self.ladder_model.snapshot(), "touch_model": self.touch_model.snapshot(), "xarb": self.xarb.snapshot(), "arbs": {k: v.snapshot() for k, v in self.arbs.items()},
             "config": {"universe": self.name, "size_mode": self.cfg["size_mode"], "size_range": [self.cfg.get("size_min"), self.cfg.get("size_max")], "active": self.active, "labels": self.labels,
                        "start_cash": self.cash, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
@@ -120,7 +121,7 @@ class Universe:
 
 class Engine:
     def __init__(self):
-        self.mf = feeds.MarketFeed(); self.idx = feeds.IndexFeed(); self.spot = feeds.SpotFeed(); self.lf = LadderFeed()
+        self.mf = feeds.MarketFeed(); self.idx = feeds.IndexFeed(); self.spot = feeds.SpotFeed(); self.lf = LadderFeed(); self.ws = WSBooks(self.mf)
         self.started = time.time(); self.crosscheck = {}; self.loop_count = 0; self.errors = 0
         self.universes = [Universe(cfg, self) for cfg in UNIVERSES]
         self.index_store = self.universes[0].store
@@ -255,7 +256,7 @@ class Engine:
             time.sleep(max(0.0, 1.0 - (time.time() - t0)))
 
     def start(self):
-        for fn in (self.t_index, self.t_discover, self.t_crosscheck, self.spot.run):
+        for fn in (self.t_index, self.t_discover, self.t_crosscheck, self.spot.run, self.ws.run):
             threading.Thread(target=fn, daemon=True).start()
         for u in self.universes: threading.Thread(target=self.t_http, args=(u,), daemon=True).start()
         time.sleep(3)
