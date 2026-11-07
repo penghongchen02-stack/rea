@@ -18,7 +18,8 @@ class RateLimiter:
             if gap < self.min_gap: time.sleep(self.min_gap - gap)
             self.last = time.monotonic()
 
-_rl = RateLimiter(22)
+_rl = RateLimiter(16)
+RATE_LIMITED = [0]
 
 def get_json(url, timeout=15, retries=3):
     for i in range(retries):
@@ -29,7 +30,10 @@ def get_json(url, timeout=15, retries=3):
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code == 404: return None
-            if e.code == 429: time.sleep(1 + i); continue
+            if e.code == 429:
+                RATE_LIMITED[0] += 1
+                if RATE_LIMITED[0] % 20 == 1: log.warning("429 rate limited (%d so far) on %s", RATE_LIMITED[0], url[:90])
+                time.sleep(1 + i); continue
             log.warning("HTTP %s %s", e.code, url); time.sleep(0.5 + i)
         except Exception as e:
             log.warning("GET failed %s: %s", url, e); time.sleep(0.5 + i)
@@ -148,9 +152,15 @@ class MarketFeed:
         if ms: m.update(ms[0])
 
     def poll_books(self):
+        now = time.time()
         for m in list(self.markets.values()):
-            if m.end < time.time() - 5 or m.start > time.time() + 20: continue
-            if getattr(m, "kind", "updown") != "updown" and time.time() - m.book_ts < 30: continue   # held ladder legs: refresh every 30 s
+            if m.end < now - 5 or m.start > now + 20: continue
+            # request budget: 5-minute books every second, 15-minute/hourly every 3 s, held ladder legs every 30 s,
+            # and the final 20 s of any window every second
+            if getattr(m, "kind", "updown") != "updown": interval = 30
+            elif m.dur <= 300 or m.end - now < 20: interval = 0
+            else: interval = 3
+            if now - m.book_ts < interval: continue
             d = get_json(f"{GATEWAY}/v1/markets/{m.slug}/book")
             if d and d.get("marketData"): m.apply_book(d["marketData"])
 
