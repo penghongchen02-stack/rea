@@ -63,9 +63,10 @@ def cash(d):
     out["pnl_incl_rebates"] = out["pnl_ex_rebates"] + out["maker_rebate"] + out["taker_rebate"]
     return out
 print("\n== LIFETIME CASH FLOW"); print(pd.Series(cash(df)).round(2))
-w = df[(df.date >= dt.date(2026,5,18)) & (df.date <= dt.date(2026,6,2))]
-print("\n== REPORT WINDOW 2026-05-18..06-02 (UTC days) cash flow"); print(pd.Series(cash(w)).round(2))
-tw = tr[(tr.date >= dt.date(2026,5,18)) & (tr.date <= dt.date(2026,6,2))]
+LO, HI = dt.date.fromisoformat(os.environ.get("REPORT_LO", "2026-05-18")), dt.date.fromisoformat(os.environ.get("REPORT_HI", "2026-06-02"))
+w = df[(df.date >= LO) & (df.date <= HI)]
+print(f"\n== REPORT WINDOW {LO}..{HI} (UTC days) cash flow"); print(pd.Series(cash(w)).round(2))
+tw = tr[(tr.date >= LO) & (tr.date <= HI)]
 print("window trades", len(tw), "markets", tw.condition_id.nunique(), "buy notional ex-fee %.0f incl-fee %.0f" % (tw.notional.sum(), tw.usdc_size.sum()),
       "median clip %.2f p99 %.2f max %.2f" % (tw.usdc_size.median(), tw.usdc_size.quantile(.99), tw.usdc_size.max()))
 

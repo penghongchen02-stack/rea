@@ -1,6 +1,6 @@
 #!/bin/bash
 # usage: dump.sh <endpoint> <outfile>
-EP=$1; OUT=$2; A=0xfcdc071df7080c214196bb0b3b751e5417f9d8e3
+EP=$1; OUT=$2; A=${POLY_WALLET:-0xfcdc071df7080c214196bb0b3b751e5417f9d8e3}
 CUR=""; N=0; P=0; : > "$OUT"
 while true; do
   URL="https://data-api.polymarket.com/v2/$EP?user=$A&limit=1000${CUR:+&cursor=$CUR}"

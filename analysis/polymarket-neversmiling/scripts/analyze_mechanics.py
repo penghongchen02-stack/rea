@@ -4,7 +4,7 @@ pd.set_option("display.width", 220); pd.set_option("display.max_columns", 40); p
 import os
 S = os.environ.get("POLY_DATA_DIR", "./data")
 tr = pd.read_pickle(f"{S}/trades_enriched.pkl"); df = pd.read_pickle(f"{S}/activity.pkl"); m = pd.read_pickle(f"{S}/markets.pkl")
-lo, hi = dt.date(2026,5,18), dt.date(2026,6,2)
+lo, hi = dt.date.fromisoformat(os.environ.get("REPORT_LO", "2026-05-18")), dt.date.fromisoformat(os.environ.get("REPORT_HI", "2026-06-02"))
 
 print("== P/L WATERFALL (lifetime and report window)")
 def waterfall(d, t):
