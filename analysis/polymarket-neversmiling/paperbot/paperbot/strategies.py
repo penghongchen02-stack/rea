@@ -489,9 +489,9 @@ class Scalper(LastCallHold):
     more than the fee plus a margin, take 2 contracts, then rest a closing order 3 cents better (maker, no fee).
     'with' trades only in the market's own direction (mid and model on the same side of 50c); 'fade' trades
     against overshoots too. Up to 3 open scalps per window; leftovers settle at the close (protective exit kept)."""
-    def __init__(self, account, name, fade=False, margin=0.04, seed=31):
+    def __init__(self, account, name, fade=False, margin=0.04, seed=31, tp=0.03):
         super().__init__(account, seed=seed)
-        self.name = name; self.fade = fade; self.margin = margin; self.clip = 2.0; self.max_pos = 6.0
+        self.name = name; self.fade = fade; self.margin = margin; self.clip = 2.0; self.max_pos = 6.0; self.tp = tp
 
     def on_tick(self, market, ctx, now):
         if market.asset not in ("btc", "eth") or market.dur != 300: return
@@ -504,10 +504,10 @@ class Scalper(LastCallHold):
         tags = {o.tag for o in acct.open_orders(slug)}
         if pos and abs(q) > 1e-9 and left > 5:
             if q > 0 and "sc-close-sell" not in tags:
-                tp = max(math.ceil((pos.avg + 0.03) / tick) * tick, ba)
+                tp = max(math.ceil((pos.avg + self.tp) / tick) * tick, ba)
                 if tp <= 0.99: acct.place(market, "sell", tp, round(q, 2), post_only=True, tag="sc-close-sell")
             if q < 0 and "sc-close-buy" not in tags:
-                tp = min(math.floor((pos.avg - 0.03) / tick) * tick, bb)
+                tp = min(math.floor((pos.avg - self.tp) / tick) * tick, bb)
                 if tp >= 0.01: acct.place(market, "buy", tp, round(-q, 2), post_only=True, tag="sc-close-buy")
         elif left <= 5: acct.cancel_all(slug)
         if left < 30 or now < st["next_take"] or left > market.dur - 20: return
@@ -572,22 +572,23 @@ class Crouch(LastCallHold):
     """Replica: 5- and 15-minute BTC/ETH. In the last quarter of the window it buys the near-certain side at
     80 to 93 cents when the model at least mildly agrees (z >= 1.5). One entry per window, 3 contracts, holds."""
     name = "crouch"
-    def __init__(self, account, seed=43): super().__init__(account, seed=seed); self.clip = 3.0; self.max_pos = 3.0
+    def __init__(self, account, seed=43, name="crouch", frac=0.25, p_lo=0.80, p_hi=0.93, z_min=1.5):
+        super().__init__(account, seed=seed); self.clip = 3.0; self.max_pos = 3.0; self.name = name; self.frac = frac; self.p_lo = p_lo; self.p_hi = p_hi; self.z_min = z_min
     def on_tick(self, market, ctx, now):
         if market.asset not in ("btc", "eth") or market.dur not in (300, 900): return
         slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
         if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
         self.manage(market, ctx, now)
-        if st.get("done") or left > 0.25 * market.dur or left < 10: return
+        if st.get("done") or left > self.frac * market.dur or left < 10: return
         bb, ba = market.best_bid, market.best_ask
         if bb is None or ba is None: return
         p, det = p_up(market, ctx["index"], ctx["spot"], now)
         if p is None: return
         z = det["z"]
-        if 0.80 <= ba <= 0.93 and z >= 1.5:
+        if self.p_lo <= ba <= self.p_hi and z >= self.z_min:
             o = acct.take(market, "buy", self.clip, limit=ba, tag=f"crouch-up {ba:.2f} z{z:.1f}")
             if o and o.filled > 0: st["done"] = True
-        elif 0.80 <= 1 - bb <= 0.93 and z <= -1.5:
+        elif self.p_lo <= 1 - bb <= self.p_hi and z <= -self.z_min:
             o = acct.take(market, "sell", self.clip, limit=bb, tag=f"crouch-down {1-bb:.2f} z{z:.1f}")
             if o and o.filled > 0: st["done"] = True
 
@@ -625,6 +626,17 @@ def build_registry(pos_mult=1.0):
     reg["stairstep"] = scaled(Stairstep); reg["lastcent"] = scaled(LastCent)
     reg["quarter"] = scaled(Param, "quarter", 45, 150, 2.5, 0.88, "take", (900,), ("btc", "eth"), 0)
     reg["guardrail"] = scaled(Guardrail)
+    # high-volume round built on the rules that stayed green (no rebates)
+    reg["consensus_z2"] = scaled(Param, "consensus_z2", 30, 90, 2.0, 0.90, "take", (300,), ("btc", "eth"), 0)
+    reg["consensus_wide"] = scaled(Param, "consensus_wide", 20, 120, 2.5, 0.93, "take", (300,), ("btc", "eth"), 0)
+    reg["multi_entry"] = scaled(MultiEntry)
+    reg["all_coins_z2"] = scaled(Param, "all_coins_z2", 30, 90, 2.0, 0.90, "take", (300,), ("btc", "eth", "sol", "xrp"), 0)
+    reg["all_horizons"] = scaled(Param, "all_horizons", 30, 120, 2.5, 0.90, "take", (300, 900, 3600), ("btc", "eth"), 0)
+    reg["guardrail_wide"] = scaled(Guardrail, name="guardrail_wide", t_lo=60, t_hi=240, p_lo=0.55, p_hi=0.80, z_min=1.0, tp=0.04)
+    reg["scalper_tp2"] = scaled(Scalper, "scalper_tp2", fade=False, margin=0.03, tp=0.02)
+    reg["momentum_cut"] = scaled(Guardrail, name="momentum_cut", t_lo=200, t_hi=285, p_lo=0.52, p_hi=0.65, z_min=2.0, tp=0.05)
+    reg["rest_ladder"] = scaled(RestLadder)
+    reg["crouch_wide"] = scaled(Crouch, name="crouch_wide", frac=0.40, p_lo=0.75, p_hi=0.93, z_min=1.5)
     # drop-in bots: paperbot/bots/*.py with REGISTRY = {name: factory(account)}
     import os, importlib, pkgutil
     bots_dir = os.path.join(os.path.dirname(__file__), "bots")
@@ -772,9 +784,11 @@ class Guardrail(LastCallHold):
     """Constructive #53: follow the 60-75c leader 4 to 2 minutes out when the model agrees (z >= 1.5), rest a
     take-profit 5 cents better (maker), and cut the position at market the moment the model flips sign."""
     name = "guardrail"
-    def __init__(self, account, seed=63): super().__init__(account, seed=seed); self.clip = 2.0; self.max_pos = 2.0
+    def __init__(self, account, seed=63, name="guardrail", t_lo=120, t_hi=240, p_lo=0.60, p_hi=0.75, z_min=1.5, tp=0.05, durs=(300,)):
+        super().__init__(account, seed=seed); self.clip = 2.0; self.max_pos = 2.0
+        self.name = name; self.t_lo = t_lo; self.t_hi = t_hi; self.p_lo = p_lo; self.p_hi = p_hi; self.z_min = z_min; self.tp = tp; self.durs = set(durs)
     def on_tick(self, market, ctx, now):
-        if market.asset not in ("btc", "eth") or market.dur != 300: return
+        if market.asset not in ("btc", "eth") or market.dur not in self.durs: return
         slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
         if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
         bb, ba = market.best_bid, market.best_ask
@@ -789,17 +803,68 @@ class Guardrail(LastCallHold):
             if (q > 0 and z < 0) or (q < 0 and z > 0):
                 acct.cancel_all(slug); acct.take(market, "sell" if q > 0 else "buy", abs(q), limit=bb if q > 0 else ba, tag=f"guard-cut z{z:.1f}"); return
             if q > 0 and "guard-tp-sell" not in tags and left > 5:
-                tp = max(math.ceil((pos.avg + 0.05) / tick) * tick, ba)
+                tp = max(math.ceil((pos.avg + self.tp) / tick) * tick, ba)
                 if tp <= 0.99: acct.place(market, "sell", tp, round(q, 2), post_only=True, tag="guard-tp-sell")
             if q < 0 and "guard-tp-buy" not in tags and left > 5:
-                tp = min(math.floor((pos.avg - 0.05) / tick) * tick, bb)
+                tp = min(math.floor((pos.avg - self.tp) / tick) * tick, bb)
                 if tp >= 0.01: acct.place(market, "buy", tp, round(-q, 2), post_only=True, tag="guard-tp-buy")
             return
-        if st.get("done") or left > 240 or left < 120 or now < st["next_take"]: return
+        if st.get("done") or left > self.t_hi or left < self.t_lo or now < st["next_take"]: return
         st["next_take"] = now + 3
-        if 0.60 <= ba <= 0.75 and z >= 1.5:
+        if self.p_lo <= ba <= self.p_hi and z >= self.z_min:
             o = acct.take(market, "buy", self.clip, limit=ba, tag=f"guard-up {ba:.2f} z{z:.1f}")
             if o and o.filled > 0: st["done"] = True
-        elif 0.60 <= 1 - bb <= 0.75 and z <= -1.5:
+        elif self.p_lo <= 1 - bb <= self.p_hi and z <= -self.z_min:
             o = acct.take(market, "sell", self.clip, limit=bb, tag=f"guard-down {1-bb:.2f} z{z:.1f}")
             if o and o.filled > 0: st["done"] = True
+
+
+class MultiEntry(LastCallHold):
+    """High-volume #56: every 10 s from 120 s out, while z >= 2.5, market agrees and the near-certain side costs
+    <= $0.90, add a 2-contract clip, up to 6 per window. Hold with the protective exit."""
+    name = "multi_entry"
+    def __init__(self, account, seed=71): super().__init__(account, seed=seed); self.clip = 2.0; self.max_pos = 12.0
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth") or market.dur != 300: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        if left > 120 or left < 20 or now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("index_age", 99) > 8: return
+        z = det["z"]; st["next_take"] = now + 10; theta = acct.theta; q = self.pos(slug); mid = (bb + ba) / 2
+        if z >= 2.5 and mid > 0.5 and ba <= 0.90 and 1 - ba - theta * ba * (1 - ba) > 0.03 and q < self.max_pos:
+            acct.take(market, "buy", self.clip, limit=ba, tag=f"multi-up {ba:.2f} z{z:.1f}")
+        elif z <= -2.5 and mid < 0.5 and 1 - bb <= 0.90 and bb - theta * bb * (1 - bb) > 0.03 and -q < self.max_pos:
+            acct.take(market, "sell", self.clip, limit=bb, tag=f"multi-down {1-bb:.2f} z{z:.1f}")
+
+
+class RestLadder(LastCallHold):
+    """High-volume #62: from 90 s out, when z >= 3 and the market agrees, rest three fee-free bids for the
+    near-certain side at 88, 90 and 92 cents (2 contracts each); pulled if z drops below 2. Hold."""
+    name = "rest_ladder"
+    def __init__(self, account, seed=72): super().__init__(account, seed=seed); self.clip = 2.0; self.max_pos = 6.0
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth") or market.dur != 300: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        if left > 90 or now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None: return
+        z = det["z"]; st["next_take"] = now + 2; q = self.pos(slug); mid = (bb + ba) / 2
+        resting = [o for o in acct.open_orders(slug) if o.tag.startswith("rl-")]
+        if abs(z) < 2 or left < 5:
+            if resting: acct.cancel_all(slug)
+            return
+        if resting or abs(q) >= self.max_pos: return
+        if z >= 3 and mid > 0.5:
+            for px in (0.88, 0.90, 0.92):
+                if px < ba: acct.place(market, "buy", px, self.clip, post_only=True, tag=f"rl-up {px:.2f}")
+        elif z <= -3 and mid < 0.5:
+            for px in (0.12, 0.10, 0.08):
+                if px > bb: acct.place(market, "sell", px, self.clip, post_only=True, tag=f"rl-down {1-px:.2f}")
