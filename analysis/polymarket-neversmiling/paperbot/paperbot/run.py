@@ -3,7 +3,7 @@ import os, sys, time, json, threading, logging, sqlite3, http.server, socketserv
 from . import feeds
 from .ladder import LadderFeed, LadderArb
 from .sim import Account
-from .strategies import OldModel, Improved, FinalMinute, WhiskasReplica, LastCall, LastCallTilt, LastCallHold, LastCallRest, LastCallEarly, Param, SWEEP, MarketFollow, RANDOM_BOTS, PickOff
+from .strategies import OldModel, Improved, FinalMinute, WhiskasReplica, LastCall, LastCallTilt, LastCallHold, LastCallRest, LastCallEarly, Param, SWEEP, MarketFollow, RANDOM_BOTS, PickOff, Scalper
 from .fair import p_up
 
 DATA = os.environ.get("PAPERBOT_DATA", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot-data"))
@@ -39,7 +39,7 @@ class Engine:
         for k in SWEEP: self.accounts[k] = Account(k, START_CASH)
         for k in ("follow80", "follow80_model"): self.accounts[k] = Account(k, START_CASH)
         for k in RANDOM_BOTS: self.accounts[k] = Account(k, START_CASH)
-        for k in ("ladder", "pickoff", "hourly_last", "hourly_rest", "hourly_follow80"): self.accounts[k] = Account(k, START_CASH)
+        for k in ("ladder", "pickoff", "hourly_last", "hourly_rest", "hourly_follow80", "scalper_with", "scalper_fade"): self.accounts[k] = Account(k, START_CASH)
         self.lf = LadderFeed(); self.ladder = LadderArb(self.accounts["ladder"], self.lf)
         # retired after the first 88 windows (structurally losing here): old, improved, whiskas. Their accounts stay for the record.
         active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
@@ -55,6 +55,8 @@ class Engine:
             else:
                 st = MarketFollow(self.accounts[k], k, params["t_lo"], params["t_hi"], params["p_lo"], params["p_hi"], params["z_min"]); self.strats.append(st)
         if "pickoff" in active: self.strats.append(PickOff(self.accounts["pickoff"]))
+        if "scalper_with" in active: self.strats.append(Scalper(self.accounts["scalper_with"], "scalper_with", fade=False))
+        if "scalper_fade" in active: self.strats.append(Scalper(self.accounts["scalper_fade"], "scalper_fade", fade=True))
         if "hourly_last" in active: self.strats.append(Param(self.accounts["hourly_last"], "hourly_last", 30, 120, 2.5, 0.90, "take", (3600,), ("btc", "eth"), 0))
         if "hourly_rest" in active: self.strats.append(Param(self.accounts["hourly_rest"], "hourly_rest", 30, 120, 2.5, 0.90, "rest", (3600,), ("btc", "eth"), 0))
         if "hourly_follow80" in active: self.strats.append(MarketFollow(self.accounts["hourly_follow80"], "hourly_follow80", 60, 180, 0.75, 0.85, None, durs=(3600,)))

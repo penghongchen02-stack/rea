@@ -482,3 +482,40 @@ class PickOff(LastCallHold):
         elif jump <= -2.5 and bb >= 0.10 and (1 - p) - (1 - bb) - theta * bb * (1 - bb) > 0.02:
             o = acct.take(market, "sell", self.clip, limit=bb, tag=f"pickoff-down j{jump:.1f}")
             if o and o.filled > 0: st["done"] = True
+
+
+class Scalper(LastCallHold):
+    """High-frequency scalper for BTC/ETH 5-minute windows: whenever the model's P(Up) differs from the touch by
+    more than the fee plus a margin, take 2 contracts, then rest a closing order 3 cents better (maker, no fee).
+    'with' trades only in the market's own direction (mid and model on the same side of 50c); 'fade' trades
+    against overshoots too. Up to 3 open scalps per window; leftovers settle at the close (protective exit kept)."""
+    def __init__(self, account, name, fade=False, margin=0.04, seed=31):
+        super().__init__(account, seed=seed)
+        self.name = name; self.fade = fade; self.margin = margin; self.clip = 2.0; self.max_pos = 6.0
+
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth") or market.dur != 300: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        tick = market.tick; q = self.pos(slug); pos = acct.positions.get(slug); theta = acct.theta
+        # closing orders on inventory (maker): 3 cents better than cost
+        tags = {o.tag for o in acct.open_orders(slug)}
+        if pos and abs(q) > 1e-9 and left > 5:
+            if q > 0 and "sc-close-sell" not in tags:
+                tp = max(math.ceil((pos.avg + 0.03) / tick) * tick, ba)
+                if tp <= 0.99: acct.place(market, "sell", tp, round(q, 2), post_only=True, tag="sc-close-sell")
+            if q < 0 and "sc-close-buy" not in tags:
+                tp = min(math.floor((pos.avg - 0.03) / tick) * tick, bb)
+                if tp >= 0.01: acct.place(market, "buy", tp, round(-q, 2), post_only=True, tag="sc-close-buy")
+        elif left <= 5: acct.cancel_all(slug)
+        if left < 30 or now < st["next_take"] or left > market.dur - 20: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("index_age", 99) > 8: return
+        st["next_take"] = now + 3; mid = (bb + ba) / 2
+        up_ok = self.fade or mid > 0.5; down_ok = self.fade or mid < 0.5
+        if up_ok and p - ba - theta * ba * (1 - ba) > self.margin and q < self.max_pos and 0.05 <= ba <= 0.95:
+            acct.take(market, "buy", self.clip, limit=ba, tag=f"sc-buy m{mid:.2f} p{p:.2f}")
+        elif down_ok and bb - p - theta * bb * (1 - bb) > self.margin and -q < self.max_pos and 0.05 <= bb <= 0.95:
+            acct.take(market, "sell", self.clip, limit=bb, tag=f"sc-sell m{mid:.2f} p{p:.2f}")
