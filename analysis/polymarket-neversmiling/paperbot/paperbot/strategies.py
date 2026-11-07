@@ -620,6 +620,11 @@ def build_registry(pos_mult=1.0):
     reg["b55f"] = scaled(BurstLean, name="b55f", assets=("btc", "eth", "sol", "xrp"), durs=(900,), lean=False, clip=2.0, pair_cap=0.98, period=(15, 30))
     reg["whiskas_taker"] = scaled(BurstLean, name="whiskas_taker", assets=("btc", "eth"), durs=(300,), lean=True, clip=1.0, pair_cap=0.97, period=(4, 8))
     reg["bonereaper"] = scaled(Bonereaper); reg["almach"] = scaled(Almach); reg["arcsine"] = scaled(Arcsine)
+    # constructive round (no rebates assumed anywhere)
+    reg["consensus"] = scaled(Param, "consensus", 30, 90, 3.0, 0.90, "take", (300,), ("btc", "eth"), 0)
+    reg["stairstep"] = scaled(Stairstep); reg["lastcent"] = scaled(LastCent)
+    reg["quarter"] = scaled(Param, "quarter", 45, 150, 2.5, 0.88, "take", (900,), ("btc", "eth"), 0)
+    reg["guardrail"] = scaled(Guardrail)
     # drop-in bots: paperbot/bots/*.py with REGISTRY = {name: factory(account)}
     import os, importlib, pkgutil
     bots_dir = os.path.join(os.path.dirname(__file__), "bots")
@@ -699,3 +704,102 @@ class Arcsine(Base):
             acct.cancel_all(slug); st["last_quote"] = (bb, ba)
             if q < self.max_pos: acct.place(market, "buy", bb, self.clip, post_only=True, tag="arc-bid")
             if q > -self.max_pos: acct.place(market, "sell", ba, self.clip, post_only=True, tag="arc-ask")
+
+
+class Stairstep(LastCallHold):
+    """Constructive #50: buy the near-certain side early and cheap (<= $0.80, z >= 3, 120-60 s before close), then add
+    one clip at 60-30 s if the math still holds and the price is <= $0.90. Max 3 clips, market agreement required,
+    hold to settlement with the protective exit."""
+    name = "stairstep"
+    def __init__(self, account, seed=61): super().__init__(account, seed=seed); self.clip = 2.0; self.max_pos = 6.0
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth") or market.dur != 300: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        if left > 120 or left < 30 or now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("index_age", 99) > 8: return
+        z = det["z"]; st["next_take"] = now + 3; theta = acct.theta; q = self.pos(slug); mid = (bb + ba) / 2
+        cap = 0.80 if left > 60 else 0.90; step = st.setdefault("steps", 0)
+        if step >= 3: return
+        if z >= 3 and mid > 0.5 and ba <= cap and 1 - ba - theta * ba * (1 - ba) > 0.03 and q < self.max_pos:
+            o = acct.take(market, "buy", self.clip, limit=ba, tag=f"stair-up {ba:.2f} z{z:.1f}")
+            if o and o.filled > 0: st["steps"] = step + 1
+        elif z <= -3 and mid < 0.5 and 1 - bb <= cap and bb - theta * bb * (1 - bb) > 0.03 and -q < self.max_pos:
+            o = acct.take(market, "sell", self.clip, limit=bb, tag=f"stair-down {1-bb:.2f} z{z:.1f}")
+            if o and o.filled > 0: st["steps"] = step + 1
+
+
+class LastCent(LastCallHold):
+    """Constructive #51, the fee minimiser: in the final 25 s, once >= 40 of the 60 settlement seconds are published
+    and z >= 4, rest a bid for the near-certain side at $0.94-$0.96 (maker, no fee); cross at <= $0.97 only when
+    >= 50 seconds are in. 4 contracts, held to settlement."""
+    name = "lastcent"
+    def __init__(self, account, seed=62): super().__init__(account, seed=seed); self.clip = 4.0; self.max_pos = 4.0
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth") or market.dur not in (300, 900): return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 2 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        if left > 25:
+            if acct.open_orders(slug): acct.cancel_all(slug)
+            return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("n_known", 0) < 40: return
+        z = det["z"]; n = det["n_known"]; theta = acct.theta; q = self.pos(slug); tick = market.tick
+        if abs(z) < 4:
+            acct.cancel_all(slug); return
+        resting = [o for o in acct.open_orders(slug) if o.tag.startswith("cent")]
+        if z >= 4 and q < self.max_pos:
+            if n >= 50 and ba <= 0.97 and 1 - ba - theta * ba * (1 - ba) > 0.015:
+                acct.cancel_all(slug); acct.take(market, "buy", self.clip, limit=ba, tag=f"cent-cross-up {ba:.2f}")
+            elif not resting:
+                want = min(0.96, max(0.94, round(bb + tick, 2)))
+                if want < ba: acct.place(market, "buy", want, self.clip, post_only=True, tag=f"cent-rest-up {want:.2f}")
+        elif z <= -4 and -q < self.max_pos:
+            if n >= 50 and bb >= 0.03 and bb - theta * bb * (1 - bb) > 0.015:
+                acct.cancel_all(slug); acct.take(market, "sell", self.clip, limit=bb, tag=f"cent-cross-down {1-bb:.2f}")
+            elif not resting:
+                want = max(0.04, min(0.06, round(ba - tick, 2)))
+                if want > bb: acct.place(market, "sell", want, self.clip, post_only=True, tag=f"cent-rest-down {1-want:.2f}")
+
+
+class Guardrail(LastCallHold):
+    """Constructive #53: follow the 60-75c leader 4 to 2 minutes out when the model agrees (z >= 1.5), rest a
+    take-profit 5 cents better (maker), and cut the position at market the moment the model flips sign."""
+    name = "guardrail"
+    def __init__(self, account, seed=63): super().__init__(account, seed=seed); self.clip = 2.0; self.max_pos = 2.0
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth") or market.dur != 300: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        q = self.pos(slug); pos = acct.positions.get(slug); tick = market.tick; theta = acct.theta
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None: return
+        z = det["z"]
+        # manage: cut when the model flips, else keep a take-profit resting
+        if pos and abs(q) > 1e-9:
+            tags = {o.tag for o in acct.open_orders(slug)}
+            if (q > 0 and z < 0) or (q < 0 and z > 0):
+                acct.cancel_all(slug); acct.take(market, "sell" if q > 0 else "buy", abs(q), limit=bb if q > 0 else ba, tag=f"guard-cut z{z:.1f}"); return
+            if q > 0 and "guard-tp-sell" not in tags and left > 5:
+                tp = max(math.ceil((pos.avg + 0.05) / tick) * tick, ba)
+                if tp <= 0.99: acct.place(market, "sell", tp, round(q, 2), post_only=True, tag="guard-tp-sell")
+            if q < 0 and "guard-tp-buy" not in tags and left > 5:
+                tp = min(math.floor((pos.avg - 0.05) / tick) * tick, bb)
+                if tp >= 0.01: acct.place(market, "buy", tp, round(-q, 2), post_only=True, tag="guard-tp-buy")
+            return
+        if st.get("done") or left > 240 or left < 120 or now < st["next_take"]: return
+        st["next_take"] = now + 3
+        if 0.60 <= ba <= 0.75 and z >= 1.5:
+            o = acct.take(market, "buy", self.clip, limit=ba, tag=f"guard-up {ba:.2f} z{z:.1f}")
+            if o and o.filled > 0: st["done"] = True
+        elif 0.60 <= 1 - bb <= 0.75 and z <= -1.5:
+            o = acct.take(market, "sell", self.clip, limit=bb, tag=f"guard-down {1-bb:.2f} z{z:.1f}")
+            if o and o.filled > 0: st["done"] = True
