@@ -184,10 +184,30 @@ class Engine:
                                      "books_polled": len(self.mf.markets), "brti_crosscheck": self.crosscheck},
                            "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "config": {"active": self.active, "start_cash": START_CASH, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
 
+    def settle_orphans(self):
+        """After a restart, positions in windows that closed while the engine was down are settled from the exchange."""
+        slugs = set()
+        for a in self.accounts.values():
+            for slug, pos in a.positions.items():
+                if not pos.closed and abs(pos.qty) > 1e-9: slugs.add(slug)
+        for slug in slugs:
+            if slug in self.mf.markets: continue
+            raw = feeds.get_json(f"{feeds.GATEWAY}/v1/markets?slug={slug}")
+            ms = (raw or {}).get("markets") or []
+            if not ms or not ms[0].get("assetPriceTerms"): continue
+            m = feeds.Market(ms[0])
+            if m.end < time.time() + 2:
+                if self.settle_market(m): log.info("settled orphan %s after restart", slug)
+            else:
+                with self.mf.lock: self.mf.markets[slug] = m
+
     def start(self):
         for fn in (self.t_index, self.t_discover, self.t_crosscheck, self.t_http, self.spot.run):
             threading.Thread(target=fn, daemon=True).start()
-        time.sleep(3); self.loop()
+        time.sleep(3)
+        try: self.settle_orphans()
+        except Exception as e: log.warning("orphan settlement: %s", e)
+        self.loop()
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
