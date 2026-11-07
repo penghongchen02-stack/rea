@@ -241,3 +241,68 @@ class LastCallTilt(LastCall):
         elif z <= -2.0 and bb >= 0.35 and (1 - p) - (1 - bb) - theta * bb * (1 - bb) > 0.04 and -q < self.max_pos:
             o = self.acct.take(market, "sell", self.clip, limit=bb, tag=f"lc-tilt-down z{z:.1f}")
             if o and o.filled > 0: st["tilted"] = True
+
+
+class LastCallHold(LastCall):
+    """LastCall without the take-profit: a near-certain position is held to settlement for the full $1.00.
+    The only exit is protective: if the published seconds turn and the confidence collapses (|z| < 1), get out."""
+    name = "lastcall_hold"
+    EXIT_Z = 1.0
+    def manage(self, market, ctx, now):
+        slug = market.slug; rem = market.remaining(now); q = self.pos(slug); acct = self.acct
+        if abs(q) < 1e-9 or rem < 3: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("n_known", 0) < 20: return
+        z = det["z"]
+        if q > 0 and z < self.EXIT_Z and market.best_bid is not None:
+            acct.cancel_all(slug); acct.take(market, "sell", q, limit=market.best_bid, tag=f"lc-exit z{z:.1f}")
+        elif q < 0 and z > -self.EXIT_Z and market.best_ask is not None:
+            acct.cancel_all(slug); acct.take(market, "buy", -q, limit=market.best_ask, tag=f"lc-exit z{z:.1f}")
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth"): return
+        slug = market.slug; st = self.m(slug); rem = market.remaining(now)
+        if rem < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        if rem > 60 or now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask; q = self.pos(slug); acct = self.acct; theta = acct.theta
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("n_known", 0) < 25: return
+        z = det["z"]; st["next_take"] = now + 2; n = self.shots_for(z) * self.clip
+        if z >= 2.5 and ba is not None and ba <= self.MAX_PRICE and q < self.max_pos and 1.0 - ba - theta * ba * (1 - ba) > 0.03:
+            acct.take(market, "buy", min(n, self.max_pos - q), limit=ba, tag=f"lc-up z{z:.1f}")
+        elif z <= -2.5 and bb is not None and bb >= 1 - self.MAX_PRICE and -q < self.max_pos and bb - theta * bb * (1 - bb) > 0.03:
+            acct.take(market, "sell", min(n, self.max_pos + q), limit=bb, tag=f"lc-down z{z:.1f}")
+
+
+class LastCallRest(LastCallHold):
+    """LastCallHold, but the entry is a resting order on the book: one tick inside the touch (capped at $0.90 for
+    the near-certain side) placed as soon as the math is decisive, left to be filled fee-free; only if it is still
+    unfilled with 20 seconds left does it cross the spread."""
+    name = "lastcall_rest"
+    REST_CAP = 0.90
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth"): return
+        slug = market.slug; st = self.m(slug); rem = market.remaining(now); acct = self.acct
+        if rem < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        if rem > 60 or now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask; q = self.pos(slug); theta = acct.theta; tick = market.tick
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("n_known", 0) < 25: return
+        z = det["z"]; st["next_take"] = now + 2; n = self.shots_for(z) * self.clip
+        resting = [o for o in acct.open_orders(slug) if o.tag.startswith("lc-rest")]
+        if z >= 2.5 and q < self.max_pos:
+            want = min(round(bb + tick, 2), self.REST_CAP, round(ba - tick, 2))
+            if rem <= 20 and ba <= self.MAX_PRICE and 1.0 - ba - theta * ba * (1 - ba) > 0.03:
+                acct.cancel_all(slug); acct.take(market, "buy", min(n, self.max_pos - q), limit=ba, tag=f"lc-rest-cross z{z:.1f}")
+            elif not resting and want >= 0.5:
+                acct.place(market, "buy", want, min(n, self.max_pos - q), post_only=True, tag=f"lc-rest-up z{z:.1f}")
+        elif z <= -2.5 and -q < self.max_pos:
+            want = max(round(ba - tick, 2), 1 - self.REST_CAP, round(bb + tick, 2))
+            if rem <= 20 and bb >= 1 - self.MAX_PRICE and bb - theta * bb * (1 - bb) > 0.03:
+                acct.cancel_all(slug); acct.take(market, "sell", min(n, self.max_pos + q), limit=bb, tag=f"lc-rest-cross z{z:.1f}")
+            elif not resting and want <= 0.5:
+                acct.place(market, "sell", want, min(n, self.max_pos + q), post_only=True, tag=f"lc-rest-down z{z:.1f}")
+        elif resting and abs(z) < 1.5:
+            acct.cancel_all(slug)                      # math no longer decisive: do not leave a bid out to be picked off
