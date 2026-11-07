@@ -107,3 +107,34 @@ class Improved(Base):
                 acct.take(market, "buy", 2 * self.size(), limit=ba, tag="edge-buy" if rem > 60 else "twap-buy")
             elif edge_sell > margin and agree_down and (bb <= 0.15 or rem <= 60) and -q + resting_sell < self.max_pos:
                 acct.take(market, "sell", 2 * self.size(), limit=bb, tag="edge-sell" if rem > 60 else "twap-sell")
+
+
+class FinalMinute(Base):
+    """Third bot: no quotes, no hedges. Trades once per window inside the final minute, when most of the
+    60 one-second index prices that decide settlement are already published and the projection cannot
+    plausibly flip, but only while the market price still leaves room after the taker fee."""
+    name = "final"
+    Z_MIN = 2.5            # projection must be >= 2.5 sd from the price to beat (about 99.4%)
+    MAX_PRICE = 0.93       # do not pay more than this for the near-certain side (user observed 0.99 books are already full)
+    QTY = 3.0              # contracts per shot (~$2.5)
+    def __init__(self, account, seed=3):
+        super().__init__(account, clip=3.0, max_pos=3.0, seed=seed)
+
+    def on_tick(self, market, ctx, now):
+        slug = market.slug; st = self.m(slug); rem = market.remaining(now)
+        if st.get("done") or rem > 60 or rem < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        bb, ba = market.best_bid, market.best_ask
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("sd") is None: return
+        z = (det["mean"] - det["K"]) / max(det["sd"], 1e-9)
+        theta = self.acct.theta
+        if z >= self.Z_MIN and ba is not None and ba <= self.MAX_PRICE:
+            edge = 1.0 - ba - theta * ba * (1 - ba)             # win pays $1
+            if edge > 0.03:
+                o = self.acct.take(market, "buy", self.QTY, limit=ba, tag=f"final-up z{z:.1f}")
+                if o and o.filled > 0: st["done"] = True
+        elif z <= -self.Z_MIN and bb is not None and bb >= 1 - self.MAX_PRICE:
+            edge = bb - theta * bb * (1 - bb)                   # short YES: keep the sale price when Down wins
+            if edge > 0.03:
+                o = self.acct.take(market, "sell", self.QTY, limit=bb, tag=f"final-down z{z:.1f}")
+                if o and o.filled > 0: st["done"] = True

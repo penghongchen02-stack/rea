@@ -2,9 +2,9 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Paper Bots Dashboard</title>
 <style>
-:root{color-scheme:light;--bg:#fcfcfb;--surface:#ffffff;--border:#e4e3df;--text:#0b0b0b;--text2:#52514e;--muted:#8a8984;--old:#2a78d6;--imp:#eb6834;--good:#008300;--bad:#e34948;--grid:#ebebe8}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#121211;--surface:#1a1a19;--border:#2e2e2c;--text:#f0efec;--text2:#c3c2b7;--muted:#8a8984;--old:#3987e5;--imp:#d95926;--good:#3fae3f;--bad:#e66767;--grid:#262625}}
-:root[data-theme="dark"]{color-scheme:dark;--bg:#121211;--surface:#1a1a19;--border:#2e2e2c;--text:#f0efec;--text2:#c3c2b7;--muted:#8a8984;--old:#3987e5;--imp:#d95926;--good:#3fae3f;--bad:#e66767;--grid:#262625}
+:root{color-scheme:light;--bg:#fcfcfb;--surface:#ffffff;--border:#e4e3df;--text:#0b0b0b;--text2:#52514e;--muted:#8a8984;--old:#2a78d6;--imp:#eb6834;--fin:#1baf7a;--good:#008300;--bad:#e34948;--grid:#ebebe8}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#121211;--surface:#1a1a19;--border:#2e2e2c;--text:#f0efec;--text2:#c3c2b7;--muted:#8a8984;--old:#3987e5;--imp:#d95926;--fin:#199e70;--good:#3fae3f;--bad:#e66767;--grid:#262625}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#121211;--surface:#1a1a19;--border:#2e2e2c;--text:#f0efec;--text2:#c3c2b7;--muted:#8a8984;--old:#3987e5;--imp:#d95926;--fin:#199e70;--good:#3fae3f;--bad:#e66767;--grid:#262625}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
 h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:0 0 8px;color:var(--text2);font-weight:600}
 .sub{color:var(--text2);margin-bottom:14px}.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 16px}
@@ -12,7 +12,7 @@ h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:0 0 8px;color:var(--te
 .chip.ok::before{content:"●";color:var(--good);margin-right:5px}.chip.bad::before{content:"●";color:var(--bad);margin-right:5px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:14px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;min-width:0}
-.bot{border-top:4px solid var(--old)}.bot.imp{border-top-color:var(--imp)}
+.bot{border-top:4px solid var(--old)}.bot.imp{border-top-color:var(--imp)}.bot.fin{border-top-color:var(--fin)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
 .tile .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.tile .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
 .tile .s{font-size:12px;color:var(--text2)}.pos{color:var(--good)}.neg{color:var(--bad)}
@@ -26,9 +26,9 @@ canvas{width:100%;height:260px;display:block}.tip{position:absolute;pointer-even
 <div class="sub">$100 each, live Polymarket US crypto Up/Down markets (BTC, ETH, SOL, XRP · 5m and 15m). Settlement index: CF Benchmarks BRTI and the other reference indices as served by Polymarket US, checked against cfbenchmarks.com. Fast signal: Coinbase spot. Fees: Tier 1 taker coefficient 0.095, no rebates.</div>
 <div class="chips" id="chips"></div>
 <div class="grid" id="bots"></div>
-<div class="card" style="margin-bottom:14px"><h2>Equity, $ (5-second samples)</h2><div class="legend"><span><i class="dot" style="background:var(--old)"></i>Old model</span><span><i class="dot" style="background:var(--imp)"></i>Improved</span></div><div class="rel"><canvas id="eq"></canvas><div class="tip" id="tip"></div></div></div>
-<div class="card" style="margin-bottom:14px"><h2>Live markets</h2><div class="wrap"><table id="mk"><thead><tr><th>Market</th><th>Left</th><th>YES bid / ask</th><th>Last</th><th>Price to beat</th><th>Index now</th><th>Model P(Up)</th><th>Old pos</th><th>Imp pos</th><th>Open orders (old / imp)</th></tr></thead><tbody></tbody></table></div><div class="note">Positions are signed YES contracts: positive = long Up, negative = short (Down). Model P(Up) uses the 60-second settlement average rule.</div></div>
-<div class="grid"><div class="card"><h2>Settled markets (newest first)</h2><div class="wrap"><table id="st"><thead><tr><th>Market</th><th>Result</th><th>Beat → settle</th><th>Old P/L</th><th>Imp P/L</th></tr></thead><tbody></tbody></table></div></div>
+<div class="card" style="margin-bottom:14px"><h2>Equity, $ (5-second samples)</h2><div class="legend"><span><i class="dot" style="background:var(--old)"></i>Old model</span><span><i class="dot" style="background:var(--imp)"></i>Improved</span><span><i class="dot" style="background:var(--fin)"></i>Final-minute</span></div><div class="rel"><canvas id="eq"></canvas><div class="tip" id="tip"></div></div></div>
+<div class="card" style="margin-bottom:14px"><h2>Live markets</h2><div class="wrap"><table id="mk"><thead><tr><th>Market</th><th>Left</th><th>YES bid / ask</th><th>Last</th><th>Price to beat</th><th>Index now</th><th>Model P(Up)</th><th>Old pos</th><th>Imp pos</th><th>Fin pos</th><th>Open orders (old / imp)</th></tr></thead><tbody></tbody></table></div><div class="note">Positions are signed YES contracts: positive = long Up, negative = short (Down). Model P(Up) uses the 60-second settlement average rule.</div></div>
+<div class="grid"><div class="card"><h2>Settled markets (newest first)</h2><div class="wrap"><table id="st"><thead><tr><th>Market</th><th>Result</th><th>Beat → settle</th><th>Old P/L</th><th>Imp P/L</th><th>Fin P/L</th></tr></thead><tbody></tbody></table></div></div>
 <div class="card"><h2>Recent fills</h2><div class="wrap"><table id="fl"><thead><tr><th>Time</th><th>Bot</th><th>Market</th><th>Side</th><th>Px</th><th>Qty</th><th>Fee</th><th>Liq</th><th>Why</th></tr></thead><tbody></tbody></table></div></div></div>
 <script>
 const $=s=>document.querySelector(s);const fmt=(v,d=2)=>v==null?'–':Number(v).toFixed(d);const money=v=>(v>=0?'+':'')+'$'+Math.abs(v).toFixed(2).replace(/^/,v<0?'-':'');
@@ -36,7 +36,8 @@ const short=s=>s.replace('cpc-','').replace('-updown','').replace(/-(\d{4})-(\d\
 const hms=sec=>{sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return (h?h+'h ':'')+(m||h?m+'m ':'')+s+'s'};
 const tm=ts=>new Date(ts*1000).toISOString().substr(11,8)+'Z';
 function cls(v){return v>0?'pos':v<0?'neg':''}
-function botCard(a,k){const won=a.markets_won,n=a.markets_settled;return `<div class="card bot ${k==='improved'?'imp':''}"><h2 style="color:var(--${k==='old'?'old':'imp'})">${k==='old'?'Old model (NeverSmiling replica)':'Improved bot'}</h2><div class="tiles">
+const BOT={old:{v:'old',t:'Old model (NeverSmiling replica)'},improved:{v:'imp',t:'Improved bot'},final:{v:'fin',t:'Final-minute bot'}};const cv_=k=>'var(--'+(BOT[k]||{v:'old'}).v+')';
+function botCard(a,k){const won=a.markets_won,n=a.markets_settled;return `<div class="card bot ${BOT[k].v}"><h2 style="color:${cv_(k)}">${BOT[k].t}</h2><div class="tiles">
 <div class="tile"><div class="l">Equity</div><div class="v">$${fmt(a.equity)}</div><div class="s ${cls(a.pnl)}">${money(a.pnl)} (${fmt(100*a.pnl/100,2)}%)</div></div>
 <div class="tile"><div class="l">Realized</div><div class="v ${cls(a.realized)}">${money(a.realized)}</div><div class="s">cash $${fmt(a.cash)}</div></div>
 <div class="tile"><div class="l">Fees paid</div><div class="v">$${fmt(a.fees)}</div><div class="s">buying power $${fmt(a.buying_power)}</div></div>
@@ -45,7 +46,7 @@ function botCard(a,k){const won=a.markets_won,n=a.markets_settled;return `<div c
 <div class="tile"><div class="l">Open</div><div class="v">${Object.keys(a.open_positions).length}</div><div class="s">${a.open_orders} resting orders · ${a.rejected} rejected</div></div></div></div>`}
 let S=null;const cv=$('#eq'),tip=$('#tip');let pts={};
 function draw(){if(!S)return;const dpr=devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
-const cs=getComputedStyle(document.documentElement);const col={old:cs.getPropertyValue('--old').trim(),improved:cs.getPropertyValue('--imp').trim()};
+const cs=getComputedStyle(document.documentElement);const col={old:cs.getPropertyValue('--old').trim(),improved:cs.getPropertyValue('--imp').trim(),final:cs.getPropertyValue('--fin').trim()};
 const h=S.equity_history||{};let all=[];for(const k in h)all=all.concat(h[k]);if(all.length<2){g.fillStyle=cs.getPropertyValue('--muted');g.fillText('Waiting for data…',12,20);return}
 const L=44,R=10,T=10,Bm=22;const xs=all.map(p=>p[0]),ys=all.map(p=>p[1]);let x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys,S.config.start_cash),y1=Math.max(...ys,S.config.start_cash);const pad=Math.max(0.25,(y1-y0)*0.1);y0-=pad;y1+=pad;if(x1===x0)x1=x0+1;
 const X=t=>L+(t-x0)/(x1-x0)*(W-L-R),Y=v=>T+(y1-v)/(y1-y0)*(H-T-Bm);
@@ -63,11 +64,11 @@ function render(){const f=S.feeds;const ck=f.brti_crosscheck||{};$('#chips').inn
 `<span class="chip ${ck.ok?'ok':''}">BRTI vs cfbenchmarks.com: ${ck.ok?(ck.compared+' s compared, max diff $'+(ck.max_abs_diff??'–')):'pending'}</span>`,
 `<span class="chip">BTC ${fmt(S.index.btc.value)} · ETH ${fmt(S.index.eth.value)} · SOL ${fmt(S.index.sol.value)} · XRP ${fmt(S.index.xrp.value,4)}</span>`,
 `<span class="chip">Up ${hms(S.uptime)} · loop ${S.loop} · errors ${S.errors}</span>`].join('');
-$('#bots').innerHTML=botCard(S.accounts.old,'old')+botCard(S.accounts.improved,'improved');
-const mk=Object.values(S.markets).sort((a,b)=>a.end-b.end);$('#mk tbody').innerHTML=mk.map(m=>`<tr><td class="mono">${short(m.slug)}</td><td>${hms(m.remaining)}</td><td>${fmt(m.bid)} / ${fmt(m.ask)}</td><td>${fmt(m.last)}</td><td>${fmt(m.p2b)}</td><td>${fmt(S.index[m.asset].value,m.asset==='xrp'?4:2)}</td><td>${m.p_up==null?'–':(100*m.p_up).toFixed(1)+'%'}</td><td class="${cls(m.positions.old)}">${fmt(m.positions.old)}</td><td class="${cls(m.positions.improved)}">${fmt(m.positions.improved)}</td><td class="mono">${m.orders.old.map(o=>o.side[0]+o.px).join(' ')||'–'} / ${m.orders.improved.map(o=>o.side[0]+o.px).join(' ')||'–'}</td></tr>`).join('')||'<tr><td colspan="10">Waiting for the next windows to list…</td></tr>';
+$('#bots').innerHTML=Object.keys(S.accounts).map(k=>botCard(S.accounts[k],k)).join('');
+const mk=Object.values(S.markets).sort((a,b)=>a.end-b.end);$('#mk tbody').innerHTML=mk.map(m=>`<tr><td class="mono">${short(m.slug)}</td><td>${hms(m.remaining)}</td><td>${fmt(m.bid)} / ${fmt(m.ask)}</td><td>${fmt(m.last)}</td><td>${fmt(m.p2b)}</td><td>${fmt(S.index[m.asset].value,m.asset==='xrp'?4:2)}</td><td>${m.p_up==null?'–':(100*m.p_up).toFixed(1)+'%'}</td><td class="${cls(m.positions.old)}">${fmt(m.positions.old)}</td><td class="${cls(m.positions.improved)}">${fmt(m.positions.improved)}</td><td class="${cls(m.positions.final)}">${fmt(m.positions.final)}</td><td class="mono">${m.orders.old.map(o=>o.side[0]+o.px).join(' ')||'–'} / ${m.orders.improved.map(o=>o.side[0]+o.px).join(' ')||'–'}</td></tr>`).join('')||'<tr><td colspan="11">Waiting for the next windows to list…</td></tr>';
 const by={};for(const s of S.settlements){const k=s.slug;by[k]=by[k]||{slug:k,up:s.up,p2b:s.p2b,sp:s.settle_px,ts:s.ts};by[k][s.bot]=s.pnl_total}
-$('#st tbody').innerHTML=Object.values(by).sort((a,b)=>b.ts-a.ts).slice(0,25).map(s=>`<tr><td class="mono">${short(s.slug)}</td><td>${s.up?'Up':'Down'}</td><td>${fmt(s.p2b)} → ${fmt(s.sp)}</td><td class="${cls(s.old)}">${s.old==null?'–':money(s.old)}</td><td class="${cls(s.improved)}">${s.improved==null?'–':money(s.improved)}</td></tr>`).join('')||'<tr><td colspan="5">None yet</td></tr>';
-$('#fl tbody').innerHTML=S.fills.slice(0,30).map(f=>`<tr><td>${tm(f.ts)}</td><td><i class="dot" style="background:var(--${f.bot==='old'?'old':'imp'})"></i>${f.bot}</td><td class="mono">${short(f.slug)}</td><td>${f.side}</td><td>${fmt(f.price)}</td><td>${fmt(f.qty)}</td><td>${fmt(f.fee,4)}</td><td>${f.liq}</td><td class="mono">${f.tag}</td></tr>`).join('')||'<tr><td colspan="9">None yet</td></tr>';
+$('#st tbody').innerHTML=Object.values(by).sort((a,b)=>b.ts-a.ts).slice(0,25).map(s=>`<tr><td class="mono">${short(s.slug)}</td><td>${s.up?'Up':'Down'}</td><td>${fmt(s.p2b)} → ${fmt(s.sp)}</td><td class="${cls(s.old)}">${s.old==null?'–':money(s.old)}</td><td class="${cls(s.improved)}">${s.improved==null?'–':money(s.improved)}</td><td class="${cls(s.final)}">${s.final==null?'–':money(s.final)}</td></tr>`).join('')||'<tr><td colspan="6">None yet</td></tr>';
+$('#fl tbody').innerHTML=S.fills.slice(0,30).map(f=>`<tr><td>${tm(f.ts)}</td><td><i class="dot" style="background:${cv_(f.bot)}"></i>${f.bot}</td><td class="mono">${short(f.slug)}</td><td>${f.side}</td><td>${fmt(f.price)}</td><td>${fmt(f.qty)}</td><td>${fmt(f.fee,4)}</td><td>${f.liq}</td><td class="mono">${f.tag}</td></tr>`).join('')||'<tr><td colspan="9">None yet</td></tr>';
 draw()}
 async function tick(){try{const r=await fetch('/state.json',{cache:'no-store'});S=await r.json();if(S&&S.accounts)render()}catch(e){}}
 tick();setInterval(tick,2000);addEventListener('resize',draw);

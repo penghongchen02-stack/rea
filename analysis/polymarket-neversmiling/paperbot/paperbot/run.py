@@ -2,7 +2,7 @@
 import os, sys, time, json, threading, logging, sqlite3, http.server, socketserver, functools, collections
 from . import feeds
 from .sim import Account
-from .strategies import OldModel, Improved
+from .strategies import OldModel, Improved, FinalMinute
 from .fair import p_up
 
 DATA = os.environ.get("PAPERBOT_DATA", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot-data"))
@@ -34,8 +34,8 @@ class Engine:
     def __init__(self):
         self.mf = feeds.MarketFeed(); self.idx = feeds.IndexFeed(); self.spot = feeds.SpotFeed()
         self.store = Store(os.path.join(DATA, "paper.db"))
-        self.accounts = {"old": Account("old", START_CASH), "improved": Account("improved", START_CASH)}
-        self.strats = [OldModel(self.accounts["old"]), Improved(self.accounts["improved"])]
+        self.accounts = {"old": Account("old", START_CASH), "improved": Account("improved", START_CASH), "final": Account("final", START_CASH)}
+        self.strats = [OldModel(self.accounts["old"]), Improved(self.accounts["improved"]), FinalMinute(self.accounts["final"])]
         self.started = time.time(); self.equity_hist = collections.deque(maxlen=20000); self.crosscheck = {}; self.lock = threading.Lock()
         self.last_state = {}; self.loop_count = 0; self.errors = 0
         self._load()
@@ -46,6 +46,7 @@ class Engine:
             try:
                 snap = json.load(open(p))
                 for name, s in snap.get("accounts", {}).items():
+                    if name not in self.accounts: continue
                     a = self.accounts[name]; a.cash = s["cash"]; a.fees = s["fees"]; a.maker_fills = s["maker_fills"]; a.taker_fills = s["taker_fills"]
                     a.start_cash = s.get("start_cash", START_CASH)
                     for slug, ps in s.get("positions", {}).items():
