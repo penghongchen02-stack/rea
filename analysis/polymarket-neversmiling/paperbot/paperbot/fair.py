@@ -19,11 +19,9 @@ def p_up(market, index_feed, spot_feed, now=None):
     if tau > 60:
         mean = S; var = sig * sig * ((tau - 60) + 60 / 3.0)
     else:
-        known_mean, n = index_feed.avg(a, market.end - 60, market.end)
-        k = 60 - tau                        # seconds already inside the averaging window
-        known_sum = (known_mean or S) * min(n, int(k)) if n else S * int(k)
-        future = max(0.0, tau)
-        mean = (known_sum + future * S) / 60.0
+        known_mean, n = index_feed.avg(a, market.end - 60, market.end)   # seconds of the averaging window already published
+        n = min(n, 60); future = 60 - n                                   # unpublished seconds (lag) plus the seconds still to come
+        mean = (known_mean * n + future * S) / 60.0 if n else S
         var = sig * sig * (future ** 3) / (3 * 3600.0) if future > 0 else 1e-12
     sd = math.sqrt(max(var, 1e-12)); z = (mean - K) / sd
     p = phi(z)
