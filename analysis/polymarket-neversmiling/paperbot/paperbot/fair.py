@@ -26,6 +26,9 @@ def p_up(market, index_feed, spot_feed, now=None):
     n_known = 0 if tau > 60 else n
     # the published index is quantized (XRP to 1e-5, SOL to 1e-4): never claim more precision than two index ticks
     quant = 2 * 10 ** (-getattr(market, "decimals", 2))
-    sd = max(math.sqrt(max(var, 1e-12)), quant, 3e-5 * S * math.sqrt(max(60 - n_known, 1) / 60.0)); z = (mean - K) / sd
+    # basis and lag noise: the spot carry-forward and the unpublished seconds are not exact. 1.2 bp of the price with
+    # nothing published, shrinking to 0.2 bp when the whole minute is in (a 4-cent lead on ETH must never read as z=10).
+    noise = S * (2e-5 + 1.0e-4 * (1 - n_known / 60.0))
+    sd = max(math.sqrt(max(var, 1e-12)), quant, noise); z = (mean - K) / sd
     p = phi(z)
     return p, {"S": round(S, 5), "S_index": S_idx, "K": K, "tau": round(tau, 1), "sd": round(sd, 5), "mean": round(mean, 5), "sigma_1s": round(sig, 5), "index_age": round(now - its, 1), "n_known": n_known, "z": round(z, 2)}

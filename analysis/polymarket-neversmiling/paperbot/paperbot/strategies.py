@@ -268,9 +268,11 @@ class LastCallHold(LastCall):
         p, det = p_up(market, ctx["index"], ctx["spot"], now)
         if p is None or det.get("n_known", 0) < 25: return
         z = det["z"]; st["next_take"] = now + 2; n = self.shots_for(z) * self.clip
-        if z >= 2.5 and ba is not None and ba <= self.MAX_PRICE and q < self.max_pos and 1.0 - ba - theta * ba * (1 - ba) > 0.03:
+        mid = (bb + ba) / 2 if bb is not None and ba is not None else 0.5
+        sure = det.get("n_known", 0) >= 50                      # the market may be wrong only when the minute is nearly all published
+        if z >= 2.5 and (mid > 0.5 or sure) and ba is not None and ba <= self.MAX_PRICE and q < self.max_pos and 1.0 - ba - theta * ba * (1 - ba) > 0.03:
             acct.take(market, "buy", min(n, self.max_pos - q), limit=ba, tag=f"lc-up z{z:.1f}")
-        elif z <= -2.5 and bb is not None and bb >= 1 - self.MAX_PRICE and -q < self.max_pos and bb - theta * bb * (1 - bb) > 0.03:
+        elif z <= -2.5 and (mid < 0.5 or sure) and bb is not None and bb >= 1 - self.MAX_PRICE and -q < self.max_pos and bb - theta * bb * (1 - bb) > 0.03:
             acct.take(market, "sell", min(n, self.max_pos + q), limit=bb, tag=f"lc-down z{z:.1f}")
 
 
@@ -292,13 +294,14 @@ class LastCallRest(LastCallHold):
         if p is None or det.get("n_known", 0) < 25: return
         z = det["z"]; st["next_take"] = now + 2; n = self.shots_for(z) * self.clip
         resting = [o for o in acct.open_orders(slug) if o.tag.startswith("lc-rest")]
-        if z >= 2.5 and q < self.max_pos:
+        mid = (bb + ba) / 2; sure = det.get("n_known", 0) >= 50
+        if z >= 2.5 and (mid > 0.5 or sure) and q < self.max_pos:
             want = min(round(bb + tick, 2), self.REST_CAP, round(ba - tick, 2))
             if rem <= 20 and ba <= self.MAX_PRICE and 1.0 - ba - theta * ba * (1 - ba) > 0.03:
                 acct.cancel_all(slug); acct.take(market, "buy", min(n, self.max_pos - q), limit=ba, tag=f"lc-rest-cross z{z:.1f}")
             elif not resting and want >= 0.5:
                 acct.place(market, "buy", want, min(n, self.max_pos - q), post_only=True, tag=f"lc-rest-up z{z:.1f}")
-        elif z <= -2.5 and -q < self.max_pos:
+        elif z <= -2.5 and (mid < 0.5 or sure) and -q < self.max_pos:
             want = max(round(ba - tick, 2), 1 - self.REST_CAP, round(bb + tick, 2))
             if rem <= 20 and bb >= 1 - self.MAX_PRICE and bb - theta * bb * (1 - bb) > 0.03:
                 acct.cancel_all(slug); acct.take(market, "sell", min(n, self.max_pos + q), limit=bb, tag=f"lc-rest-cross z{z:.1f}")
@@ -325,9 +328,10 @@ class LastCallEarly(LastCallHold):
         p, det = p_up(market, ctx["index"], ctx["spot"], now)
         if p is None or det.get("index_age", 99) > 8: return
         z = det["z"]; st["next_take"] = now + 2; n = self.shots_for(z) * self.clip
-        if z >= 3.0 and ba is not None and ba <= self.MAX_PRICE and q < self.max_pos and 1.0 - ba - theta * ba * (1 - ba) > 0.04:
+        mid = (bb + ba) / 2 if bb is not None and ba is not None else 0.5
+        if z >= 3.0 and mid > 0.5 and ba is not None and ba <= self.MAX_PRICE and q < self.max_pos and 1.0 - ba - theta * ba * (1 - ba) > 0.04:
             acct.take(market, "buy", min(n, self.max_pos - q), limit=ba, tag=f"lc-early-up z{z:.1f}")
-        elif z <= -3.0 and bb is not None and bb >= 1 - self.MAX_PRICE and -q < self.max_pos and bb - theta * bb * (1 - bb) > 0.04:
+        elif z <= -3.0 and mid < 0.5 and bb is not None and bb >= 1 - self.MAX_PRICE and -q < self.max_pos and bb - theta * bb * (1 - bb) > 0.04:
             acct.take(market, "sell", min(n, self.max_pos + q), limit=bb, tag=f"lc-early-down z{z:.1f}")
 
 
@@ -354,7 +358,8 @@ class Param(LastCallHold):
         z = det["z"]; st["next_take"] = now + 2; n = self.shots_for(z) * self.clip
         resting = [o for o in acct.open_orders(slug) if o.tag.startswith("v-rest")]
         late = left <= self.t_lo + 10
-        if z >= self.z_min and q < self.max_pos:
+        mid = (bb + ba) / 2; sure = det.get("n_known", 0) >= 50
+        if z >= self.z_min and (mid > 0.5 or sure) and q < self.max_pos:
             fee = theta * ba * (1 - ba)
             if self.entry == "take" or late:
                 if ba <= self.max_price and 1.0 - ba - fee > self.edge:
@@ -362,7 +367,7 @@ class Param(LastCallHold):
             elif not resting:
                 want = min(round(bb + tick, 2), self.max_price, round(ba - tick, 2))
                 if want >= 0.5: acct.place(market, "buy", want, min(n, self.max_pos - q), post_only=True, tag=f"v-rest-up z{z:.1f}")
-        elif z <= -self.z_min and -q < self.max_pos:
+        elif z <= -self.z_min and (mid < 0.5 or sure) and -q < self.max_pos:
             fee = theta * bb * (1 - bb)
             if self.entry == "take" or late:
                 if bb >= 1 - self.max_price and bb - fee > self.edge:
