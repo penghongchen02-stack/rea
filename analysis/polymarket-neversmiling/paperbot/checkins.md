@@ -4,3 +4,4 @@
 2026-11-07 14:07Z run3 | v_all_assets  · lastcall_hold  · lastcall  · lastcall_tilt  · final  · whiskas  · improved  · old  | 60 windows | errors 0
 2026-11-07 15:07Z run3 | ENGINE WAS DOWN since 14:32Z (container reset), restarted in resume mode | v_all_assets  · lastcall_hold  · lastcall  · lastcall_tilt  · lastcall_rest  · final  · whiskas  · improved  · old  | 95 windows
 2026-11-07 16:07Z run3 restarted=yes | v_all_assets  · lastcall_hold  · lastcall  · lastcall_tilt  · lastcall_rest  · final  · whiskas  · improved  · old  | 107 windows | errors 0
+2026-11-07 17:07Z run3 | v_all_assets  · lastcall  · lastcall_tilt  · v_early_z2  · v_loose_z2  · v_mid_z2  · lastcall_early  · v_loose_rest  · lastcall_hold  · lastcall_rest  · final  · whiskas  · improved  · old  | 171 windows | errors 0
