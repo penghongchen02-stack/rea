@@ -101,11 +101,12 @@ class Engine:
     # ---- main loop -------------------------------------------------------
     def settle_market(self, m):
         # authoritative: settlementPrice from the market; fallback: our own 60-second average of the index
-        self.mf.refresh_terms(m); up = None; sp = m.settle_px
+        self.mf.refresh_terms(m); up = None; sp = m.settle_px; src = "exchange"
         if sp is not None and m.p2b is not None: up = sp >= m.p2b
+        elif time.time() - m.end < 45: return False        # give the exchange time to publish settlementPrice
         else:
             avg, n = self.idx.avg(m.asset, m.end - 60, m.end)
-            if avg is not None and n >= 55 and m.p2b is not None: up = avg >= m.p2b; sp = round(avg, 2)
+            if avg is not None and n >= 55 and m.p2b is not None: sp = round(avg, m.decimals); up = sp >= m.p2b; src = "index-average"
         if up is None:
             if time.time() - m.end < 240: return False     # wait for data
             log.warning("could not settle %s; using last price", m.slug); up = (m.last_px or 0.5) >= 0.5
@@ -113,7 +114,7 @@ class Engine:
         for a in self.accounts.values():
             rec = a.settle(m, up, sp)
             if rec: self.store.insert("settlements", {k: v for k, v in rec.items() if k != "ts"} | {"ts": rec["ts"], "up": int(up)})
-        log.info("settled %s up=%s p2b=%s settle=%s", m.slug, up, m.p2b, sp); return True
+        log.info("settled %s up=%s p2b=%s settle=%s (%s)", m.slug, up, m.p2b, sp, src); return True
 
     def loop(self):
         ctx = {"index": self.idx, "spot": self.spot}; last_save = 0; last_eq = 0

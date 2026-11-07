@@ -64,6 +64,7 @@ class Market:
         self.status = raw.get("status"); self.closed = raw.get("closed", False)
         self.fee_coef = float(raw.get("feeCoefficient") or 0.095); self.tick = float(raw.get("orderPriceMinTickSize") or 0.01)
         self.min_qty = float(raw.get("minimumTradeQty") or 0.01); self.question = raw.get("question", "")
+        self.decimals = int(t.get("priceDecimals") or 2)
 
     def apply_book(self, md):
         bids = [(float(b["px"]["value"]), float(b["qty"])) for b in md.get("bids", [])]
@@ -215,8 +216,14 @@ def crosscheck_brti(index_feed):
         m = re.search(r'"rtis":(\[\{.*?\}\])', html)
         if not m: return {"ok": False, "reason": "no rtis block"}
         rtis = json.loads(m.group(1)); ser = index_feed.series.get("btc") or {}
-        diffs = [abs(float(x["value"]) - ser[int(x["time"]) // 1000]) for x in rtis if int(x["time"]) // 1000 in ser]
-        return {"ok": True, "ts": time.time(), "compared": len(diffs), "max_abs_diff": round(max(diffs), 2) if diffs else None,
+        best = None
+        for off in (-3, -2, -1, 0, 1, 2, 3):      # the page's timestamps may be publication time; align on the best offset
+            diffs = [abs(float(x["value"]) - ser[int(x["time"]) // 1000 + off]) for x in rtis if int(x["time"]) // 1000 + off in ser]
+            if diffs:
+                med = sorted(diffs)[len(diffs) // 2]
+                if best is None or med < best[1]: best = (off, med, max(diffs), len(diffs))
+        if not best: return {"ok": False, "reason": "no overlap"}
+        return {"ok": True, "ts": time.time(), "compared": best[3], "offset_s": best[0], "median_abs_diff": round(best[1], 2), "max_abs_diff": round(best[2], 2),
                 "page_last_ts": int(rtis[-1]["time"]) // 1000 if rtis else None}
     except Exception as e:
         return {"ok": False, "reason": str(e)[:120]}
