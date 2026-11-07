@@ -14,9 +14,12 @@ class LadderFeed:
         self.assets = set(assets); self.horizon_s = horizon_s; self.legs = {}; self.last_discover = 0.0; self.lock = __import__("threading").Lock()
 
     def discover(self):
-        now = time.time(); lo = dt.datetime.fromtimestamp(now, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"); hi = dt.datetime.fromtimestamp(now + self.horizon_s, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        d = feeds.get_json(f"{feeds.GATEWAY}/v1/markets?active=true&closed=false&endDateMin={lo}&endDateMax={hi}&limit=500")
-        ms = (d or {}).get("markets") or []; fresh = {}
+        now = time.time(); fmt = lambda t: dt.datetime.fromtimestamp(t, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ms = []
+        for a, b in ((now, now + self.horizon_s), (now + self.horizon_s, now + 30 * 3600)):     # hourly window, then daily ladders
+            d = feeds.get_json(f"{feeds.GATEWAY}/v1/markets?active=true&closed=false&endDateMin={fmt(a)}&endDateMax={fmt(b)}&limit=500")
+            ms += (d or {}).get("markets") or []
+        fresh = {}
         for raw in ms:
             t = raw.get("assetPriceTerms")
             if not t or t["marketType"] not in (ABOVE, RANGE) or t["asset"]["symbol"] not in self.assets: continue
@@ -152,3 +155,51 @@ class LadderArb:
 
     def snapshot(self):
         return {"stats": dict(self.stats), "recent": list(self.opportunities)[:15]}
+
+
+def _phi(z):
+    import math
+    return 0.5 * (1 + math.erf(z / math.sqrt(2)))
+
+
+class LadderModel:
+    """Replica of the ladder-pricing wallet: price every strike and bucket of the hourly and daily BTC/ETH ladders
+    with a lognormal model (spot carried forward, per-second volatility from the index), then buy legs the book
+    offers well below the model: near-sure legs at 0.96-0.99 when the model says >= 0.995, and tiny longshots
+    offered at less than half their model odds. 5 contracts per leg, held to settlement."""
+    name = "ladder_model"
+    MAX_PER_LEG = 5.0
+    def __init__(self, account, feed, index, spot):
+        self.acct = account; self.feed = feed; self.index = index; self.spot = spot; self.last_scan = 0.0; self.stats = collections.Counter(); self.done = set()
+
+    def prob_yes(self, m, S, sig, now):
+        import math
+        tau = max(m.end - now, 1.0); sd = sig * S * math.sqrt(tau) + S * 2e-5
+        if m.market_type.endswith("ABOVE_BELOW"): return 1 - _phi((m.strike - S) / sd)
+        lo = m.r_lo if m.r_lo is not None else -1e18; hi = m.r_hi if m.r_hi is not None else 1e18
+        return _phi((hi - S) / sd) - _phi((lo - S) / sd)
+
+    def scan(self, now):
+        if now - self.last_scan < 20: return
+        self.last_scan = now; theta = self.acct.theta
+        for (asset, end), legs in self.feed.ladders().items():
+            if end - now < 120: continue
+            its, S_idx = self.index.last(asset)
+            if S_idx is None: continue
+            cb_now, cb_ts = self.spot.last(asset); cb_then = self.spot.at(asset, its) if cb_now else None
+            S = S_idx * (cb_now / cb_then) if cb_now and cb_then else S_idx
+            sig = self.index.sigma(asset)
+            for m in legs:
+                if m.slug in self.done or m.list_ask is None: continue
+                pm = self.prob_yes(m, S, sig, now); ask = m.list_ask
+                near_sure = 0.90 <= ask <= 0.99 and pm >= 0.995 and 1 - ask - theta * ask * (1 - ask) > 0.005
+                longshot = 0.01 <= ask <= 0.10 and pm >= 2 * ask + 0.02
+                if not (near_sure or longshot): continue
+                self.stats["candidates"] += 1
+                if not self.feed.fetch_book(m) or m.best_ask is None: self.stats["no_live_quote"] += 1; continue
+                ask = m.best_ask
+                if not ((0.90 <= ask <= 0.99 and pm >= 0.995) or (0.01 <= ask <= 0.10 and pm >= 2 * ask + 0.02)): self.stats["vanished"] += 1; continue
+                n = min(self.MAX_PER_LEG, m.offers[0][1])
+                o = self.acct.take(m, "buy", n, limit=ask, tag=f"lm-{'sure' if ask >= 0.9 else 'long'} p{pm:.3f}")
+                if o and o.filled > 0: self.stats["trades"] += 1; self.done.add(m.slug); log.info("ladder_model buy %s @%.2f model %.3f x %.1f", m.slug, ask, pm, n)
+    def snapshot(self): return {"stats": dict(self.stats)}

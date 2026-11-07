@@ -1,9 +1,9 @@
 """Main loop: feeds -> books -> strategies -> fills -> settlement; persists to SQLite and serves the dashboard."""
 import os, sys, time, json, threading, logging, sqlite3, http.server, socketserver, functools, collections
 from . import feeds
-from .ladder import LadderFeed, LadderArb
+from .ladder import LadderFeed, LadderArb, LadderModel
 from .sim import Account
-from .strategies import OldModel, Improved, FinalMinute, WhiskasReplica, LastCall, LastCallTilt, LastCallHold, LastCallRest, LastCallEarly, Param, SWEEP, MarketFollow, RANDOM_BOTS, PickOff, Scalper
+from .strategies import OldModel, Improved, FinalMinute, WhiskasReplica, LastCall, LastCallTilt, LastCallHold, LastCallRest, LastCallEarly, Param, SWEEP, MarketFollow, RANDOM_BOTS, PickOff, Scalper, BurstLean, FairValue, Crouch
 from .fair import p_up
 
 DATA = os.environ.get("PAPERBOT_DATA", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot-data"))
@@ -39,8 +39,8 @@ class Engine:
         for k in SWEEP: self.accounts[k] = Account(k, START_CASH)
         for k in ("follow80", "follow80_model"): self.accounts[k] = Account(k, START_CASH)
         for k in RANDOM_BOTS: self.accounts[k] = Account(k, START_CASH)
-        for k in ("ladder", "pickoff", "hourly_last", "hourly_rest", "hourly_follow80", "scalper_with", "scalper_fade"): self.accounts[k] = Account(k, START_CASH)
-        self.lf = LadderFeed(); self.ladder = LadderArb(self.accounts["ladder"], self.lf)
+        for k in ("ladder", "pickoff", "hourly_last", "hourly_rest", "hourly_follow80", "scalper_with", "scalper_fade", "burst_lean", "fair_value", "crouch", "ladder_model"): self.accounts[k] = Account(k, START_CASH)
+        self.lf = LadderFeed(); self.ladder = LadderArb(self.accounts["ladder"], self.lf); self.ladder_model = LadderModel(self.accounts["ladder_model"], self.lf, self.idx, self.spot)
         # retired after the first 88 windows (structurally losing here): old, improved, whiskas. Their accounts stay for the record.
         active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
         if active == ["all"]: active = list(self.accounts.keys())
@@ -57,6 +57,9 @@ class Engine:
         if "pickoff" in active: self.strats.append(PickOff(self.accounts["pickoff"]))
         if "scalper_with" in active: self.strats.append(Scalper(self.accounts["scalper_with"], "scalper_with", fade=False))
         if "scalper_fade" in active: self.strats.append(Scalper(self.accounts["scalper_fade"], "scalper_fade", fade=True))
+        if "burst_lean" in active: self.strats.append(BurstLean(self.accounts["burst_lean"]))
+        if "fair_value" in active: self.strats.append(FairValue(self.accounts["fair_value"]))
+        if "crouch" in active: self.strats.append(Crouch(self.accounts["crouch"]))
         if "hourly_last" in active: self.strats.append(Param(self.accounts["hourly_last"], "hourly_last", 30, 120, 2.5, 0.90, "take", (3600,), ("btc", "eth"), 0))
         if "hourly_rest" in active: self.strats.append(Param(self.accounts["hourly_rest"], "hourly_rest", 30, 120, 2.5, 0.90, "rest", (3600,), ("btc", "eth"), 0))
         if "hourly_follow80" in active: self.strats.append(MarketFollow(self.accounts["hourly_follow80"], "hourly_follow80", 60, 180, 0.75, 0.85, None, durs=(3600,)))
@@ -149,12 +152,14 @@ class Engine:
             t0 = time.time(); self.loop_count += 1
             try:
                 self.mf.poll_books(); now = time.time()
-                if "ladder" in self.active:
+                if "ladder" in self.active or "ladder_model" in self.active:
                     try:
-                        self.ladder.scan(now)
-                        for slug, pos in self.accounts["ladder"].positions.items():     # legs we hold must settle: adopt them into the market map
-                            if not pos.closed and abs(pos.qty) > 1e-9 and slug not in self.mf.markets and slug in self.lf.legs:
-                                with self.mf.lock: self.mf.markets[slug] = self.lf.legs[slug]
+                        if "ladder" in self.active: self.ladder.scan(now)
+                        if "ladder_model" in self.active: self.ladder_model.scan(now)
+                        for a in (self.accounts["ladder"], self.accounts["ladder_model"]):
+                            for slug, pos in a.positions.items():     # legs we hold must settle: adopt them into the market map
+                                if not pos.closed and abs(pos.qty) > 1e-9 and slug not in self.mf.markets and slug in self.lf.legs:
+                                    with self.mf.lock: self.mf.markets[slug] = self.lf.legs[slug]
                     except Exception as e: self.errors += 1; log.exception("ladder: %s", e)
                 for m in list(self.mf.markets.values()):
                     if m.p2b is None and now - m.start > 5 and int(now) % 5 == 0: self.mf.refresh_terms(m)
@@ -209,7 +214,7 @@ class Engine:
                            "accounts": {n: a.snapshot(self.mf.markets) for n, a in self.accounts.items()}, "markets": mk, "index": idx, "spot": spot,
                            "feeds": {"index_age": round(now - self.idx.last_ok, 1) if self.idx.last_ok else None, "coinbase_connected": self.spot.connected, "coinbase_msgs": self.spot.msgs,
                                      "books_polled": len(self.mf.markets), "brti_crosscheck": self.crosscheck},
-                           "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot() if hasattr(self, "ladder") else {}, "config": {"active": self.active, "labels": self.labels, "start_cash": START_CASH, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
+                           "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot() if hasattr(self, "ladder") else {}, "ladder_model": self.ladder_model.snapshot() if hasattr(self, "ladder_model") else {}, "config": {"active": self.active, "labels": self.labels, "start_cash": START_CASH, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
 
     def settle_orphans(self):
         """After a restart, positions in windows that closed while the engine was down are settled from the exchange."""

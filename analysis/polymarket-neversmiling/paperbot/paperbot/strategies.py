@@ -519,3 +519,73 @@ class Scalper(LastCallHold):
             acct.take(market, "buy", self.clip, limit=ba, tag=f"sc-buy m{mid:.2f} p{p:.2f}")
         elif down_ok and bb - p - theta * bb * (1 - bb) > self.margin and -q < self.max_pos and 0.05 <= bb <= 0.95:
             acct.take(market, "sell", self.clip, limit=bb, tag=f"sc-sell m{mid:.2f} p{p:.2f}")
+
+
+class BurstLean(Base):
+    """Replica: 5-minute BTC only, taker only. Bursts every ~10 s buying both sides in 3-contract lots, two lots on
+    the side spot is moving toward and one on the other, only while the pair still costs under $0.98 after fees.
+    Everything held to settlement."""
+    name = "burst_lean"
+    def __init__(self, account, seed=41): super().__init__(account, clip=3.0, max_pos=12.0, seed=seed)
+    def on_tick(self, market, ctx, now):
+        if market.asset != "btc" or market.dur != 300: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 20 or now - market.start < 15 or market.state not in (None, "MARKET_STATE_OPEN") or now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None or ba - bb > 0.06: return
+        st["next_take"] = now + self.rng.uniform(8, 14)
+        spot = ctx["spot"]; cb_now, cb_ts = spot.last("btc"); cb_then = spot.at("btc", now - 10)
+        if not cb_now or not cb_then: return
+        up_lean = cb_now >= cb_then; theta = acct.theta
+        pair = ba + (1 - bb) + theta * ba * (1 - ba) + theta * bb * (1 - bb)      # buy Up at ask and Down at (1 - bid)
+        if pair > 0.98: return
+        q = self.pos(slug)
+        n_up, n_dn = (2, 1) if up_lean else (1, 2)
+        if q + n_up * self.clip <= self.max_pos: acct.take(market, "buy", n_up * self.clip, limit=ba, tag=f"burst-up{'*' if up_lean else ''}")
+        if -q + n_dn * self.clip <= self.max_pos: acct.take(market, "sell", n_dn * self.clip, limit=bb, tag=f"burst-down{'*' if not up_lean else ''}")
+
+
+class FairValue(LastCallHold):
+    """Replica: 5-minute BTC/ETH, 6-contract round lots, taker only, any time in the window including late. Buys
+    whichever side is cheap against the model's probability by more than the fee plus 2 cents, up to $0.95. Holds."""
+    name = "fair_value"
+    def __init__(self, account, seed=42): super().__init__(account, seed=seed); self.clip = 6.0; self.max_pos = 12.0
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth") or market.dur != 300: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 5 or now - market.start < 15 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        if now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("index_age", 99) > 8: return
+        st["next_take"] = now + 4; theta = acct.theta; q = self.pos(slug)
+        if p - ba - theta * ba * (1 - ba) > 0.02 and ba <= 0.95 and q < self.max_pos:
+            acct.take(market, "buy", self.clip, limit=ba, tag=f"fv-up p{p:.2f}")
+        elif bb - p - theta * bb * (1 - bb) > 0.02 and bb >= 0.05 and -q < self.max_pos:
+            acct.take(market, "sell", self.clip, limit=bb, tag=f"fv-down p{p:.2f}")
+
+
+class Crouch(LastCallHold):
+    """Replica: 5- and 15-minute BTC/ETH. In the last quarter of the window it buys the near-certain side at
+    80 to 93 cents when the model at least mildly agrees (z >= 1.5). One entry per window, 3 contracts, holds."""
+    name = "crouch"
+    def __init__(self, account, seed=43): super().__init__(account, seed=seed); self.clip = 3.0; self.max_pos = 3.0
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth") or market.dur not in (300, 900): return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        if st.get("done") or left > 0.25 * market.dur or left < 10: return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None: return
+        z = det["z"]
+        if 0.80 <= ba <= 0.93 and z >= 1.5:
+            o = acct.take(market, "buy", self.clip, limit=ba, tag=f"crouch-up {ba:.2f} z{z:.1f}")
+            if o and o.filled > 0: st["done"] = True
+        elif 0.80 <= 1 - bb <= 0.93 and z <= -1.5:
+            o = acct.take(market, "sell", self.clip, limit=bb, tag=f"crouch-down {1-bb:.2f} z{z:.1f}")
+            if o and o.filled > 0: st["done"] = True
