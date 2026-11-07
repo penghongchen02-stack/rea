@@ -397,3 +397,32 @@ SWEEP = {
     "v_mid_z2":        (90,   240,  2.0,   0.80,      "take", (300,),      ("btc", "eth"),                0),
     "v_15m_z2":        (60,   300,  2.0,   0.90,      "take", (900,),      ("btc", "eth", "sol", "xrp"),  0),
 }
+
+
+class MarketFollow(LastCallHold):
+    """User's rule: with 1 to 2 minutes left in a BTC/ETH 5-minute window, if the leading side is priced around
+    80 cents, buy it. Pure market-following, no model, unless z_min is set (then the settlement arithmetic must
+    at least mildly agree). One entry per window, 2 contracts, held to settlement (protective exit kept)."""
+    def __init__(self, account, name, t_lo=60, t_hi=120, p_lo=0.75, p_hi=0.85, z_min=None, seed=21):
+        super().__init__(account, seed=seed)
+        self.name = name; self.t_lo = t_lo; self.t_hi = t_hi; self.p_lo = p_lo; self.p_hi = p_hi; self.z_min = z_min; self.clip = 2.0; self.max_pos = 2.0
+
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth") or market.dur != 300: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        if self.z_min is not None: self.manage(market, ctx, now)
+        if st.get("done") or left > self.t_hi or left < self.t_lo: return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        z = None
+        if self.z_min is not None:
+            p, det = p_up(market, ctx["index"], ctx["spot"], now)
+            if p is None: return
+            z = det["z"]
+        if self.p_lo <= ba <= self.p_hi and (z is None or z >= self.z_min):          # Up is leading at ~80c: buy Up
+            o = acct.take(market, "buy", self.clip, limit=ba, tag=f"follow-up {ba:.2f}" + (f" z{z:.1f}" if z is not None else ""))
+            if o and o.filled > 0: st["done"] = True
+        elif self.p_lo <= 1 - bb <= self.p_hi and (z is None or z <= -self.z_min):    # Down is leading at ~80c: sell YES
+            o = acct.take(market, "sell", self.clip, limit=bb, tag=f"follow-down {1-bb:.2f}" + (f" z{z:.1f}" if z is not None else ""))
+            if o and o.filled > 0: st["done"] = True
