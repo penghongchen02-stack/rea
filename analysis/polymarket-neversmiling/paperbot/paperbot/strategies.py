@@ -391,4 +391,9 @@ SWEEP = {
     "v_cheap":         (60,   280,  3.0,   0.70,      "take", (300, 900),  ("btc", "eth"),                0),
     "v_all_assets":    (30,   90,   3.0,   0.90,      "take", (300,),      ("btc", "eth", "sol", "xrp"),  0),
     "v_strict":        (30,   120,  4.0,   0.92,      "take", (300, 900),  ("btc", "eth"),                0),
+    # looser round (added 14:10Z after an hour with almost no fills): same idea, more room to act
+    "v_loose_z2":      (30,   120,  2.0,   0.95,      "take", (300,),      ("btc", "eth"),                0),
+    "v_loose_rest":    (30,   120,  2.0,   0.95,      "rest", (300,),      ("btc", "eth"),                0),
+    "v_mid_z2":        (90,   240,  2.0,   0.80,      "take", (300,),      ("btc", "eth"),                0),
+    "v_15m_z2":        (60,   300,  2.0,   0.90,      "take", (900,),      ("btc", "eth", "sol", "xrp"),  0),
 }
