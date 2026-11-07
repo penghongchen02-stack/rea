@@ -306,3 +306,26 @@ class LastCallRest(LastCallHold):
                 acct.place(market, "sell", want, min(n, self.max_pos + q), post_only=True, tag=f"lc-rest-down z{z:.1f}")
         elif resting and abs(z) < 1.5:
             acct.cancel_all(slug)                      # math no longer decisive: do not leave a bid out to be picked off
+
+
+class LastCallEarly(LastCallHold):
+    """Probe result: by the time 25 settlement seconds are published (about 32 s before the close, given the index
+    lag) the BTC book is already 0.98/0.99. This variant acts earlier, between 90 and 30 seconds before the close,
+    on the spot-carried projection alone (no published-seconds requirement) with a stricter z >= 3 and a $0.90 cap.
+    Holds to settlement; protective exit if the published seconds then disagree."""
+    name = "lastcall_early"
+    MAX_PRICE = 0.90
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth"): return
+        slug = market.slug; st = self.m(slug); rem = market.remaining(now)
+        if rem < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        if rem > 90 or rem < 30 or now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask; q = self.pos(slug); acct = self.acct; theta = acct.theta
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("index_age", 99) > 8: return
+        z = det["z"]; st["next_take"] = now + 2; n = self.shots_for(z) * self.clip
+        if z >= 3.0 and ba is not None and ba <= self.MAX_PRICE and q < self.max_pos and 1.0 - ba - theta * ba * (1 - ba) > 0.04:
+            acct.take(market, "buy", min(n, self.max_pos - q), limit=ba, tag=f"lc-early-up z{z:.1f}")
+        elif z <= -3.0 and bb is not None and bb >= 1 - self.MAX_PRICE and -q < self.max_pos and bb - theta * bb * (1 - bb) > 0.04:
+            acct.take(market, "sell", min(n, self.max_pos + q), limit=bb, tag=f"lc-early-down z{z:.1f}")
