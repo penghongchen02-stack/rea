@@ -66,9 +66,12 @@ class Improved(Base):
         if el < 15 or rem < 2 or market.state not in (None, "MARKET_STATE_OPEN"): return
         bb, ba = market.best_bid, market.best_ask
         if bb is None or ba is None: return
-        p, det = p_up(market, ctx["index"], ctx["spot"], now)
-        if p is None: return
+        p_model, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p_model is None: return
+        mid = (bb + ba) / 2
+        p = 0.5 * p_model + 0.5 * mid                 # the market is a strong prior; the model alone was under-confident and faded winners
         q = self.pos(slug); acct = self.acct; theta = acct.theta
+        resting_buy = sum(o.remaining for o in acct.open_orders(slug) if o.side == "buy"); resting_sell = sum(o.remaining for o in acct.open_orders(slug) if o.side == "sell")
         def fee(px): return theta * px * (1 - px)
         tick = market.tick
         # --- quoting around fair value; pulled whenever fair moves through a quote; off in the last 20%
@@ -81,9 +84,9 @@ class Improved(Base):
             if o.tag.startswith("tp-") and abs(q) < 1e-9: acct.cancel(o.id)
         tags = {o.tag for o in acct.open_orders(slug)}
         if not pickoff_zone and want_ask - want_bid >= 2 * tick - 1e-9:
-            if "quote-bid" not in tags and q <= 0 + 1e-9 and q > -self.max_pos and 0.03 <= want_bid <= 0.97:
+            if "quote-bid" not in tags and q <= 0 + 1e-9 and q > -self.max_pos and 0.03 <= want_bid <= 0.97 and abs(p_model - mid) < 0.15:
                 acct.place(market, "buy", want_bid, self.size(), post_only=True, tag="quote-bid")
-            if "quote-ask" not in tags and q >= 0 - 1e-9 and q < self.max_pos and 0.03 <= want_ask <= 0.97:
+            if "quote-ask" not in tags and q >= 0 - 1e-9 and q < self.max_pos and 0.03 <= want_ask <= 0.97 and abs(p_model - mid) < 0.15:
                 acct.place(market, "sell", want_ask, self.size(), post_only=True, tag="quote-ask")
         # --- resting take-profit on inventory (maker, no fee), never averaging down
         pos = acct.positions.get(slug)
@@ -99,7 +102,8 @@ class Improved(Base):
             st["next_take"] = now + 3
             edge_buy = p - ba - fee(ba); edge_sell = bb - p - fee(bb)
             margin = 0.03 if rem > 60 else 0.015
-            if edge_buy > margin and (ba <= 0.15 or ba >= 0.85 or rem <= 60) and q < self.max_pos:
+            agree_up = p_model > 0.5 and mid > 0.5; agree_down = p_model < 0.5 and mid < 0.5     # never fade the market's direction
+            if edge_buy > margin and agree_up and (ba >= 0.85 or rem <= 60) and q + resting_buy < self.max_pos:
                 acct.take(market, "buy", 2 * self.size(), limit=ba, tag="edge-buy" if rem > 60 else "twap-buy")
-            elif edge_sell > margin and (bb <= 0.15 or bb >= 0.85 or rem <= 60) and q > -self.max_pos:
+            elif edge_sell > margin and agree_down and (bb <= 0.15 or rem <= 60) and -q + resting_sell < self.max_pos:
                 acct.take(market, "sell", 2 * self.size(), limit=bb, tag="edge-sell" if rem > 60 else "twap-sell")

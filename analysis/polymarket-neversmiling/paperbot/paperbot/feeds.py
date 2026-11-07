@@ -174,10 +174,11 @@ class IndexFeed:
         ser = self.series.get(a) or {}
         if len(ser) < 60: return 2e-4
         items = list(ser.items())[-seconds:]; import math
-        rets = [math.log(items[i][1] / items[i - 1][1]) for i in range(1, len(items)) if items[i][0] - items[i - 1][0] == 1 and items[i - 1][1] > 0]
+        step = 5   # 5-second differences scaled back to 1 second: less biased by the index's smoothing than 1-second ticks
+        rets = [math.log(items[i][1] / items[i - step][1]) for i in range(step, len(items)) if items[i][0] - items[i - step][0] == step and items[i - step][1] > 0]
         if len(rets) < 30: return 2e-4
         m = sum(rets) / len(rets); var = sum((r - m) ** 2 for r in rets) / (len(rets) - 1)
-        return max(var ** 0.5, 8e-5)   # floor: the 1-second index is smoother than spot; ~2.5%/day => 8e-5 per sqrt(second)
+        return max((var / step) ** 0.5, 1.5e-5)
 
 
 class SpotFeed:
@@ -185,6 +186,7 @@ class SpotFeed:
     PRODUCTS = {"btc": "BTC-USD", "eth": "ETH-USD", "sol": "SOL-USD", "xrp": "XRP-USD"}
     def __init__(self):
         self.price = {}; self.ts = {}; self.lock = threading.Lock(); self.connected = False; self.msgs = 0
+        self.hist = {a: collections.deque(maxlen=600) for a in self.PRODUCTS}   # (ts, price) for the last ~minutes
 
     def run(self):
         import asyncio, websockets
@@ -199,13 +201,23 @@ class SpotFeed:
                             if m.get("type") == "ticker" and m.get("price"):
                                 a = next((k for k, v in self.PRODUCTS.items() if v == m["product_id"]), None)
                                 if a:
-                                    with self.lock: self.price[a] = float(m["price"]); self.ts[a] = time.time(); self.msgs += 1
+                                    with self.lock:
+                                        self.price[a] = float(m["price"]); self.ts[a] = time.time(); self.msgs += 1; self.hist[a].append((self.ts[a], self.price[a]))
                 except Exception as e:
                     self.connected = False; log.warning("coinbase ws: %s", e); await asyncio.sleep(3)
         asyncio.run(main())
 
     def last(self, a):
         with self.lock: return self.price.get(a), self.ts.get(a)
+
+    def at(self, a, ts):
+        """Spot price at (or just before) a timestamp, from the recent history."""
+        with self.lock:
+            best = None
+            for t, px in self.hist.get(a, ()):
+                if t <= ts + 0.5: best = px
+                else: break
+            return best
 
 
 def crosscheck_brti(index_feed):
