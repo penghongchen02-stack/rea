@@ -9,3 +9,5 @@
 2026-11-07 18:07Z dollar | rnd2  · ladder_model  · scalper_fade  · improved  · fair_value  · old  | errors 0
 2026-11-07 19:07Z std | v_all_assets  · lastcall  · lastcall_tilt  · v_early_z2  · v_loose_z2  · scalper_with  · crouch  · v_mid_z2  · lastcall_early  · v_loose_rest  · rnd2  · lastcall_hold  · lastcall_rest  · final  · ladder_model  · follow80  · scalper_fade  · fair_value  · whiskas  · improved  · old  | errors 0
 2026-11-07 19:07Z dollar | rnd2  · v_all_assets  · final  · scalper_with  · ladder_model  · fair_value  · follow80  · improved  · scalper_fade  · old  · whiskas  | errors 0
+2026-11-07 20:07Z std | v_all_assets  · v_loose_z2  · lastcall  · lastcall_tilt  · scalper_with  · crouch  · v_early_z2  · v_loose_rest  · v_mid_z2  · lastcall_early  · lastcall_hold  · lastcall_rest  · final  · rnd2  · scalper_fade  · ladder_model  · follow80  · fair_value  · whiskas  · improved  · old  | errors 0
+2026-11-07 20:07Z dollar | fair_value  · final  · v_all_assets  · scalper_with  · v_loose_z2  · lastcall  · crouch  · v_loose_rest  · lastcall_hold  · lastcall_tilt  · ladder_model  · rnd2  · scalper_fade  · follow80  · improved  · old  · whiskas  | errors 0
