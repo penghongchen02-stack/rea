@@ -426,3 +426,27 @@ class MarketFollow(LastCallHold):
         elif self.p_lo <= 1 - bb <= self.p_hi and (z is None or z <= -self.z_min):    # Down is leading at ~80c: sell YES
             o = acct.take(market, "sell", self.clip, limit=bb, tag=f"follow-down {1-bb:.2f}" + (f" z{z:.1f}" if z is not None else ""))
             if o and o.filled > 0: st["done"] = True
+
+
+def random_bots(n=5, seed=2026):
+    """Randomly drawn configurations across the design space; reproducible by seed. Returns {name: (kind, params)}."""
+    import random
+    rng = random.Random(seed); out = {}
+    for i in range(n):
+        kind = rng.choice(["model", "model", "follow"])
+        durs = rng.choice([(300,), (900,), (300, 900)])
+        assets = rng.choice([("btc",), ("btc", "eth"), ("btc", "eth", "sol", "xrp")])
+        dmax = max(durs); t_lo = rng.choice([20, 30, 60, 90]); t_hi = min(dmax - 10, t_lo + rng.choice([60, 90, 150, 240]))
+        if kind == "model":
+            params = dict(t_lo=t_lo, t_hi=t_hi, z_min=rng.choice([1.5, 2.0, 2.5, 3.0, 4.0]), max_price=rng.choice([0.6, 0.7, 0.8, 0.9, 0.95]),
+                          entry=rng.choice(["take", "rest"]), durs=durs, assets=assets, n_min=0, clip=rng.choice([1.0, 2.0, 3.0]))
+            label = "model z%.1f <=%.2f %s %ds-%ds %s %s c%g" % (params["z_min"], params["max_price"], params["entry"], t_hi, t_lo,
+                     "/".join(str(d // 60) + "m" for d in durs), "+".join(a.upper() for a in assets), params["clip"])
+        else:
+            lo = rng.choice([0.55, 0.65, 0.75, 0.85]); hi = lo + rng.choice([0.08, 0.10, 0.15])
+            params = dict(t_lo=t_lo, t_hi=t_hi, p_lo=lo, p_hi=round(hi, 2), z_min=rng.choice([None, None, 0.5, 1.0]))
+            label = "follow %.2f-%.2f %ds-%ds %s" % (lo, params["p_hi"], t_hi, t_lo, "z>=%.1f" % params["z_min"] if params["z_min"] is not None else "no model")
+        out[f"rnd{i+1}"] = (kind, params, label)
+    return out
+
+RANDOM_BOTS = random_bots()
