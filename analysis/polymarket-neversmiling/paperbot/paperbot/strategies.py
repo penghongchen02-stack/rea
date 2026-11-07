@@ -173,3 +173,48 @@ class WhiskasReplica(Base):
             else:                                       # short YES (sold at avg): buy YES at ask => pair = (1 - avg) + ba
                 pair = (1 - pos.avg) + ba + theta * ba * (1 - ba)
                 if pair <= self.PAIR_CAP: acct.take(market, "buy", min(-q, 2 * self.clip), limit=ba, tag="w-hedge")
+
+
+class LastCall(Base):
+    """Fifth bot, 'LastCall': the lessons of the first four. BTC and ETH only (precise indices). Never quotes
+    both sides. Enters only in the final minute, once most of the 60 settlement seconds are published and the
+    projection is decisive, buying the near-certain side while it still costs <= $0.93. Size scales with
+    confidence (z), in small uniform clips. Rests a take-profit 3 cents above cost (maker, no fee) so an early
+    lift frees the capital; otherwise holds to settlement."""
+    name = "lastcall"
+    MAX_PRICE = 0.93
+    def __init__(self, account, seed=5):
+        super().__init__(account, clip=2.0, max_pos=8.0, seed=seed)
+
+    def shots_for(self, z):
+        z = abs(z)
+        return 1 if z < 4 else (2 if z < 6 else 3)          # 2, 4 or 6 contracts
+
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth"): return
+        slug = market.slug; st = self.m(slug); rem = market.remaining(now)
+        if rem < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        acct = self.acct; bb, ba = market.best_bid, market.best_ask; pos = acct.positions.get(slug); q = self.pos(slug)
+        tick = market.tick; theta = acct.theta
+        # --- take-profit on inventory: rest 3 cents better than cost, cancel it in the last 5 seconds (settlement pays anyway)
+        tags = {o.tag for o in acct.open_orders(slug)}
+        if pos and abs(q) > 1e-9 and rem > 5:
+            if q > 0 and "lc-tp-sell" not in tags and ba is not None:
+                tp = max(math.ceil((pos.avg + 0.03) / tick) * tick, ba)
+                if tp <= 0.99: acct.place(market, "sell", tp, round(q, 2), post_only=True, tag="lc-tp-sell")
+            if q < 0 and "lc-tp-buy" not in tags and bb is not None:
+                tp = min(math.floor((pos.avg - 0.03) / tick) * tick, bb)
+                if tp >= 0.01: acct.place(market, "buy", tp, round(-q, 2), post_only=True, tag="lc-tp-buy")
+        elif rem <= 5: acct.cancel_all(slug)
+        # --- final-minute entries
+        if rem > 60 or now < st["next_take"]: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("n_known", 0) < 25: return
+        z = det["z"]; st["next_take"] = now + 2
+        n = self.shots_for(z) * self.clip
+        if z >= 2.5 and ba is not None and ba <= self.MAX_PRICE and q < self.max_pos:
+            if 1.0 - ba - theta * ba * (1 - ba) > 0.03:
+                acct.take(market, "buy", min(n, self.max_pos - q), limit=ba, tag=f"lc-up z{z:.1f}")
+        elif z <= -2.5 and bb is not None and bb >= 1 - self.MAX_PRICE and -q < self.max_pos:
+            if bb - theta * bb * (1 - bb) > 0.03:
+                acct.take(market, "sell", min(n, self.max_pos + q), limit=bb, tag=f"lc-down z{z:.1f}")
