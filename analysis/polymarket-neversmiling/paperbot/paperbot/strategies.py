@@ -329,3 +329,61 @@ class LastCallEarly(LastCallHold):
             acct.take(market, "buy", min(n, self.max_pos - q), limit=ba, tag=f"lc-early-up z{z:.1f}")
         elif z <= -3.0 and bb is not None and bb >= 1 - self.MAX_PRICE and -q < self.max_pos and bb - theta * bb * (1 - bb) > 0.04:
             acct.take(market, "sell", min(n, self.max_pos + q), limit=bb, tag=f"lc-early-down z{z:.1f}")
+
+
+class Param(LastCallHold):
+    """Parametric variant used for the sweep. Enters the near-certain side when the spot-led projection is decisive
+    inside a time band before the close, by taking or by resting one tick inside the touch (crossing only if still
+    unfilled near the end of the band). Holds to settlement; protective exit when the published seconds disagree."""
+    def __init__(self, account, name, t_lo, t_hi, z_min, max_price, entry="take", durs=(300,), assets=("btc", "eth"),
+                 n_min=0, clip=2.0, max_pos=8.0, edge=0.03, seed=11):
+        super().__init__(account, seed=seed)
+        self.name = name; self.t_lo = t_lo; self.t_hi = t_hi; self.z_min = z_min; self.max_price = max_price; self.entry = entry
+        self.durs = set(durs); self.assets = set(assets); self.n_min = n_min; self.clip = clip; self.max_pos = max_pos; self.edge = edge
+
+    def on_tick(self, market, ctx, now):
+        if market.asset not in self.assets or market.dur not in self.durs: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        if left > self.t_hi or left < self.t_lo or now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask; q = self.pos(slug); theta = acct.theta; tick = market.tick
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("index_age", 99) > 8 or det.get("n_known", 0) < self.n_min: return
+        z = det["z"]; st["next_take"] = now + 2; n = self.shots_for(z) * self.clip
+        resting = [o for o in acct.open_orders(slug) if o.tag.startswith("v-rest")]
+        late = left <= self.t_lo + 10
+        if z >= self.z_min and q < self.max_pos:
+            fee = theta * ba * (1 - ba)
+            if self.entry == "take" or late:
+                if ba <= self.max_price and 1.0 - ba - fee > self.edge:
+                    acct.cancel_all(slug); acct.take(market, "buy", min(n, self.max_pos - q), limit=ba, tag=f"v-up z{z:.1f}")
+            elif not resting:
+                want = min(round(bb + tick, 2), self.max_price, round(ba - tick, 2))
+                if want >= 0.5: acct.place(market, "buy", want, min(n, self.max_pos - q), post_only=True, tag=f"v-rest-up z{z:.1f}")
+        elif z <= -self.z_min and -q < self.max_pos:
+            fee = theta * bb * (1 - bb)
+            if self.entry == "take" or late:
+                if bb >= 1 - self.max_price and bb - fee > self.edge:
+                    acct.cancel_all(slug); acct.take(market, "sell", min(n, self.max_pos + q), limit=bb, tag=f"v-down z{z:.1f}")
+            elif not resting:
+                want = max(round(ba - tick, 2), 1 - self.max_price, round(bb + tick, 2))
+                if want <= 0.5: acct.place(market, "sell", want, min(n, self.max_pos + q), post_only=True, tag=f"v-rest-down z{z:.1f}")
+        elif resting and abs(z) < self.z_min - 1:
+            acct.cancel_all(slug)
+
+
+SWEEP = {
+    # name:            (t_lo, t_hi, z_min, max_price, entry,  durs,        assets,                        n_min)
+    "v_mid_take":      (90,   180,  3.0,   0.85,      "take", (300,),      ("btc", "eth"),                0),
+    "v_mid_rest":      (90,   180,  3.0,   0.85,      "rest", (300,),      ("btc", "eth"),                0),
+    "v_early_z2":      (30,   90,   2.0,   0.90,      "take", (300,),      ("btc", "eth"),                0),
+    "v_early_rest":    (30,   90,   3.0,   0.90,      "rest", (300,),      ("btc", "eth"),                0),
+    "v_15m_early":     (60,   180,  3.0,   0.90,      "take", (900,),      ("btc", "eth"),                0),
+    "v_15m_rest":      (60,   180,  3.0,   0.90,      "rest", (900,),      ("btc", "eth"),                0),
+    "v_open_mom":      (210,  280,  2.0,   0.65,      "take", (300,),      ("btc", "eth"),                0),
+    "v_cheap":         (60,   280,  3.0,   0.70,      "take", (300, 900),  ("btc", "eth"),                0),
+    "v_all_assets":    (30,   90,   3.0,   0.90,      "take", (300,),      ("btc", "eth", "sol", "xrp"),  0),
+    "v_strict":        (30,   120,  4.0,   0.92,      "take", (300, 900),  ("btc", "eth"),                0),
+}
