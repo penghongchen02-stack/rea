@@ -3,9 +3,21 @@ import math, time
 
 def phi(z): return 0.5 * (1 + math.erf(z / math.sqrt(2)))
 
+_CACHE = {}
+
 def p_up(market, index_feed, spot_feed, now=None):
-    """Return (prob_up, details). Settlement value = mean of index over [end-60, end)."""
-    now = now or time.time(); a = market.asset; K = market.p2b
+    """Return (prob_up, details), cached per (market, second): 60+ bots in 3 universes call this for the same
+    market in the same loop pass."""
+    now = now or time.time(); key = (market.slug, int(now))
+    hit = _CACHE.get(key)
+    if hit is not None: return hit
+    if len(_CACHE) > 4000: _CACHE.clear()
+    res = _p_up(market, index_feed, spot_feed, now); _CACHE[key] = res; return res
+
+
+def _p_up(market, index_feed, spot_feed, now):
+    """Settlement value = mean of index over [end-60, end)."""
+    a = market.asset; K = market.p2b
     if K is None: return None, {"reason": "no price to beat yet"}
     its, S = index_feed.last(a)          # IndexFeed.last returns (timestamp, value)
     if S is None: return None, {"reason": "no index"}

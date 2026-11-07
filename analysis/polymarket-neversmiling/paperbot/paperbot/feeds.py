@@ -187,13 +187,20 @@ class IndexFeed:
             ts = next(reversed(ser)); return ts, ser[ts]
 
     def avg(self, a, t0, t1):
-        """Mean of the 1-second index values with t0 <= ts < t1; returns (mean, n)."""
-        with self.lock: items = list((self.series.get(a) or {}).items())
-        vals = [v for ts, v in items if t0 <= ts < t1]
+        """Mean of the 1-second index values with t0 <= ts < t1; returns (mean, n). Direct lookups, no scan."""
+        with self.lock:
+            ser = self.series.get(a) or {}
+            vals = [ser[ts] for ts in range(int(t0), int(t1)) if ts in ser]
         return (sum(vals) / len(vals), len(vals)) if vals else (None, 0)
 
     def sigma(self, a, seconds=1200):
-        """Per-second log-return std over the recent window (floored; fallback 2e-4)."""
+        """Per-second log-return std over the recent window (floored; fallback 2e-4). Cached for 10 s."""
+        cache = self.__dict__.setdefault("_sig_cache", {}); now = time.time()
+        hit = cache.get(a)
+        if hit and now - hit[0] < 10: return hit[1]
+        val = self._sigma(a, seconds); cache[a] = (now, val); return val
+
+    def _sigma(self, a, seconds=1200):
         with self.lock: items = list((self.series.get(a) or {}).items())
         if len(items) < 60: return 2e-4
         items = items[-seconds:]; import math

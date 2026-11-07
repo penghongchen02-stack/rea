@@ -152,8 +152,11 @@ class Account:
             if o.side == "sell" and market.best_bid is not None and market.best_bid >= o.price:
                 self._fill(market, o, o.price, o.remaining, maker=True); continue
             # 2) trades printed at our price or better since we placed: they consume queue ahead, then us
-            for ts, px, q in market.tape:
-                if ts <= o.ts: continue
+            recent = []
+            for ts, px, q in reversed(market.tape):
+                if ts <= o.ts: break
+                recent.append((ts, px, q))
+            for ts, px, q in reversed(recent):
                 if o.side == "buy" and px <= o.price + 1e-9 or o.side == "sell" and px >= o.price - 1e-9:
                     if (o.side == "buy" and px < o.price - 1e-9) or (o.side == "sell" and px > o.price + 1e-9):
                         self._fill(market, o, o.price, o.remaining, maker=True); break
