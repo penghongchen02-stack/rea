@@ -1,0 +1,90 @@
+
+== PER-FILL WIN RATE BY PRICE BAND x MAKER/TAKER (LIFETIME; P/L assumes hold-to-settlement, fees included in cost)
+             fills         win_rate        mean_price             usdc            pnl_hold             roi        win_minus_price       
+taker        maker   taker    maker  taker      maker  taker     maker     taker     maker    taker  maker  taker           maker  taker
+price                                                                                                                                   
+(0.0, 0.1]   29259   27409    0.048  0.075      0.081  0.076   22538.0   37422.0   -8774.0  -4523.0 -0.389 -0.121          -0.033 -0.001
+(0.1, 0.2]   79636  101245    0.118  0.161      0.157  0.161   96498.0  181935.0  -24507.0 -10391.0 -0.254 -0.057          -0.039  0.000
+(0.2, 0.3]  105034  162219    0.198  0.250      0.256  0.257  207371.0  396287.0  -48922.0 -27367.0 -0.236 -0.069          -0.058 -0.007
+(0.3, 0.4]  137504  184355    0.286  0.346      0.356  0.354  379168.0  640421.0  -76227.0 -44370.0 -0.201 -0.069          -0.070 -0.008
+(0.4, 0.5]  151090  183789    0.377  0.440      0.454  0.456  560501.0  913625.0 -103163.0 -71666.0 -0.184 -0.078          -0.077 -0.016
+(0.5, 0.6]  116064  141373    0.465  0.531      0.552  0.551  569057.0  869361.0  -97467.0 -60229.0 -0.171 -0.069          -0.087 -0.020
+(0.6, 0.7]   82278   97427    0.563  0.627      0.651  0.653  500640.0  705777.0  -76217.0 -45438.0 -0.152 -0.064          -0.088 -0.026
+(0.7, 0.8]   61294   75434    0.651  0.724      0.751  0.754  456389.0  620130.0  -66392.0 -41468.0 -0.145 -0.067          -0.100 -0.030
+(0.8, 0.9]   47397   58795    0.749  0.824      0.854  0.854  451160.0  566003.0  -59781.0 -31705.0 -0.133 -0.056          -0.105 -0.030
+(0.9, 1.0]   41275   41354    0.820  0.894      0.949  0.948  501782.0  469892.0  -68032.0 -27067.0 -0.136 -0.058          -0.129 -0.054
+
+== PER-FILL WIN RATE BY PRICE BAND x MAKER/TAKER (WINDOW; P/L assumes hold-to-settlement, fees included in cost)
+            fills        win_rate        mean_price            usdc           pnl_hold            roi        win_minus_price       
+taker       maker  taker    maker  taker      maker  taker    maker     taker    maker   taker  maker  taker           maker  taker
+price                                                                                                                              
+(0.0, 0.1]   4082   2252    0.066  0.094      0.078  0.076   3316.0    3564.0   -463.0  1144.0 -0.140  0.321          -0.012  0.018
+(0.1, 0.2]   7442   8451    0.149  0.176      0.156  0.161  11694.0   16964.0   -450.0  1268.0 -0.038  0.075          -0.007  0.015
+(0.2, 0.3]   8489  13021    0.239  0.267      0.255  0.256  21956.0   35043.0  -1092.0  -306.0 -0.050 -0.009          -0.016  0.011
+(0.3, 0.4]  11995  14557    0.352  0.366      0.357  0.355  43580.0   59034.0    -83.0 -1995.0 -0.002 -0.034          -0.005  0.011
+(0.4, 0.5]  14115  16854    0.430  0.488      0.454  0.457  68564.0  104157.0  -2596.0  4612.0 -0.038  0.044          -0.024  0.031
+(0.5, 0.6]  11416  14140    0.527  0.584      0.553  0.552  74220.0  105804.0  -3675.0  1630.0 -0.050  0.015          -0.026  0.032
+(0.6, 0.7]   8103  10284    0.636  0.683      0.651  0.652  65891.0   88013.0  -1685.0  1006.0 -0.026  0.011          -0.015  0.031
+(0.7, 0.8]   6318   7048    0.752  0.780      0.752  0.752  61926.0   67369.0    347.0   650.0  0.006  0.010           0.000  0.028
+(0.8, 0.9]   4990   5006    0.856  0.864      0.854  0.853  59853.0   52295.0    385.0  -127.0  0.006 -0.002           0.002  0.011
+(0.9, 1.0]   3595   4807    0.966  0.949      0.945  0.953  54803.0   60475.0   1400.0  -124.0  0.026 -0.002           0.021 -0.004
+
+== ALTERNATIVE 'DOMINANCE' DEFINITIONS IN THE WINDOW (trying to reproduce the report's 78.8%)
+usdc {'size': {Interval(1.0, 1.5, closed='right'): 1501, Interval(1.5, 2.0, closed='right'): 990, Interval(2.0, 3.0, closed='right'): 1105, Interval(3.0, 1000000000.0, closed='right'): 1438}, 'mean': {Interval(1.0, 1.5, closed='right'): 0.53, Interval(1.5, 2.0, closed='right'): 0.647, Interval(2.0, 3.0, closed='right'): 0.744, Interval(3.0, 1000000000.0, closed='right'): 0.784}}
+shares {'size': {Interval(1.0, 1.5, closed='right'): 2613, Interval(1.5, 2.0, closed='right'): 885, Interval(2.0, 3.0, closed='right'): 706, Interval(3.0, 1000000000.0, closed='right'): 826}, 'mean': {Interval(1.0, 1.5, closed='right'): 0.527, Interval(1.5, 2.0, closed='right'): 0.468, Interval(2.0, 3.0, closed='right'): 0.37, Interval(3.0, 1000000000.0, closed='right'): 0.395}}
+fills {'size': {Interval(1.0, 1.5, closed='right'): 2268, Interval(1.5, 2.0, closed='right'): 1046, Interval(2.0, 3.0, closed='right'): 675, Interval(3.0, 1000000000.0, closed='right'): 681}, 'mean': {Interval(1.0, 1.5, closed='right'): 0.457, Interval(1.5, 2.0, closed='right'): 0.413, Interval(2.0, 3.0, closed='right'): 0.428, Interval(3.0, 1000000000.0, closed='right'): 0.455}}
+market pnl>0 by usdc-dominance: {'size': {Interval(1.0, 1.5, closed='right'): 1501, Interval(1.5, 2.0, closed='right'): 990, Interval(2.0, 3.0, closed='right'): 1105, Interval(3.0, 1000000000.0, closed='right'): 1438}, 'mean': {Interval(1.0, 1.5, closed='right'): 0.442, Interval(1.5, 2.0, closed='right'): 0.428, Interval(2.0, 3.0, closed='right'): 0.435, Interval(3.0, 1000000000.0, closed='right'): 0.556}}
+hold-to-settlement pnl>0 by usdc-dominance: {'size': {Interval(1.0, 1.5, closed='right'): 1501, Interval(1.5, 2.0, closed='right'): 990, Interval(2.0, 3.0, closed='right'): 1105, Interval(3.0, 1000000000.0, closed='right'): 1438}, 'mean': {Interval(1.0, 1.5, closed='right'): 0.442, Interval(1.5, 2.0, closed='right'): 0.428, Interval(2.0, 3.0, closed='right'): 0.435, Interval(3.0, 1000000000.0, closed='right'): 0.556}}
+
+== FIRST FILL LATENCY after window start (seconds), by duration
+         0.1   0.5    0.9
+dur                      
+300.0   12.0  21.0   75.0
+900.0   12.0  24.0   99.0
+3600.0  10.0  16.0  102.0
+last fill before window end (seconds before end), by duration:
+         0.1    0.5     0.9
+dur                        
+300.0   17.0  125.0   239.0
+900.0   35.0  217.0   627.0
+3600.0  40.0  442.0  1598.0
+
+== TAKER TIER PLAUSIBILITY: 30-day weighted volume estimate = sum(taker notional x (1-price) x 2.3)
+30-day wV on [('2026-06-19', 1906192), ('2026-06-30', 2466337), ('2026-07-08', 2376042), ('2026-08-06', 1339843)]
+tier thresholds: Gold 200k (18%), Platinum 1M (32%), Diamond 4M (44%)
+
+== DAILY SERIES AROUND THE TAKER-REBATE LAUNCH (May 28) — window days
+            fills  markets  notional  taker_share    fees           assets     durs  mkt_pnl_net  both  gross_before_fees
+date                                                                                                                     
+2026-05-18  16252      172   96850.0         0.09   221.0              BTC     5,15        133.0  0.96              354.0
+2026-05-19  21716      297  133708.0         0.15   515.0              BTC     5,15       -470.0  0.97               45.0
+2026-05-20  12829      227   75667.0         0.27   530.0              BTC     5,15       -245.0  0.93              285.0
+2026-05-21   9517      199   54358.0         0.36   537.0              BTC     5,15        799.0  0.93             1336.0
+2026-05-22   3642       95   20098.0         1.00   565.0              BTC       15       -413.0  0.89              152.0
+2026-05-23   4179       96   25648.0         1.00   737.0              BTC       15        849.0  0.90             1586.0
+2026-05-24   4405       96   25260.0         1.00   717.0              BTC       15       -160.0  0.85              557.0
+2026-05-25   4555       96   25738.0         1.00   729.0              BTC       15         17.0  0.95              746.0
+2026-05-26   4270       96   23539.0         1.00   659.0              BTC       15       -214.0  0.92              445.0
+2026-05-27   3500       95   18569.0         1.00   551.0              BTC       15        330.0  0.92              881.0
+2026-05-28   3976       93   19908.0         1.00   596.0              BTC       15        629.0  0.90             1225.0
+2026-05-29  16623      737   82564.0         0.66  1563.0  BTC,ETH,SOL,XRP  5,15,60        769.0  0.80             2332.0
+2026-05-30  15453      987  114293.0         0.70  2419.0  BTC,ETH,SOL,XRP  5,15,60       2497.0  0.73             4916.0
+2026-05-31  13375      937  108630.0         0.60  2159.0      BTC,SOL,XRP  5,15,60       -825.0  0.70             1334.0
+2026-06-01  18715     1000   97732.0         0.65  1853.0  BTC,ETH,SOL,XRP  5,15,60       1129.0  0.74             2982.0
+2026-06-02  23958     1137  119563.0         0.61  2048.0  BTC,ETH,SOL,XRP  5,15,60       -511.0  0.77             1537.0
+2026-06-03  21739     1084  105304.0         0.62  1978.0  BTC,ETH,SOL,XRP  5,15,60        775.0  0.74             2753.0
+2026-06-04  25355     1125  111853.0         0.62  1949.0  BTC,ETH,SOL,XRP  5,15,60       -591.0  0.77             1358.0
+2026-06-05  27615     1067  122092.0         0.65  2142.0  BTC,ETH,SOL,XRP  5,15,60       -194.0  0.79             1948.0
+
+== ACTIVITY vs TRADES FEED ROW COUNTS
+activity TRADE rows 1924231 unique tx 1880189 rows per tx: {1: 1843894, 2: 30454, 3: 4380, 4: 1128, 5: 262, 6: 55}
+multi-row txs: same token within tx? share of txs with >1 distinct token: 0.0
+example multi-row tx:
+         timestamp outcome  size  price  usdc_size
+488519  1783585181    Down  12.8   0.58      7.424
+488520  1783585181    Down  12.8   0.59      7.552
+488521  1783585181    Down  12.8   0.60      7.680
+trades-feed rows in window: 96420 (activity rows in window: 176965 ; report: 173,640)
+
+== OPEN POSITIONS / INACTIVITY: last trade 2026-08-07 00:59:38+00:00 ; last redeem 2026-09-24 09:52:35+00:00
+active days: 104 ; gap days between 2026-04-26 and 2026-05-18
