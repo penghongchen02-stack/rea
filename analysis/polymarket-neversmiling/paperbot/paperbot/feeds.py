@@ -11,7 +11,7 @@ _CTX = ssl.create_default_context(cafile=CA) if CA else ssl.create_default_conte
 
 class RateLimiter:
     """Adaptive: the gateway limit (25/s) is shared per source IP, so the real budget is unknown. Start at per_sec,
-    halve on every 429 (floor 2/s), and recover 10% every 30 s without one."""
+    halve on every 429 (floor 3/s), and recover 10% every 30 s without one."""
     def __init__(self, per_sec):
         self.base = per_sec; self.rate = per_sec; self.last = 0.0; self.lock = threading.Lock(); self.last_429 = 0.0; self.last_recover = time.monotonic()
     def wait(self):
@@ -24,16 +24,23 @@ class RateLimiter:
             self.last = time.monotonic()
     def hit_429(self):
         with self.lock:
-            self.rate = max(2.0, self.rate / 2); self.last_429 = time.monotonic()
+            self.rate = max(3.0, self.rate / 2); self.last_429 = time.monotonic()
 
-_rl = RateLimiter(10)
+# Cloudflare throttles the default "Python-urllib/x" agent far below the documented 25/s (measured: ~25% 429s at
+# 3 req/s); a plain client name of our own gets none at the same rate.
+USER_AGENT = "rea-paperbot/1.0"
+_rl = RateLimiter(8)
 RATE_LIMITED = [0]
 
 def get_json(url, timeout=15, retries=3):
+    """GET JSON from the gateway. Cloudflare fronts gateway.polymarket.us with `cache-control: public, max-age=30`,
+    so a plain URL returns a book up to 30 s old (and a cached 429 keeps coming back for 30 s). A unique `_=`
+    parameter makes every request a cache miss and gives the live book. See USER_AGENT below for the 429s."""
     for i in range(retries):
         _rl.wait()
         try:
-            req = urllib.request.Request(url, headers={"Accept": "application/json"})
+            u = f"{url}{'&' if '?' in url else '?'}_={time.time_ns()}"
+            req = urllib.request.Request(u, headers={"Accept": "application/json", "Cache-Control": "no-cache", "User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=timeout, context=_CTX) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:

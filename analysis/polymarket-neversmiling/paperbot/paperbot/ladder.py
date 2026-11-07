@@ -275,7 +275,8 @@ class LadderTouch:
 
 class XArb:
     """Cross-window arbitrage (bot 64). Every Up/Down window (5m, 15m, 1h) that ends at instant T settles on the
-    same 60-second index average as the hourly strikes expiring at T. Each is an 'above K' contract: Up = above the
+    same 60-second index average as the hourly strikes expiring at T. Only contracts on the SAME asset are compared
+    (grouped by asset and settlement instant). Each is an 'above K' contract: Up = above the
     window's price-to-beat, strike leg = above X. If K_a <= K_b then contract a pays whenever b pays, so a must be
     worth at least b. Whenever bid(b) exceeds ask(a) by more than both fees, buy a and sell b: a locked profit of
     the premium at settlement whatever the price does. Checked every second on live books; ladder legs verified on
@@ -289,13 +290,13 @@ class XArb:
         groups = collections.defaultdict(list)
         for m in list(self.mf.markets.values()):
             if m.kind == "updown" and m.p2b is not None and m.end - now > 8 and m.book_ts > now - 5:
-                groups[int(m.end)].append((m.p2b, m, "live"))
+                groups[(m.asset, int(m.end))].append((m.p2b, m, "live"))
         if now - self.lf.last_discover > 60:
             try: self.lf.discover()
             except Exception as e: log.warning("xarb discover: %s", e)
         for m in list(self.lf.legs.values()):
-            if m.market_type.endswith("ABOVE_BELOW") and m.strike is not None and int(m.end) in groups and m.end - now > 8:
-                groups[int(m.end)].append((m.strike, m, "list"))
+            if m.market_type.endswith("ABOVE_BELOW") and m.strike is not None and (m.asset, int(m.end)) in groups and m.end - now > 8:
+                groups[(m.asset, int(m.end))].append((m.strike, m, "list"))
         return groups
 
     def quotes(self, m, src):
@@ -304,8 +305,9 @@ class XArb:
 
     def scan(self, now):
         theta = self.acct.theta; budget = 2
-        for T, items in self.contracts(now).items():
+        for (asset, T), items in self.contracts(now).items():
             if len(items) < 2: continue
+            assert all(m.asset == asset for _, m, _ in items)
             self.stats["groups"] += 1
             items.sort(key=lambda x: x[0])
             for i, (Ka, a, sa) in enumerate(items):
@@ -329,7 +331,7 @@ class XArb:
                     if ask_a is None or bid_b is None: self.stats["no_live_quote"] += 1; continue
                     prem = bid_b - ask_a - theta * ask_a * (1 - ask_a) - theta * bid_b * (1 - bid_b)
                     depth = min(a.offers[0][1], b.bids[0][1])
-                    self.opps.appendleft({"ts": now, "T": T, "buy": a.slug, "K_a": Ka, "ask_a": ask_a, "sell": b.slug, "K_b": Kb, "bid_b": bid_b, "prem": round(prem, 4), "depth": round(depth, 2)})
+                    self.opps.appendleft({"ts": now, "T": T, "asset": asset, "buy": a.slug, "K_a": Ka, "ask_a": ask_a, "sell": b.slug, "K_b": Kb, "bid_b": bid_b, "prem": round(prem, 4), "depth": round(depth, 2)})
                     if prem < self.MIN_EDGE: self.stats["vanished"] += 1; continue
                     n = min(self.MAX_SETS, depth)
                     if n < 0.01: continue
