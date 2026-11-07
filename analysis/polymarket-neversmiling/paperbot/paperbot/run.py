@@ -2,7 +2,7 @@
 import os, sys, time, json, threading, logging, sqlite3, http.server, socketserver, functools, collections
 from . import feeds
 from .sim import Account
-from .strategies import OldModel, Improved, FinalMinute, WhiskasReplica, LastCall
+from .strategies import OldModel, Improved, FinalMinute, WhiskasReplica, LastCall, LastCallTilt
 from .fair import p_up
 
 DATA = os.environ.get("PAPERBOT_DATA", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot-data"))
@@ -34,8 +34,12 @@ class Engine:
     def __init__(self):
         self.mf = feeds.MarketFeed(); self.idx = feeds.IndexFeed(); self.spot = feeds.SpotFeed()
         self.store = Store(os.path.join(DATA, "paper.db"))
-        self.accounts = {"old": Account("old", START_CASH), "improved": Account("improved", START_CASH), "final": Account("final", START_CASH), "whiskas": Account("whiskas", START_CASH), "lastcall": Account("lastcall", START_CASH)}
-        self.strats = [OldModel(self.accounts["old"]), Improved(self.accounts["improved"]), FinalMinute(self.accounts["final"]), WhiskasReplica(self.accounts["whiskas"]), LastCall(self.accounts["lastcall"])]
+        self.accounts = {"old": Account("old", START_CASH), "improved": Account("improved", START_CASH), "final": Account("final", START_CASH), "whiskas": Account("whiskas", START_CASH), "lastcall": Account("lastcall", START_CASH), "lastcall_tilt": Account("lastcall_tilt", START_CASH)}
+        # retired after the first 88 windows (structurally losing here): old, improved, whiskas. Their accounts stay for the record.
+        active = os.environ.get("PAPERBOT_ACTIVE", "final,lastcall,lastcall_tilt").split(",")
+        all_strats = {"old": OldModel, "improved": Improved, "final": FinalMinute, "whiskas": WhiskasReplica, "lastcall": LastCall, "lastcall_tilt": LastCallTilt}
+        self.strats = [all_strats[k](self.accounts[k]) for k in active if k in all_strats]
+        self.active = active
         self.started = time.time(); self.equity_hist = collections.deque(maxlen=20000); self.crosscheck = {}; self.lock = threading.Lock()
         self.last_state = {}; self.loop_count = 0; self.errors = 0
         self._load()
@@ -175,7 +179,7 @@ class Engine:
                            "accounts": {n: a.snapshot(self.mf.markets) for n, a in self.accounts.items()}, "markets": mk, "index": idx, "spot": spot,
                            "feeds": {"index_age": round(now - self.idx.last_ok, 1) if self.idx.last_ok else None, "coinbase_connected": self.spot.connected, "coinbase_msgs": self.spot.msgs,
                                      "books_polled": len(self.mf.markets), "brti_crosscheck": self.crosscheck},
-                           "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "config": {"start_cash": START_CASH, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
+                           "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "config": {"active": self.active, "start_cash": START_CASH, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
 
     def start(self):
         for fn in (self.t_index, self.t_discover, self.t_crosscheck, self.t_http, self.spot.run):

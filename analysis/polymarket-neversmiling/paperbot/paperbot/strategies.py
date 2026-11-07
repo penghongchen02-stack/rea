@@ -218,3 +218,26 @@ class LastCall(Base):
         elif z <= -2.5 and bb is not None and bb >= 1 - self.MAX_PRICE and -q < self.max_pos:
             if bb - theta * bb * (1 - bb) > 0.03:
                 acct.take(market, "sell", min(n, self.max_pos + q), limit=bb, tag=f"lc-down z{z:.1f}")
+
+
+class LastCallTilt(LastCall):
+    """LastCall plus one selective early tilt per window: between 30 s in and the midpoint, if the projection
+    already favours a side by z >= 2 and that side still costs <= $0.65 with at least 4 cents of modelled edge
+    after the taker fee, take 2 contracts. Everything else as LastCall (final-minute entries, resting take-profit)."""
+    name = "lastcall_tilt"
+    def on_tick(self, market, ctx, now):
+        super().on_tick(market, ctx, now)
+        if market.asset not in ("btc", "eth"): return
+        slug = market.slug; st = self.m(slug); rem = market.remaining(now); el = now - market.start
+        if st.get("tilted") or el < 30 or rem < 0.5 * market.dur or market.state not in (None, "MARKET_STATE_OPEN"): return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None: return
+        z = det["z"]; theta = self.acct.theta; q = self.pos(slug)
+        if z >= 2.0 and ba <= 0.65 and p - ba - theta * ba * (1 - ba) > 0.04 and q < self.max_pos:
+            o = self.acct.take(market, "buy", self.clip, limit=ba, tag=f"lc-tilt-up z{z:.1f}")
+            if o and o.filled > 0: st["tilted"] = True
+        elif z <= -2.0 and bb >= 0.35 and (1 - p) - (1 - bb) - theta * bb * (1 - bb) > 0.04 and -q < self.max_pos:
+            o = self.acct.take(market, "sell", self.clip, limit=bb, tag=f"lc-tilt-down z{z:.1f}")
+            if o and o.filled > 0: st["tilted"] = True
