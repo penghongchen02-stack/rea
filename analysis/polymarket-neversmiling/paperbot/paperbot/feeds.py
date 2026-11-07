@@ -181,21 +181,22 @@ class IndexFeed:
             self.last_ok = time.time()
 
     def last(self, a):
-        ser = self.series.get(a)
-        if not ser: return None, None
-        ts = next(reversed(ser)); return ts, ser[ts]
+        with self.lock:
+            ser = self.series.get(a)
+            if not ser: return None, None
+            ts = next(reversed(ser)); return ts, ser[ts]
 
     def avg(self, a, t0, t1):
         """Mean of the 1-second index values with t0 <= ts < t1; returns (mean, n)."""
-        ser = self.series.get(a) or {}
-        vals = [v for ts, v in ser.items() if t0 <= ts < t1]
+        with self.lock: items = list((self.series.get(a) or {}).items())
+        vals = [v for ts, v in items if t0 <= ts < t1]
         return (sum(vals) / len(vals), len(vals)) if vals else (None, 0)
 
     def sigma(self, a, seconds=1200):
-        """Per-second log-return std over the recent window, floored at 8e-5 (fallback 2e-4)."""
-        ser = self.series.get(a) or {}
-        if len(ser) < 60: return 2e-4
-        items = list(ser.items())[-seconds:]; import math
+        """Per-second log-return std over the recent window (floored; fallback 2e-4)."""
+        with self.lock: items = list((self.series.get(a) or {}).items())
+        if len(items) < 60: return 2e-4
+        items = items[-seconds:]; import math
         step = 5   # 5-second differences scaled back to 1 second: less biased by the index's smoothing than 1-second ticks
         rets = [math.log(items[i][1] / items[i - step][1]) for i in range(step, len(items)) if items[i][0] - items[i - step][0] == step and items[i - step][1] > 0]
         if len(rets) < 30: return 2e-4
