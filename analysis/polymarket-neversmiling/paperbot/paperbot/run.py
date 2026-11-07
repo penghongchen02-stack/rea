@@ -19,6 +19,8 @@ UNIVERSES = [
     {"name": "std", "port": int(os.environ.get("PAPERBOT_PORT", "8080")), "size_mode": "contracts", "dir": DATA, "pos_mult": 1.0},
     {"name": "dollar", "port": int(os.environ.get("PAPERBOT_PORT2", "8081")), "size_mode": "dollar", "dir": os.path.join(DATA, "dollar"), "pos_mult": 5.0,
      "size_min": float(os.environ.get("PAPERBOT_SIZE_MIN", "0.1")), "size_max": float(os.environ.get("PAPERBOT_SIZE_MAX", "10"))},
+    {"name": "dollar30", "port": int(os.environ.get("PAPERBOT_PORT3", "8082")), "size_mode": "dollar", "dir": os.path.join(DATA, "dollar30"), "pos_mult": 15.0,
+     "size_min": 0.1, "size_max": 30.0, "cash": float(os.environ.get("PAPERBOT_CASH3", "1000"))},
 ]
 os.makedirs(DATA, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -46,7 +48,8 @@ class Universe:
     def __init__(self, cfg, engine):
         self.cfg = cfg; self.name = cfg["name"]; self.port = cfg["port"]; self.dir = cfg["dir"]; os.makedirs(self.dir, exist_ok=True)
         self.store = Store(os.path.join(self.dir, "paper.db")); self.engine = engine
-        mk = lambda k: Account(k, START_CASH, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0))
+        self.cash = cfg.get("cash", START_CASH)
+        mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0))
         reg = build_registry(cfg.get("pos_mult", 1.0))
         self.accounts = {k: mk(k) for k in list(reg) + list(LADDER_BOTS)}
         active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
@@ -68,7 +71,7 @@ class Universe:
                 snap = json.load(open(p))
                 for name, s in snap.get("accounts", {}).items():
                     if name not in self.accounts: continue
-                    a = self.accounts[name]; a.cash = s["cash"]; a.fees = s["fees"]; a.maker_fills = s["maker_fills"]; a.taker_fills = s["taker_fills"]; a.start_cash = s.get("start_cash", START_CASH)
+                    a = self.accounts[name]; a.cash = s["cash"]; a.fees = s["fees"]; a.maker_fills = s["maker_fills"]; a.taker_fills = s["taker_fills"]; a.start_cash = s.get("start_cash", self.cash)
                     for slug, ps in s.get("positions", {}).items():
                         pos = a.positions[slug]; pos.qty = ps["qty"]; pos.avg = ps["avg"]; pos.realized = ps["realized"]; pos.fees = ps["fees"]; pos.fills = ps["fills"]; pos.closed = ps["closed"]
                     a.settlements = s.get("settlements", [])
@@ -109,7 +112,7 @@ class Universe:
                       "books_polled": len(engine.mf.markets), "brti_crosscheck": engine.crosscheck},
             "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot(), "ladder_model": self.ladder_model.snapshot(), "touch_model": self.touch_model.snapshot(),
             "config": {"universe": self.name, "size_mode": self.cfg["size_mode"], "size_range": [self.cfg.get("size_min"), self.cfg.get("size_max")], "active": self.active, "labels": self.labels,
-                       "start_cash": START_CASH, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
+                       "start_cash": self.cash, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
 
 
 class Engine:
