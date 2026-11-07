@@ -9,7 +9,7 @@ import os, sys, time, json, threading, logging, sqlite3, http.server, socketserv
 from . import feeds
 from .sim import Account
 from .strategies import build_registry, LADDER_BOTS
-from .ladder import LadderFeed, LadderArb, LadderModel
+from .ladder import LadderFeed, LadderArb, LadderModel, LadderTouch
 from .fair import p_up
 
 DATA = os.environ.get("PAPERBOT_DATA", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot-data"))
@@ -53,6 +53,7 @@ class Universe:
         self.active = list(self.accounts) if active == ["all"] else active
         self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
         self.ladder = LadderArb(self.accounts["ladder"], engine.lf); self.ladder_model = LadderModel(self.accounts["ladder_model"], engine.lf, engine.idx, engine.spot)
+        self.touch_model = LadderTouch(self.accounts["touch_model"], engine.lf, engine.idx, engine.spot)
         self.equity_hist = collections.deque(maxlen=20000); self.last_state = {}; self.started = time.time()
         self.labels = {}
         try:
@@ -106,7 +107,7 @@ class Universe:
             "accounts": {n: a.snapshot(engine.mf.markets) for n, a in self.accounts.items()}, "markets": mk, "index": idx, "spot": spot,
             "feeds": {"index_age": round(now - engine.idx.last_ok, 1) if engine.idx.last_ok else None, "coinbase_connected": engine.spot.connected, "coinbase_msgs": engine.spot.msgs,
                       "books_polled": len(engine.mf.markets), "brti_crosscheck": engine.crosscheck},
-            "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot(), "ladder_model": self.ladder_model.snapshot(),
+            "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot(), "ladder_model": self.ladder_model.snapshot(), "touch_model": self.touch_model.snapshot(),
             "config": {"universe": self.name, "size_mode": self.cfg["size_mode"], "size_range": [self.cfg.get("size_min"), self.cfg.get("size_max")], "active": self.active, "labels": self.labels,
                        "start_cash": START_CASH, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
 
@@ -200,13 +201,19 @@ class Engine:
                     try:
                         if "ladder" in u.active: u.ladder.scan(now)
                         if "ladder_model" in u.active: u.ladder_model.scan(now)
-                        for a in (u.accounts["ladder"], u.accounts["ladder_model"]):
+                        if "touch_model" in u.active: u.touch_model.scan(now)
+                        for a in (u.accounts["ladder"], u.accounts["ladder_model"], u.accounts["touch_model"]):
                             for slug, pos in a.positions.items():
-                                if not pos.closed and abs(pos.qty) > 1e-9 and slug not in self.mf.markets and slug in self.lf.legs:
-                                    with self.mf.lock: self.mf.markets[slug] = self.lf.legs[slug]
+                                if not pos.closed and abs(pos.qty) > 1e-9 and slug not in self.mf.markets:
+                                    leg = self.lf.legs.get(slug) or getattr(self.lf, "touch_legs", {}).get(slug)
+                                    if leg is not None:
+                                        with self.mf.lock: self.mf.markets[slug] = leg
                     except Exception as e: self.errors += 1; log.exception("[%s] ladder: %s", u.name, e)
                 for m in list(self.mf.markets.values()):
-                    if m.p2b is None and now - m.start > 5 and int(now) % 5 == 0: self.mf.refresh_terms(m)
+                    if m.p2b is None and now - m.start > 5 and int(now) % 5 == 0 and m.kind == "updown": self.mf.refresh_terms(m)
+                    if m.kind == "ladder" and m.market_type.endswith("ONE_TOUCH") and int(now) % 300 == 0:
+                        self.mf.refresh_terms(m)
+                        if m.closed and m.settle_px is not None and self.settle_market(m): self.mf.retire(m.slug); continue
                     if now >= m.end + 2:
                         if self.settle_market(m): self.mf.retire(m.slug)
                         continue

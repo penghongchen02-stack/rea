@@ -75,12 +75,16 @@ class Market:
         if self.kind == "ladder" and self.r_kind == "below" and self.r_lo is None: self.r_lo = -1e18
         if self.kind == "ladder" and self.r_kind == "above" and self.r_hi is None: self.r_hi = 1e18
         self.list_bid = None; self.list_ask = None
+        self.direction = "up" if str(t.get("direction", "")).endswith("_UP") else ("down" if str(t.get("direction", "")).endswith("_DOWN") else None)
+        self.horizon = t.get("horizon")
 
     def yes_wins(self, settle_px):
         """Settlement rule per family: Up/Down and Above/Below are 'at or above'; ranges are inclusive on both bounds."""
         if self.kind == "updown": return self.p2b is not None and settle_px >= self.p2b
         if self.market_type.endswith("ABOVE_BELOW"): return self.strike is not None and settle_px >= self.strike
         if self.market_type.endswith("RANGE"): return (self.r_lo is None or settle_px >= self.r_lo) and (self.r_hi is None or settle_px <= self.r_hi)
+        if self.market_type.endswith("ONE_TOUCH") and self.strike is not None:
+            return settle_px >= self.strike if self.direction != "down" else settle_px <= self.strike
         return None
 
     def apply_book(self, md):

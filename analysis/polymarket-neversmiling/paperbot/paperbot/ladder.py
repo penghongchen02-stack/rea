@@ -33,6 +33,22 @@ class LadderFeed:
         self.last_discover = now
         return len(fresh)
 
+    def discover_touch(self, days=70):
+        """Weekly/monthly one-touch markets: 'will BTC reach (or dip to) $X before ...'."""
+        now = time.time(); fmt = lambda t: dt.datetime.fromtimestamp(t, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        out = {}
+        for a, b in ((now, now + 10 * 86400), (now + 10 * 86400, now + days * 86400)):
+            d = feeds.get_json(f"{feeds.GATEWAY}/v1/markets?active=true&closed=false&endDateMin={fmt(a)}&endDateMax={fmt(b)}&limit=500")
+            for raw in (d or {}).get("markets") or []:
+                t = raw.get("assetPriceTerms")
+                if not t or not t["marketType"].endswith("ONE_TOUCH") or t["asset"]["symbol"] not in ("btc", "eth", "sol", "xrp"): continue
+                m = self.touch_legs.get(raw["slug"]) if hasattr(self, "touch_legs") else None
+                m = feeds.Market(raw) if m is None else (m.update(raw) or m)
+                m.list_bid = float(raw["bestBidQuote"]["value"]) if raw.get("bestBidQuote") else None
+                m.list_ask = float(raw["bestAskQuote"]["value"]) if raw.get("bestAskQuote") else None
+                out[raw["slug"]] = m
+        self.touch_legs = out; self.last_touch_discover = now; return len(out)
+
     def ladders(self):
         """Group legs by (asset, windowEnd)."""
         g = collections.defaultdict(list)
@@ -202,4 +218,48 @@ class LadderModel:
                 n = min(self.MAX_PER_LEG, m.offers[0][1])
                 o = self.acct.take(m, "buy", n, limit=ask, tag=f"lm-{'sure' if ask >= 0.9 else 'long'} p{pm:.3f}")
                 if o and o.filled > 0: self.stats["trades"] += 1; self.done.add(m.slug); log.info("ladder_model buy %s @%.2f model %.3f x %.1f", m.slug, ask, pm, n)
+    def snapshot(self): return {"stats": dict(self.stats)}
+
+
+class LadderTouch:
+    """Replica of 0xf705: prices weekly/monthly one-touch markets ('reach $X before ...') with a barrier model
+    (reflection principle: P(touch) ~ 2 * P(end beyond the barrier)), buys legs offered well below model odds and
+    sells legs bid well above them, in sizes up to 20 contracts, holding to settlement."""
+    name = "touch_model"
+    MAX_PER_LEG = 20.0; EDGE = 0.04
+    def __init__(self, account, feed, index, spot):
+        self.acct = account; self.feed = feed; self.index = index; self.spot = spot; self.last_scan = 0.0; self.stats = collections.Counter(); self.done = set()
+
+    def prob_touch(self, m, S, sig, now):
+        import math
+        tau = max(m.end - now, 60.0); sd = sig * S * math.sqrt(tau)
+        d = (m.strike - S) if m.direction != "down" else (S - m.strike)
+        if d <= 0: return 1.0
+        return min(1.0, 2 * (1 - _phi(d / sd)))
+
+    def scan(self, now):
+        if now - self.last_scan < 60: return
+        self.last_scan = now
+        if now - getattr(self.feed, "last_touch_discover", 0) > 600:
+            try: self.stats["legs"] = self.feed.discover_touch()
+            except Exception as e: log.warning("touch discover: %s", e)
+        theta = self.acct.theta
+        for m in list(getattr(self.feed, "touch_legs", {}).values()):
+            if m.slug in self.done or m.end - now < 3600: continue
+            its, S_idx = self.index.last(m.asset)
+            if S_idx is None: continue
+            cb_now, cb_ts = self.spot.last(m.asset); cb_then = self.spot.at(m.asset, its) if cb_now else None
+            S = S_idx * (cb_now / cb_then) if cb_now and cb_then else S_idx
+            pm = self.prob_touch(m, S, self.index.sigma(m.asset), now)
+            buy = m.list_ask is not None and m.list_ask <= 0.97 and pm - m.list_ask - theta * m.list_ask * (1 - m.list_ask) > self.EDGE
+            sell = m.list_bid is not None and m.list_bid >= 0.03 and m.list_bid - pm - theta * m.list_bid * (1 - m.list_bid) > self.EDGE
+            if not (buy or sell): continue
+            self.stats["candidates"] += 1
+            if not self.feed.fetch_book(m): self.stats["no_live_quote"] += 1; continue
+            if buy and m.best_ask is not None and pm - m.best_ask - theta * m.best_ask * (1 - m.best_ask) > self.EDGE:
+                n = min(self.MAX_PER_LEG, m.offers[0][1]); o = self.acct.take(m, "buy", n, limit=m.best_ask, tag=f"touch-buy p{pm:.2f}")
+            elif sell and m.best_bid is not None and m.best_bid - pm - theta * m.best_bid * (1 - m.best_bid) > self.EDGE:
+                n = min(self.MAX_PER_LEG, m.bids[0][1]); o = self.acct.take(m, "sell", n, limit=m.best_bid, tag=f"touch-sell p{pm:.2f}")
+            else: self.stats["vanished"] += 1; continue
+            if o and o.filled > 0: self.stats["trades"] += 1; self.done.add(m.slug); log.info("touch_model %s %s model %.2f", o.side, m.slug, pm)
     def snapshot(self): return {"stats": dict(self.stats)}

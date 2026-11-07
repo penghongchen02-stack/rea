@@ -522,25 +522,26 @@ class Scalper(LastCallHold):
 
 
 class BurstLean(Base):
-    """Replica: 5-minute BTC only, taker only. Bursts every ~10 s buying both sides in 3-contract lots, two lots on
-    the side spot is moving toward and one on the other, only while the pair still costs under $0.98 after fees.
-    Everything held to settlement."""
+    """Replica family: taker only, bursts buying both sides in round lots; optional lean (2:1) toward the side spot
+    is moving toward; only while the pair still costs under the cap after fees. Everything held to settlement."""
     name = "burst_lean"
-    def __init__(self, account, seed=41): super().__init__(account, clip=3.0, max_pos=12.0, seed=seed)
+    def __init__(self, account, seed=41, name="burst_lean", assets=("btc",), durs=(300,), lean=True, clip=3.0, pair_cap=0.98, period=(8, 14)):
+        super().__init__(account, clip=clip, max_pos=4 * clip, seed=seed)
+        self.name = name; self.assets = set(assets); self.durs = set(durs); self.lean = lean; self.pair_cap = pair_cap; self.period = period
     def on_tick(self, market, ctx, now):
-        if market.asset != "btc" or market.dur != 300: return
+        if market.asset not in self.assets or market.dur not in self.durs: return
         slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
         if left < 20 or now - market.start < 15 or market.state not in (None, "MARKET_STATE_OPEN") or now < st["next_take"]: return
         bb, ba = market.best_bid, market.best_ask
         if bb is None or ba is None or ba - bb > 0.06: return
-        st["next_take"] = now + self.rng.uniform(8, 14)
-        spot = ctx["spot"]; cb_now, cb_ts = spot.last("btc"); cb_then = spot.at("btc", now - 10)
+        st["next_take"] = now + self.rng.uniform(*self.period)
+        spot = ctx["spot"]; cb_now, cb_ts = spot.last(market.asset); cb_then = spot.at(market.asset, now - 10)
         if not cb_now or not cb_then: return
         up_lean = cb_now >= cb_then; theta = acct.theta
         pair = ba + (1 - bb) + theta * ba * (1 - ba) + theta * bb * (1 - bb)      # buy Up at ask and Down at (1 - bid)
-        if pair > 0.98: return
+        if pair > self.pair_cap: return
         q = self.pos(slug)
-        n_up, n_dn = (2, 1) if up_lean else (1, 2)
+        n_up, n_dn = ((2, 1) if up_lean else (1, 2)) if self.lean else (1, 1)
         if q + n_up * self.clip <= self.max_pos: acct.take(market, "buy", n_up * self.clip, limit=ba, tag=f"burst-up{'*' if up_lean else ''}")
         if -q + n_dn * self.clip <= self.max_pos: acct.take(market, "sell", n_dn * self.clip, limit=bb, tag=f"burst-down{'*' if not up_lean else ''}")
 
@@ -615,6 +616,10 @@ def build_registry(pos_mult=1.0):
     reg["hourly_follow80"] = scaled(MarketFollow, "hourly_follow80", 60, 180, 0.75, 0.85, None, durs=(3600,))
     reg["scalper_with"] = scaled(Scalper, "scalper_with", fade=False); reg["scalper_fade"] = scaled(Scalper, "scalper_fade", fade=True)
     reg["burst_lean"] = scaled(BurstLean); reg["fair_value"] = scaled(FairValue); reg["crouch"] = scaled(Crouch)
+    reg["norm1e69"] = scaled(BurstLean, name="norm1e69", assets=("btc", "eth", "sol"), durs=(300, 900), lean=False, clip=3.0, pair_cap=0.98)
+    reg["b55f"] = scaled(BurstLean, name="b55f", assets=("btc", "eth", "sol", "xrp"), durs=(900,), lean=False, clip=2.0, pair_cap=0.98, period=(15, 30))
+    reg["whiskas_taker"] = scaled(BurstLean, name="whiskas_taker", assets=("btc", "eth"), durs=(300,), lean=True, clip=1.0, pair_cap=0.97, period=(4, 8))
+    reg["bonereaper"] = scaled(Bonereaper); reg["almach"] = scaled(Almach); reg["arcsine"] = scaled(Arcsine)
     # drop-in bots: paperbot/bots/*.py with REGISTRY = {name: factory(account)}
     import os, importlib, pkgutil
     bots_dir = os.path.join(os.path.dirname(__file__), "bots")
@@ -627,4 +632,70 @@ def build_registry(pos_mult=1.0):
                 import logging; logging.getLogger("strat").warning("bot module %s failed: %s", mod.name, e)
     return reg
 
-LADDER_BOTS = ("ladder", "ladder_model")
+LADDER_BOTS = ("ladder", "ladder_model", "touch_model")
+
+
+class Bonereaper(LastCallHold):
+    """Replica: BTC 5m, 15m and 1h windows at once, buys the cheap side at 7-70 cents when the model says it is
+    worth more than the price plus fee plus 3 cents; 2 contracts normally, a 10-contract block one time in ten. Holds."""
+    name = "bonereaper"
+    def __init__(self, account, seed=51): super().__init__(account, seed=seed); self.clip = 2.0; self.max_pos = 14.0
+    def on_tick(self, market, ctx, now):
+        if market.asset != "btc" or market.dur not in (300, 900, 3600): return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 10 or now - market.start < 10 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        if now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None: return
+        st["next_take"] = now + 6; theta = acct.theta; q = self.pos(slug); n = 10.0 if self.rng.random() < 0.1 else self.clip
+        if 0.07 <= ba <= 0.70 and p - ba - theta * ba * (1 - ba) > 0.03 and q + n <= self.max_pos:
+            acct.take(market, "buy", n, limit=ba, tag=f"bone-up {ba:.2f}")
+        elif 0.07 <= 1 - bb <= 0.70 and (1 - p) - (1 - bb) - theta * bb * (1 - bb) > 0.03 and -q + n <= self.max_pos:
+            acct.take(market, "sell", n, limit=bb, tag=f"bone-down {1-bb:.2f}")
+
+
+class Almach(LastCallHold):
+    """Replica: 5m, 15m and 1h BTC/ETH windows; buys the extremes in the last quarter: 2-cent longshots when the model
+    gives them at least double the odds (20 contracts), and 90-99 cent near-certain sides when the model says
+    >= 99.5% (3 contracts). Holds."""
+    name = "almach"
+    def __init__(self, account, seed=52): super().__init__(account, seed=seed); self.clip = 3.0; self.max_pos = 30.0
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth") or market.dur not in (300, 900, 3600): return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 5 or left > 0.25 * market.dur or market.state not in (None, "MARKET_STATE_OPEN") or now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None: return
+        st["next_take"] = now + 5; theta = acct.theta; q = self.pos(slug)
+        if ba <= 0.03 and p >= 2 * ba + 0.02 and not st.get("long_up"):
+            o = acct.take(market, "buy", 20.0, limit=ba, tag=f"almach-longshot-up {ba:.2f}"); st["long_up"] = bool(o and o.filled > 0)
+        elif bb >= 0.97 and (1 - p) >= 2 * (1 - bb) + 0.02 and not st.get("long_dn"):
+            o = acct.take(market, "sell", 20.0, limit=bb, tag=f"almach-longshot-down {1-bb:.2f}"); st["long_dn"] = bool(o and o.filled > 0)
+        elif 0.90 <= ba <= 0.99 and p >= 0.995 and not st.get("sure"):
+            o = acct.take(market, "buy", self.clip, limit=ba, tag=f"almach-sure-up {ba:.2f}"); st["sure"] = bool(o and o.filled > 0)
+        elif 0.90 <= 1 - bb <= 0.99 and (1 - p) >= 0.995 and not st.get("sure"):
+            o = acct.take(market, "sell", self.clip, limit=bb, tag=f"almach-sure-down {1-bb:.2f}"); st["sure"] = bool(o and o.filled > 0)
+
+
+class Arcsine(Base):
+    """Replica of arcsine-barrister: a pure market maker that never takes. On Polymarket US the 'split then sell
+    both sides' is the same as resting a sell at the ask and a buy at the bid: inventory-neutral quoting of
+    5-minute BTC, 5 contracts a side, refreshed whenever the touch moves, leftovers held to settlement."""
+    name = "arcsine"
+    def __init__(self, account, seed=53): super().__init__(account, clip=5.0, max_pos=15.0, seed=seed)
+    def on_tick(self, market, ctx, now):
+        if market.asset != "btc" or market.dur != 300: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 15 or now - market.start < 5 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None or ba - bb > 0.10: return
+        q = self.pos(slug)
+        if st["last_quote"] != (bb, ba):
+            acct.cancel_all(slug); st["last_quote"] = (bb, ba)
+            if q < self.max_pos: acct.place(market, "buy", bb, self.clip, post_only=True, tag="arc-bid")
+            if q > -self.max_pos: acct.place(market, "sell", ba, self.clip, post_only=True, tag="arc-ask")
