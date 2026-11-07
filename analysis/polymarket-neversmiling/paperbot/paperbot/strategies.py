@@ -138,3 +138,38 @@ class FinalMinute(Base):
             if edge > 0.03:
                 o = self.acct.take(market, "sell", self.QTY, limit=bb, tag=f"final-down z{z:.1f}")
                 if o and o.filled > 0: st["done"] = True
+
+
+class WhiskasReplica(Base):
+    """Fourth bot: replica of x-MoneyForWhiskas as measured on its recent fills: BTC 5-minute windows only,
+    maker-heavy two-sided quoting in round lots spread evenly through the window, immediate pair discipline
+    (when one side fills and the inventory is lopsided, hedge the other side only if the pair still costs
+    under $1.00 after fees), no merges, everything held to settlement."""
+    name = "whiskas"
+    PAIR_CAP = 0.99
+    def __init__(self, account, clip=2.0, max_pos=6.0, seed=4):
+        super().__init__(account, clip, max_pos, seed)
+    def size(self): return self.clip * self.rng.choice([1, 1, 1, 2])          # round lots: mostly 1x, sometimes 2x
+
+    def on_tick(self, market, ctx, now):
+        if market.asset != "btc" or market.dur != 300: return
+        slug = market.slug; st = self.m(slug); rem = market.remaining(now); el = now - market.start
+        if el < 10 or rem < 15 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None or ba - bb > 0.06: return                 # it quotes liquid books, not 60-cent spreads
+        acct = self.acct; q = self.pos(slug); pos = acct.positions.get(slug)
+        theta = acct.theta
+        # --- join the touch on both sides while inventory is balanced enough; refresh when the touch moves
+        if st["last_quote"] != (bb, ba):
+            acct.cancel_all(slug); st["last_quote"] = (bb, ba)
+            if q < self.max_pos: acct.place(market, "buy", bb, self.size(), post_only=True, tag="w-bid")
+            if q > -self.max_pos: acct.place(market, "sell", ba, self.size(), post_only=True, tag="w-ask")
+        # --- pair discipline: lopsided inventory gets hedged by taking the other side if the pair is still under $1
+        if pos and abs(q) >= 4 and now >= st["next_take"]:
+            st["next_take"] = now + 5
+            if q > 0:                                   # long YES at avg: sell YES at bid => pair cost = avg + (1 - bb)
+                pair = pos.avg + (1 - bb) + theta * bb * (1 - bb)
+                if pair <= self.PAIR_CAP: acct.take(market, "sell", min(q, 2 * self.clip), limit=bb, tag="w-hedge")
+            else:                                       # short YES (sold at avg): buy YES at ask => pair = (1 - avg) + ba
+                pair = (1 - pos.avg) + ba + theta * ba * (1 - ba)
+                if pair <= self.PAIR_CAP: acct.take(market, "buy", min(-q, 2 * self.clip), limit=ba, tag="w-hedge")
