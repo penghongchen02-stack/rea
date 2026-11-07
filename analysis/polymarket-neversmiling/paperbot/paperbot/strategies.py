@@ -403,12 +403,12 @@ class MarketFollow(LastCallHold):
     """User's rule: with 1 to 2 minutes left in a BTC/ETH 5-minute window, if the leading side is priced around
     80 cents, buy it. Pure market-following, no model, unless z_min is set (then the settlement arithmetic must
     at least mildly agree). One entry per window, 2 contracts, held to settlement (protective exit kept)."""
-    def __init__(self, account, name, t_lo=60, t_hi=120, p_lo=0.75, p_hi=0.85, z_min=None, seed=21):
+    def __init__(self, account, name, t_lo=60, t_hi=120, p_lo=0.75, p_hi=0.85, z_min=None, seed=21, durs=(300,)):
         super().__init__(account, seed=seed)
-        self.name = name; self.t_lo = t_lo; self.t_hi = t_hi; self.p_lo = p_lo; self.p_hi = p_hi; self.z_min = z_min; self.clip = 2.0; self.max_pos = 2.0
+        self.name = name; self.t_lo = t_lo; self.t_hi = t_hi; self.p_lo = p_lo; self.p_hi = p_hi; self.z_min = z_min; self.clip = 2.0; self.max_pos = 2.0; self.durs = set(durs)
 
     def on_tick(self, market, ctx, now):
-        if market.asset not in ("btc", "eth") or market.dur != 300: return
+        if market.asset not in ("btc", "eth") or market.dur not in self.durs: return
         slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
         if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
         if self.z_min is not None: self.manage(market, ctx, now)
@@ -450,3 +450,35 @@ def random_bots(n=5, seed=2026):
     return out
 
 RANDOM_BOTS = random_bots()
+
+
+class PickOff(LastCallHold):
+    """Best-effort pick-off bot, handicapped by 1-second book polling: when Coinbase spot has just jumped (>= 2.5 sd
+    over the last 3 s) and the YES book has not moved yet, hit the stale side at the touch in spot's direction,
+    if the carried-forward model still shows edge after the fee. BTC/ETH 5-minute windows, any time with > 20 s
+    left, 2 contracts, one shot per window, held to settlement with the protective exit."""
+    name = "pickoff"
+    def on_tick(self, market, ctx, now):
+        if market.asset not in ("btc", "eth") or market.dur != 300: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        mids = st.setdefault("mids", [])
+        mids.append((now, (bb + ba) / 2)); st["mids"] = [x for x in mids if now - x[0] <= 4]
+        if st.get("done") or left < 20 or now < st["next_take"]: return
+        spot = ctx["spot"]; a = market.asset; cb_now, cb_ts = spot.last(a); cb_then = spot.at(a, now - 3)
+        if not cb_now or not cb_then or cb_ts is None or now - cb_ts > 2: return
+        sig = ctx["index"].sigma(a) * cb_now * (3 ** 0.5); jump = (cb_now - cb_then) / max(sig, 1e-9)
+        old_mid = next((mv for t_, mv in st["mids"] if now - t_ >= 2.5), None)
+        if old_mid is None or abs(((bb + ba) / 2) - old_mid) > 0.011: return     # book already moved: nothing stale to hit
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None: return
+        theta = acct.theta; st["next_take"] = now + 2
+        if jump >= 2.5 and ba <= 0.90 and p - ba - theta * ba * (1 - ba) > 0.02:
+            o = acct.take(market, "buy", self.clip, limit=ba, tag=f"pickoff-up j{jump:.1f}")
+            if o and o.filled > 0: st["done"] = True
+        elif jump <= -2.5 and bb >= 0.10 and (1 - p) - (1 - bb) - theta * bb * (1 - bb) > 0.02:
+            o = acct.take(market, "sell", self.clip, limit=bb, tag=f"pickoff-down j{jump:.1f}")
+            if o and o.filled > 0: st["done"] = True

@@ -1,8 +1,9 @@
 """Main loop: feeds -> books -> strategies -> fills -> settlement; persists to SQLite and serves the dashboard."""
 import os, sys, time, json, threading, logging, sqlite3, http.server, socketserver, functools, collections
 from . import feeds
+from .ladder import LadderFeed, LadderArb
 from .sim import Account
-from .strategies import OldModel, Improved, FinalMinute, WhiskasReplica, LastCall, LastCallTilt, LastCallHold, LastCallRest, LastCallEarly, Param, SWEEP, MarketFollow, RANDOM_BOTS
+from .strategies import OldModel, Improved, FinalMinute, WhiskasReplica, LastCall, LastCallTilt, LastCallHold, LastCallRest, LastCallEarly, Param, SWEEP, MarketFollow, RANDOM_BOTS, PickOff
 from .fair import p_up
 
 DATA = os.environ.get("PAPERBOT_DATA", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot-data"))
@@ -38,6 +39,8 @@ class Engine:
         for k in SWEEP: self.accounts[k] = Account(k, START_CASH)
         for k in ("follow80", "follow80_model"): self.accounts[k] = Account(k, START_CASH)
         for k in RANDOM_BOTS: self.accounts[k] = Account(k, START_CASH)
+        for k in ("ladder", "pickoff", "hourly_last", "hourly_rest", "hourly_follow80"): self.accounts[k] = Account(k, START_CASH)
+        self.lf = LadderFeed(); self.ladder = LadderArb(self.accounts["ladder"], self.lf)
         # retired after the first 88 windows (structurally losing here): old, improved, whiskas. Their accounts stay for the record.
         active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
         if active == ["all"]: active = list(self.accounts.keys())
@@ -51,6 +54,10 @@ class Engine:
             if kind == "model": self.strats.append(Param(self.accounts[k], k, params["t_lo"], params["t_hi"], params["z_min"], params["max_price"], params["entry"], params["durs"], params["assets"], 0, clip=params["clip"]))
             else:
                 st = MarketFollow(self.accounts[k], k, params["t_lo"], params["t_hi"], params["p_lo"], params["p_hi"], params["z_min"]); self.strats.append(st)
+        if "pickoff" in active: self.strats.append(PickOff(self.accounts["pickoff"]))
+        if "hourly_last" in active: self.strats.append(Param(self.accounts["hourly_last"], "hourly_last", 30, 120, 2.5, 0.90, "take", (3600,), ("btc", "eth"), 0))
+        if "hourly_rest" in active: self.strats.append(Param(self.accounts["hourly_rest"], "hourly_rest", 30, 120, 2.5, 0.90, "rest", (3600,), ("btc", "eth"), 0))
+        if "hourly_follow80" in active: self.strats.append(MarketFollow(self.accounts["hourly_follow80"], "hourly_follow80", 60, 180, 0.75, 0.85, None, durs=(3600,)))
         self.labels = {k: v[2] for k, v in RANDOM_BOTS.items()}
         self.active = active
         self.started = time.time(); self.equity_hist = collections.deque(maxlen=20000); self.crosscheck = {}; self.lock = threading.Lock()
@@ -120,11 +127,11 @@ class Engine:
     def settle_market(self, m):
         # authoritative: settlementPrice from the market; fallback: our own 60-second average of the index
         self.mf.refresh_terms(m); up = None; sp = m.settle_px; src = "exchange"
-        if sp is not None and m.p2b is not None: up = sp >= m.p2b
-        elif time.time() - m.end < 45: return False        # give the exchange time to publish settlementPrice
+        if sp is not None: up = m.yes_wins(sp)
+        elif time.time() - m.end < (45 if m.kind == "updown" else 900): return False   # ladders settle within ~15 minutes
         else:
             avg, n = self.idx.avg(m.asset, m.end - 60, m.end)
-            if avg is not None and n >= 55 and m.p2b is not None: sp = round(avg, m.decimals); up = sp >= m.p2b; src = "index-average"
+            if avg is not None and n >= 55: sp = round(avg, m.decimals); up = m.yes_wins(sp); src = "index-average"
         if up is None:
             if time.time() - m.end < 240: return False     # wait for data
             log.warning("could not settle %s; using last price", m.slug); up = (m.last_px or 0.5) >= 0.5
@@ -140,6 +147,13 @@ class Engine:
             t0 = time.time(); self.loop_count += 1
             try:
                 self.mf.poll_books(); now = time.time()
+                if "ladder" in self.active:
+                    try:
+                        self.ladder.scan(now)
+                        for slug, pos in self.accounts["ladder"].positions.items():     # legs we hold must settle: adopt them into the market map
+                            if not pos.closed and abs(pos.qty) > 1e-9 and slug not in self.mf.markets and slug in self.lf.legs:
+                                with self.mf.lock: self.mf.markets[slug] = self.lf.legs[slug]
+                    except Exception as e: self.errors += 1; log.exception("ladder: %s", e)
                 for m in list(self.mf.markets.values()):
                     if m.p2b is None and now - m.start > 5 and int(now) % 5 == 0: self.mf.refresh_terms(m)
                     if now >= m.end + 2:
@@ -147,6 +161,7 @@ class Engine:
                         continue
                     if m.book_ts < now - 10: continue
                     for a in self.accounts.values(): a.on_book(m)
+                    if m.kind != "updown": continue
                     for s in self.strats:
                         try: s.on_tick(m, ctx, now)
                         except Exception as e: self.errors += 1; log.exception("strategy %s on %s: %s", s.name, m.slug, e)
@@ -192,7 +207,7 @@ class Engine:
                            "accounts": {n: a.snapshot(self.mf.markets) for n, a in self.accounts.items()}, "markets": mk, "index": idx, "spot": spot,
                            "feeds": {"index_age": round(now - self.idx.last_ok, 1) if self.idx.last_ok else None, "coinbase_connected": self.spot.connected, "coinbase_msgs": self.spot.msgs,
                                      "books_polled": len(self.mf.markets), "brti_crosscheck": self.crosscheck},
-                           "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "config": {"active": self.active, "labels": self.labels, "start_cash": START_CASH, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
+                           "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot() if hasattr(self, "ladder") else {}, "config": {"active": self.active, "labels": self.labels, "start_cash": START_CASH, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
 
     def settle_orphans(self):
         """After a restart, positions in windows that closed while the engine was down are settled from the exchange."""

@@ -4,7 +4,7 @@ import json, os, ssl, threading, time, urllib.parse, urllib.request, collections
 log = logging.getLogger("feeds")
 GATEWAY = "https://gateway.polymarket.us"
 ASSETS = ["btc", "eth", "sol", "xrp"]
-HORIZONS = {"5m": 300, "15m": 900}
+HORIZONS = {"5m": 300, "15m": 900, "1h": 3600}
 CA = os.environ.get("SSL_CERT_FILE") or ("/root/.ccr/ca-bundle.crt" if os.path.exists("/root/.ccr/ca-bundle.crt") else None)
 _CTX = ssl.create_default_context(cafile=CA) if CA else ssl.create_default_context()
 
@@ -18,7 +18,7 @@ class RateLimiter:
             if gap < self.min_gap: time.sleep(self.min_gap - gap)
             self.last = time.monotonic()
 
-_rl = RateLimiter(18)
+_rl = RateLimiter(22)
 
 def get_json(url, timeout=15, retries=3):
     for i in range(retries):
@@ -58,13 +58,30 @@ class Market:
     def update(self, raw):
         self.raw = raw; t = raw["assetPriceTerms"]
         self.asset = t["asset"]["symbol"]; self.horizon = t["horizon"]
-        self.start = parse_ts(t["windowStart"]); self.end = parse_ts(t["windowEnd"]); self.dur = self.end - self.start
+        self.end = parse_ts(t["windowEnd"]); self.start = parse_ts(t.get("windowStart")) or parse_ts(raw.get("startDate")) or (self.end - 3600)
+        self.dur = self.end - self.start
         self.p2b = float(t["priceToBeat"]["value"]) if t.get("priceToBeat") else None
         self.settle_px = float(t["settlementPrice"]["value"]) if t.get("settlementPrice") else None
         self.status = raw.get("status"); self.closed = raw.get("closed", False)
         self.fee_coef = float(raw.get("feeCoefficient") or 0.095); self.tick = float(raw.get("orderPriceMinTickSize") or 0.01)
         self.min_qty = float(raw.get("minimumTradeQty") or 0.01); self.question = raw.get("question", "")
         self.decimals = int(t.get("priceDecimals") or 2)
+        mt = t.get("marketType", ""); self.market_type = mt
+        self.kind = "updown" if mt.endswith("UP_DOWN") else "ladder"
+        self.strike = float(t["strike"]["value"]) if t.get("strike") else None
+        self.r_lo = float(t["rangeLower"]["value"]) if t.get("rangeLower") else None
+        self.r_hi = float(t["rangeUpper"]["value"]) if t.get("rangeUpper") else None
+        rk = t.get("rangeKind", ""); self.r_kind = "below" if rk.endswith("BELOW") else ("above" if rk.endswith("ABOVE") else "interior")
+        if self.kind == "ladder" and self.r_kind == "below" and self.r_lo is None: self.r_lo = -1e18
+        if self.kind == "ladder" and self.r_kind == "above" and self.r_hi is None: self.r_hi = 1e18
+        self.list_bid = None; self.list_ask = None
+
+    def yes_wins(self, settle_px):
+        """Settlement rule per family: Up/Down and Above/Below are 'at or above'; ranges are inclusive on both bounds."""
+        if self.kind == "updown": return self.p2b is not None and settle_px >= self.p2b
+        if self.market_type.endswith("ABOVE_BELOW"): return self.strike is not None and settle_px >= self.strike
+        if self.market_type.endswith("RANGE"): return (self.r_lo is None or settle_px >= self.r_lo) and (self.r_hi is None or settle_px <= self.r_hi)
+        return None
 
     def apply_book(self, md):
         bids = [(float(b["px"]["value"]), float(b["qty"])) for b in md.get("bids", [])]
@@ -129,6 +146,7 @@ class MarketFeed:
     def poll_books(self):
         for m in list(self.markets.values()):
             if m.end < time.time() - 5 or m.start > time.time() + 20: continue
+            if getattr(m, "kind", "updown") != "updown" and time.time() - m.book_ts < 30: continue   # held ladder legs: refresh every 30 s
             d = get_json(f"{GATEWAY}/v1/markets/{m.slug}/book")
             if d and d.get("marketData"): m.apply_book(d["marketData"])
 
