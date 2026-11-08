@@ -129,7 +129,8 @@ class LadderArb:
         theta = self.acct.theta; prem = y.best_bid - x.best_ask - leg_fee(theta, y.best_bid) - leg_fee(theta, x.best_ask)
         self.opportunities.appendleft({"ts": now, "kind": "pair", "asset": asset, "legs": [x.slug, y.slug], "est": round(prem_est, 4), "live": round(prem, 4), "depth": round(min(x.offers[0][1], y.bids[0][1]), 2)})
         if prem <= self.MIN_EDGE: self.stats["vanished_on_live_book"] += 1; return
-        n = min(self.acct.size_for(x.best_ask, self.MAX_SETS), x.offers[0][1], y.bids[0][1])
+        n = min(self.acct.size_for(x.best_ask, self.MAX_SETS), x.offers[0][1], y.bids[0][1], self.acct.affordable_sets([("buy", x.best_ask), ("sell", y.best_bid)]))
+        n = int(n * 100) / 100
         if n < 0.01: return
         o1 = self.acct.take(x, "buy", n, limit=x.best_ask, tag=f"ladder-pair-buy {x.strike:.0f}", fixed=True)
         o2 = self.acct.take(y, "sell", n, limit=y.best_bid, tag=f"ladder-pair-sell {y.strike:.0f}", fixed=True)
@@ -148,6 +149,7 @@ class LadderArb:
             if any(b.best_bid is None for b in buckets): self.stats["no_live_quote"] += 1; return
             s = sum(b.best_bid for b in buckets); edge = s - 1 - sum(leg_fee(theta, b.best_bid) for b in buckets); n = min([self.acct.size_for(buckets[0].best_bid, self.MAX_SETS)] + [b.bids[0][1] for b in buckets])
         self.opportunities.appendleft({"ts": now, "kind": f"buckets-{side}", "asset": asset, "legs": [b.slug for b in buckets][:3] + ["..."], "est": round(edge_est, 4), "live": round(edge, 4), "depth": round(n, 2)})
+        n = int(min(n, self.acct.affordable_sets([(side, b.best_ask if side == "buy" else b.best_bid) for b in buckets])) * 100) / 100
         if edge <= self.MIN_EDGE or n < 0.01: self.stats["vanished_on_live_book"] += 1; return
         filled = 0
         for b in buckets:
@@ -164,6 +166,7 @@ class LadderArb:
         if any(m.best_ask is None for m in legs): self.stats["no_live_quote"] += 1; return
         theta = self.acct.theta; s = sum(m.best_ask for m in legs); edge = 1 - s - sum(leg_fee(theta, m.best_ask) for m in legs); n = min([self.acct.size_for(x.best_ask, self.MAX_SETS)] + [m.offers[0][1] for m in legs])
         self.opportunities.appendleft({"ts": now, "kind": "complement", "asset": asset, "legs": [x.slug] + [b.slug for b in below][:2] + ["..."], "est": round(edge_est, 4), "live": round(edge, 4), "depth": round(n, 2)})
+        n = int(min(n, self.acct.affordable_sets([("buy", m.best_ask) for m in legs])) * 100) / 100
         if edge <= self.MIN_EDGE or n < 0.01: self.stats["vanished_on_live_book"] += 1; return
         filled = 0
         for m in legs:
@@ -333,8 +336,9 @@ class XArb:
                     depth = min(a.offers[0][1], b.bids[0][1])
                     self.opps.appendleft({"ts": now, "T": T, "asset": asset, "buy": a.slug, "K_a": Ka, "ask_a": ask_a, "sell": b.slug, "K_b": Kb, "bid_b": bid_b, "prem": round(prem, 4), "depth": round(depth, 2)})
                     if prem < self.MIN_EDGE: self.stats["vanished"] += 1; continue
-                    n = min(self.acct.size_for(ask_a, self.MAX_SETS), depth)
-                    if n < 0.01: continue
+                    n = min(self.acct.size_for(ask_a, self.MAX_SETS), depth, self.acct.affordable_sets([("buy", ask_a), ("sell", bid_b)]))
+                    n = int(n * 100) / 100
+                    if n < 0.01: self.stats["unaffordable"] += 1; continue
                     o1 = self.acct.take(a, "buy", n, limit=ask_a, tag=f"xarb-buy K{Ka:.0f}", fixed=True)
                     o2 = self.acct.take(b, "sell", n, limit=bid_b, tag=f"xarb-sell K{Kb:.0f}", fixed=True)
                     if (o1 and o1.filled > 0) or (o2 and o2.filled > 0):

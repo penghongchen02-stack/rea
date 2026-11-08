@@ -50,8 +50,9 @@ class ArbBase:
     def execute(self, legs, n, key, label, edge):
         """legs: [(market, side, limit, tag)]. One contract count for every leg: dollar universes draw the dollar
         size once at the first leg's price, then every leg uses that count (capped by the thinnest book)."""
-        n = min(n, round(self.acct.size_for(legs[0][2], self.MAX_SETS), 2))
-        if n < 0.01: return False
+        n = min(n, round(self.acct.size_for(legs[0][2], self.MAX_SETS), 2), self.acct.affordable_sets([(s, l) for _, s, l, _ in legs]))
+        n = math.floor(n * 100) / 100
+        if n < 0.01: self.stats["unaffordable"] += 1; return False
         self.opps.appendleft({"ts": time.time(), "kind": label, "legs": [m.slug for m, _, _, _ in legs], "edge": round(edge, 4), "n": round(n, 2)})
         filled = 0
         for m, side, limit, tag in legs:

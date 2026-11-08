@@ -40,6 +40,12 @@ class Account:
         for o in self.orders.values():
             r += o.remaining * (o.price if o.side == "buy" else 1 - o.price)
         return r
+    def affordable_sets(self, legs):
+        """How many complete sets of legs [(side, price)] the buying power covers (buys need price, shorts lock 1-price).
+        Arbitrage must never leg: every leg of a set is sent only if all of them can be paid for."""
+        need = sum((p if side == "buy" else 1 - p) for side, p in legs)
+        return max(0.0, self.buying_power() * 0.98 / need) if need > 0 else 0.0
+
     def fee(self, price, qty, maker): return 0.0 if maker else round(self.theta * qty * price * (1 - price), 6)
 
     def mark_value(self, markets):
