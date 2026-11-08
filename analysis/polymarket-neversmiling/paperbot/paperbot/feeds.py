@@ -313,10 +313,14 @@ class SpotFeed:
         if hit and now - hit[0] < 10: return hit[1]
         with self.lock: items = list((self.sec_px.get(a) or {}).items())[-seconds:]
         import math
-        rets = [math.log(items[i][1] / items[i - 1][1]) for i in range(1, len(items)) if items[i][0] - items[i - 1][0] == 1 and items[i - 1][1] > 0]
-        if len(rets) < 60: val = 1.5e-4
-        else:
-            m = sum(rets) / len(rets); val = max(math.sqrt(sum((r - m) ** 2 for r in rets) / (len(rets) - 1)), 3e-5)
+        def sd(step):
+            rets = [math.log(items[i][1] / items[i - step][1]) for i in range(step, len(items)) if items[i][0] - items[i - step][0] == step and items[i - step][1] > 0]
+            if len(rets) < 60: return None
+            m = sum(rets) / len(rets); return math.sqrt(sum((r - m) ** 2 for r in rets) / (len(rets) - 1)) / math.sqrt(step)
+        # 1-second returns understate volatility when moves trend within a few seconds; take the larger of the
+        # 1-second and the 10-second (scaled) estimate, floored at 5e-5 (about 1.3% a day)
+        s1, s10 = sd(1), sd(10)
+        val = max([v for v in (s1, s10) if v is not None] + [5e-5]) if (s1 or s10) else 1.5e-4
         cache[a] = (now, val); return val
 
     def at(self, a, ts):
