@@ -46,6 +46,15 @@ class Account:
         for o in self.orders.values():
             r += o.remaining * (o.price if o.side == "buy" else 1 - o.price)
         return r
+    def cash_needed(self, slug, side, price, qty):
+        """Buying power an order consumes. Only the part that opens or grows a position needs cash: selling
+        contracts you hold, or buying back contracts you are short, releases cash/margin instead (it was treated
+        as a new short, so unwinds and hedges of an existing leg were rejected)."""
+        p = self.positions.get(slug); held = p.qty if p and not p.closed else 0.0
+        closing = min(qty, held) if side == "sell" and held > 0 else (min(qty, -held) if side == "buy" and held < 0 else 0.0)
+        opening = qty - closing
+        return opening * (price if side == "buy" else 1 - price)
+
     def affordable_sets(self, legs):
         """How many complete sets of legs [(side, price)] the buying power covers (buys need price, shorts lock 1-price).
         Arbitrage must never leg: every leg of a set is sent only if all of them can be paid for."""
@@ -93,7 +102,7 @@ class Account:
         """fixed=True keeps the caller's contract count (arbitrage legs must match); otherwise dollar universes resize."""
         price = round(max(0.01, min(0.99, price)), 2); qty = round(qty if fixed else self.size_for(price, qty), 2)
         if qty < market.min_qty: return None
-        need = qty * (price if side == "buy" else 1 - price)
+        need = self.cash_needed(market.slug, side, price, qty)
         if need > self.buying_power() + 1e-9:
             self.rejected += 1; return None
         o = Order(market.slug, side, price, qty, post_only, tag)
@@ -116,7 +125,7 @@ class Account:
         if limit is not None and ((side == "buy" and px > limit) or (side == "sell" and px < limit)): return None
         o = Order(market.slug, side, limit if limit is not None else px, round(qty if fixed else self.size_for(px, qty), 2), False, tag)
         if o.qty < market.min_qty: return None
-        need = o.qty * (o.price if side == "buy" else 1 - o.price)
+        need = self.cash_needed(market.slug, side, o.price, o.qty)
         if need > self.buying_power() + 1e-9: self.rejected += 1; return None
         self._take(market, o); return o
 
