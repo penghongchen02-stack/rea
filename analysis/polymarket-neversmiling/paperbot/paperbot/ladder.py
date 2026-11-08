@@ -139,6 +139,13 @@ class LadderArb:
     def try_buckets(self, asset, end, buckets, side, edge_est, now):
         key = ("buckets", side, end)
         if key in self.done: return
+        # the set only pays exactly $1 if the buckets tile the whole price line: a "below" tail, an "above" tail and
+        # every interior bucket in between with no gap (the listing can omit buckets). Otherwise it is not an arbitrage.
+        bs = sorted(buckets, key=lambda b: (b.r_lo if b.r_lo is not None else -1e18))
+        if not bs or bs[0].r_kind != "below" or bs[-1].r_kind != "above": self.stats["not_tiled"] += 1; return
+        for x, y in zip(bs, bs[1:]):
+            if x.r_hi is None or y.r_lo is None or abs(y.r_lo - x.r_hi) > 0.011: self.stats["not_tiled"] += 1; return
+        buckets = bs
         self.stats["candidates"] += 1
         if not self._verify(buckets): return
         theta = self.acct.theta
@@ -151,11 +158,21 @@ class LadderArb:
         self.opportunities.appendleft({"ts": now, "kind": f"buckets-{side}", "asset": asset, "legs": [b.slug for b in buckets][:3] + ["..."], "est": round(edge_est, 4), "live": round(edge, 4), "depth": round(n, 2)})
         n = int(min(n, self.acct.affordable_sets([(side, b.best_ask if side == "buy" else b.best_bid) for b in buckets])) * 100) / 100
         if edge <= self.MIN_EDGE or n < 0.01: self.stats["vanished_on_live_book"] += 1; return
-        filled = 0
+        # thinnest leg first; every later leg sized to what has filled so far; unwind any surplus at the end
+        lv = lambda b: (b.offers if side == "buy" else b.bids)
+        order = sorted(buckets, key=lambda b: lv(b)[0][1] if lv(b) else 0.0)
+        got = {}; want = n
+        for b in order:
+            if want < 0.01: break
+            o = self.acct.take(b, side, round(want, 2), limit=b.best_ask if side == "buy" else b.best_bid, tag=f"ladder-buckets-{side}", fixed=True)
+            got[b.slug] = o.filled if o else 0.0; want = min(want, got[b.slug])
+        least = min(got.get(b.slug, 0.0) for b in buckets)
         for b in buckets:
-            o = self.acct.take(b, side, n, limit=b.best_ask if side == "buy" else b.best_bid, tag=f"ladder-buckets-{side}", fixed=True)
-            if o and o.filled > 0: filled += 1
-        if filled: self.stats["trades"] += 1; self.done.add(key); log.info("ladder buckets %s %s: %d legs, edge %.3f x %.2f", asset, side, filled, edge, n)
+            extra = got.get(b.slug, 0.0) - least
+            if extra > 0.009:
+                self.stats["unwound"] += 1
+                self.acct.take(b, "sell" if side == "buy" else "buy", round(extra, 2), limit=None, tag="ladder-unwind", fixed=True)
+        if least > 0: self.stats["trades"] += 1; self.done.add(key); log.info("ladder buckets %s %s: %d legs, edge %.3f x %.2f", asset, side, len(buckets), edge, least)
 
     def try_complement(self, asset, end, x, below, edge_est, now):
         key = ("complement", x.slug)
