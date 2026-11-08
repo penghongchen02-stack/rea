@@ -31,6 +31,7 @@ class Account:
         self.size_mode = size_mode; self.size_min = size_min; self.size_max = size_max; self.rng = random.Random(seed + hash(name) % 1000)
         self.positions = collections.defaultdict(Position); self.orders = {}; self.fills = []; self.settlements = []
         self.fees = 0.0; self.maker_fills = 0; self.taker_fills = 0; self.rejected = 0; self.events = collections.deque(maxlen=200)
+        self.universe = "std"   # set by the Universe; paper takers in one universe share (and consume) the displayed liquidity
 
     # ---- accounting -------------------------------------------------
     def locked_margin(self): return sum(-p.qty for p in self.positions.values() if p.qty < 0 and not p.closed)
@@ -115,12 +116,12 @@ class Account:
         self._take(market, o); return o
 
     def _take(self, market, o):
-        levels = market.offers if o.side == "buy" else market.bids
-        for px, q in levels:
+        for px, q in market.avail(o.side, self.universe):
             if o.remaining <= 1e-9: break
             if o.side == "buy" and px > o.price: break
             if o.side == "sell" and px < o.price: break
             fq = min(q, o.remaining); self._fill(market, o, px, fq, maker=False)
+            k = (self.universe, o.side, px); market.consumed[k] = market.consumed.get(k, 0.0) + fq
         if o.remaining > 1e-9 and o.id in self.orders: del self.orders[o.id]
 
     def cancel(self, oid): return self.orders.pop(oid, None)

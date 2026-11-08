@@ -28,9 +28,9 @@ Tier 1 fee (0.095 × qty × p × (1−p)); no rebates. Settlement uses the marke
 
 ## Bots and universes (current)
 
-74 paper accounts now run on one engine in three universes: `std` (port 8080, fixed contract
+75 paper accounts now run on one engine in three universes: `std` (port 8080, fixed contract
 clips, $100 each), `dollar` (8081, every order a random $0.10-$10) and `dollar30` (8082,
-$0.10-$30 with $1,000 each). The dashboard names every bot (1-74). Bots 31, 64-74 form the
+$0.10-$30 with $1,000 each). The dashboard names every bot (1-75). Bots 31, 64-75 form the
 arbitrage family (`paperbot/ladder.py`, `paperbot/arbs.py`): they trade only relations fixed
 by the settlement rules (dominance between contracts sharing a settlement instant, bucket
 tiling, mutual exclusion, one-touch versus strike, and the bounded 60-second average in the
@@ -39,3 +39,8 @@ final seconds), with every leg sized equally and verified on live books.
 Data notes: the gateway sits behind a 30-second public cache, so every request carries a
 unique query parameter (otherwise books arrive up to 30 s stale), and requests use a plain
 client user agent (the default Python agent is throttled far below the documented limit).
+
+Fill realism: paper takers consume the displayed liquidity of a book snapshot (per universe), so repeated
+passes against the same book never fill more than the exchange showed; a level's consumption is carried
+over while the exchange still shows the same size there. Multi-leg sets are sized to what cash covers
+before any leg is sent, and unequal fills are unwound at market.

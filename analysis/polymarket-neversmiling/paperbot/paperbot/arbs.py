@@ -54,14 +54,20 @@ class ArbBase:
         n = math.floor(n * 100) / 100
         if n < 0.01: self.stats["unaffordable"] += 1; return False
         self.opps.appendleft({"ts": time.time(), "kind": label, "legs": [m.slug for m, _, _, _ in legs], "edge": round(edge, 4), "n": round(n, 2)})
-        filled = 0
+        filled = 0; got = []
         for m, side, limit, tag in legs:
             o = self.acct.take(m, side, n, limit=limit, tag=tag, fixed=True)
-            if o and o.filled > 0: filled += 1
+            f = o.filled if o else 0.0; got.append(f)
+            if f > 0: filled += 1
         if filled:
             self.stats["trades"] += 1; self.repeats[key] += 1
-            if filled < len(legs): self.stats["legged"] += 1
             log.info("%s %s edge %.4f x %.2f: %s", self.name, label, edge, n, ", ".join(f"{s} {m.slug}@{l:.2f}" for m, s, l, _ in legs))
+            # never hold a naked leg: unwind whatever filled beyond the thinnest leg, at market
+            least = min(got)
+            for (m, side, limit, tag), f in zip(legs, got):
+                if f - least > 0.009:
+                    self.stats["unwound"] += 1
+                    self.acct.take(m, "sell" if side == "buy" else "buy", round(f - least, 2), limit=None, tag=f"unwind {tag}", fixed=True)
         return bool(filled)
 
     def pull(self, st):
@@ -445,7 +451,57 @@ class WindowTile(ArbBase):
                     self.execute([(w, "buy", w.best_ask, f"tile-buy up {P:.0f}"), (r, "sell", r.best_bid, f"tile-sell {r.r_lo:.0f}-{r.r_hi:.0f}")], n, key, "dominance", edge)
 
 
-ARB_BOTS = ("xarb_tight", "xarb_windows", "xarb_maker_bid", "xarb_maker_ask", "touch_arb", "touch_ladder", "range_arb", "settle_lock", "ladder_tight", "window_tile")
+# ---- 75: fast, high-volume cross-window arbitrage -------------------------------------------------------------------
+class XArbFast(ArbBase):
+    """Bot 75: the cross-window dominance model (64) built for speed and size. Every second it groups the Up/Down
+    windows and hourly strikes by coin and settlement instant; any pair within 3 cents of a violation puts both
+    books on 1-second polling (strikes are fetched directly), so the gap is seen within a second instead of up to
+    six. When the gap clears both fees plus 0.3 cents it walks the two books level by level, taking the full
+    visible size at every level pair that still pays, up to 200 sets per pass and the cash on hand, and keeps
+    taking on later passes while the gap persists. Takers consume the displayed liquidity, so repeated passes
+    never pretend the same contracts are there twice. Unequal fills are unwound at once."""
+    name = "xarb_fast"; MIN_EDGE = 0.003; MAX_SETS = 200.0; PERIOD = 1.0; BUDGET = 4; WATCH = 0.03
+
+    def run(self, now):
+        groups = XArb.contracts(self, now); uni = self.acct.universe
+        for (asset, T), items in groups.items():
+            if len(items) < 2: continue
+            self.stats["groups"] += 1
+            items.sort(key=lambda x: x[0])
+            for i, (Ka, a, sa) in enumerate(items):
+                for Kb, b, sb in items[i + 1:]:
+                    if a.slug == b.slug: continue
+                    ask_a = a.best_ask if sa == "live" else (a.best_ask if now - a.book_ts < 60 else a.list_ask)
+                    bid_b = b.best_bid if sb == "live" else (b.best_bid if now - b.book_ts < 60 else b.list_bid)
+                    if ask_a is None or bid_b is None: continue
+                    gap = bid_b - ask_a - self.fee(ask_a) - self.fee(bid_b)
+                    if gap < -self.WATCH: continue
+                    # near a violation: watch both books every second
+                    a.hot_until = b.hot_until = now + 10; self.stats["watching"] += 1
+                    for m, src in ((a, sa), (b, sb)):
+                        if src == "list" and now - m.book_ts > 1.5:
+                            if self.budget <= 0: break
+                            self.budget -= 1; self.lf.fetch_book(m, max_age=1.5)
+                    if now - a.book_ts > 3 or now - b.book_ts > 3: continue
+                    if gap < self.MIN_EDGE: continue
+                    self.stats["candidates"] += 1
+                    # walk the books: pair level i of a's offers with level j of b's bids while the pair still pays
+                    legs_done = 0
+                    for _ in range(6):
+                        av_a = a.avail("buy", uni); av_b = b.avail("sell", uni)
+                        if not av_a or not av_b: break
+                        pa, qa = av_a[0]; pb, qb = av_b[0]
+                        edge = pb - pa - self.fee(pa) - self.fee(pb)
+                        if edge < self.MIN_EDGE: break
+                        n = min(qa, qb, self.MAX_SETS, self.acct.affordable_sets([("buy", pa), ("sell", pb)]))
+                        n = math.floor(n * 100) / 100
+                        if n < 0.01: self.stats["unaffordable"] += 1; break
+                        if not self.execute([(a, "buy", pa, f"xf-buy K{Ka:.0f}"), (b, "sell", pb, f"xf-sell K{Kb:.0f}")], n, (a.slug, b.slug), "xarb-fast", edge): break
+                        legs_done += 1
+                    if legs_done > 1: self.stats["walked_levels"] += legs_done - 1
+
+
+ARB_BOTS = ("xarb_tight", "xarb_windows", "xarb_maker_bid", "xarb_maker_ask", "touch_arb", "touch_ladder", "range_arb", "settle_lock", "ladder_tight", "window_tile", "xarb_fast")
 
 
 def make_arbs(accounts, engine):
@@ -461,4 +517,5 @@ def make_arbs(accounts, engine):
         "settle_lock": SettleLock(accounts["settle_lock"], engine),
         "ladder_tight": LadderTight(accounts["ladder_tight"], engine.lf),
         "window_tile": WindowTile(accounts["window_tile"], engine),
+        "xarb_fast": XArbFast(accounts["xarb_fast"], engine),
     }

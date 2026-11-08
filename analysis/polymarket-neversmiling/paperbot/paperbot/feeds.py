@@ -71,6 +71,8 @@ class Market:
     def __init__(self, raw):
         self.slug = raw["slug"]; self.update(raw)
         self.bids = []; self.offers = []; self.book_ts = 0.0; self.state = None; self.book_src = "rest"
+        self.consumed = {}      # (universe, side, px) -> qty our paper takers already removed from this snapshot
+        self.hot_until = 0.0    # a scanner asks for 1-second polling of this book until then
         self.last_px = None; self.last_qty = 0.0; self.shares_traded = 0.0; self.last_trade_ts = 0.0
         self.tape = collections.deque(maxlen=2000)   # (ts, price, qty) inferred from stats deltas
         self.stats = {}
@@ -110,6 +112,10 @@ class Market:
     def apply_book(self, md):
         bids = [(float(b["px"]["value"]), float(b["qty"])) for b in md.get("bids", [])]
         offers = [(float(b["px"]["value"]), float(b["qty"])) for b in md.get("offers", [])]
+        old = {("buy", px): q for px, q in self.offers} | {("sell", px): q for px, q in self.bids}
+        new = {("buy", px): q for px, q in offers} | {("sell", px): q for px, q in bids}
+        # liquidity our paper takers removed stays removed while the exchange still shows the same size at that level
+        self.consumed = {k: v for k, v in self.consumed.items() if new.get(k[1:]) is not None and new.get(k[1:]) == old.get(k[1:])}
         self.bids = sorted(bids, reverse=True); self.offers = sorted(offers); self.state = md.get("state")
         self.book_ts = time.time(); st = md.get("stats") or {}; self.stats = st
         try:
@@ -121,6 +127,14 @@ class Market:
             self.shares_traded = max(self.shares_traded, traded)
         except Exception as e:
             log.debug("stats parse %s", e)
+
+    def avail(self, side, universe):
+        """Book levels a taker in this universe can still hit: displayed size minus what its paper fills consumed."""
+        out = []
+        for px, q in (self.offers if side == "buy" else self.bids):
+            r = q - self.consumed.get((universe, side, px), 0.0)
+            if r > 1e-9: out.append((px, r))
+        return out
 
     @property
     def best_bid(self): return self.bids[0][0] if self.bids else None
@@ -173,7 +187,8 @@ class MarketFeed:
             if m.end < now - 5 or m.start > now + 20: continue
             # request budget: 5-minute books every second, 15-minute/hourly every 3 s, held ladder legs every 30 s,
             # and the final 20 s of any window every second
-            if getattr(m, "kind", "updown") != "updown": interval = 60
+            if now < m.hot_until: interval = 0.9                     # a scanner is watching a near-arbitrage on this book
+            elif getattr(m, "kind", "updown") != "updown": interval = 60
             elif m.end - now < 20: interval = 0.9
             elif m.dur <= 300: interval = 2
             else: interval = 6

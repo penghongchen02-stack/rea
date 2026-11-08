@@ -54,6 +54,7 @@ class Universe:
         mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0))
         reg = build_registry(cfg.get("pos_mult", 1.0))
         self.accounts = {k: mk(k) for k in list(reg) + list(LADDER_BOTS) + list(ARB_BOTS)}
+        for a in self.accounts.values(): a.universe = self.name
         active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
         self.active = list(self.accounts) if active == ["all"] else active
         self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
