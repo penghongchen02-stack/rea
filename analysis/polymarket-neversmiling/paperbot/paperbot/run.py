@@ -95,7 +95,7 @@ class Universe:
 
     def build_state(self, engine, now):
         mk = {}
-        for m in engine.mf.markets.values():
+        for m in list(engine.mf.markets.values()):      # the discovery thread may add a market mid-pass
             s = m.snapshot(); p, det = p_up(m, engine.idx, engine.spot, now); s["p_up"] = round(p, 3) if p is not None else None; s["model"] = det
             s["remaining"] = round(m.remaining(now)); s["positions"] = {}; s["orders"] = {}
             for name, a in self.accounts.items():
