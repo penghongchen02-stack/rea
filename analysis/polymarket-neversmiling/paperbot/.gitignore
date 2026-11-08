@@ -2,3 +2,5 @@ paperbot-data/
 paperbot-data-stdout.log
 __pycache__/
 dashboard-*.png
+trade-history-*.html
+trade-history-*.png
