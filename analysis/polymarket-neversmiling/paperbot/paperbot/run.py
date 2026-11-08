@@ -170,8 +170,8 @@ class Engine:
         if sp is not None: up = m.yes_wins(sp)
         elif time.time() - m.end < (45 if m.kind == "updown" else 900): return False
         else:
-            avg, n = self.idx.avg(m.asset, m.end - 60, m.end)
-            if avg is not None and n >= 55: sp = round(avg, m.decimals); up = m.yes_wins(sp); src = "index-average"
+            v = self.idx.value_at(m.asset, m.end - 1)      # the series is the rolling 60-second average; its value at T-1 is the settlement
+            if v is not None: sp = round(v, m.decimals); up = m.yes_wins(sp); src = "index-series"
         if up is None:
             if time.time() - m.end < 240: return False
             log.warning("could not settle %s; using last price", m.slug); up = (m.last_px or 0.5) >= 0.5

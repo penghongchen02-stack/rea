@@ -229,6 +229,12 @@ class IndexFeed:
             if not ser: return None, None
             ts = next(reversed(ser)); return ts, ser[ts]
 
+    def value_at(self, a, ts):
+        """The published series value at second ts (None if not published)."""
+        with self.lock:
+            ser = self.series.get(a) or {}
+            return ser.get(int(ts))
+
     def avg(self, a, t0, t1):
         """Mean of the 1-second index values with t0 <= ts < t1; returns (mean, n). Direct lookups, no scan."""
         with self.lock:
@@ -259,7 +265,8 @@ class SpotFeed:
     PRODUCTS = {"btc": "BTC-USD", "eth": "ETH-USD", "sol": "SOL-USD", "xrp": "XRP-USD"}
     def __init__(self):
         self.price = {}; self.ts = {}; self.lock = threading.Lock(); self.connected = False; self.msgs = 0
-        self.hist = {a: collections.deque(maxlen=600) for a in self.PRODUCTS}   # (ts, price) for the last ~minutes
+        self.hist = {a: collections.deque(maxlen=20000) for a in self.PRODUCTS}   # (ts, price) ticks for the last minutes
+        self.sec_px = {a: collections.OrderedDict() for a in self.PRODUCTS}        # int second -> last price in that second
 
     def run(self):
         import asyncio, websockets
@@ -276,12 +283,41 @@ class SpotFeed:
                                 if a:
                                     with self.lock:
                                         self.price[a] = float(m["price"]); self.ts[a] = time.time(); self.msgs += 1; self.hist[a].append((self.ts[a], self.price[a]))
+                                        sp = self.sec_px[a]; sp[int(self.ts[a])] = self.price[a]
+                                        while len(sp) > 1800: sp.popitem(last=False)
                 except Exception as e:
                     self.connected = False; log.warning("coinbase ws: %s", e); await asyncio.sleep(3)
         asyncio.run(main())
 
     def last(self, a):
         with self.lock: return self.price.get(a), self.ts.get(a)
+
+    def sec(self, a, ts):
+        """Last spot price printed in second ts, carried forward from the previous second(s) if that second was quiet."""
+        with self.lock:
+            sp = self.sec_px.get(a) or {}
+            for t in range(int(ts), int(ts) - 15, -1):
+                v = sp.get(t)
+                if v is not None: return v
+        return None
+
+    def mean(self, a, t0, t1):
+        """Mean of per-second spot over t0 <= t < t1 (carried forward), or None if nothing is known."""
+        vals = [v for v in (self.sec(a, t) for t in range(int(t0), int(t1))) if v is not None]
+        return sum(vals) / len(vals) if vals else None
+
+    def sigma(self, a, seconds=1200):
+        """Per-second log-return std of spot over the recent window (floored at 3e-5; 1.5e-4 when unknown). Cached 10 s."""
+        cache = self.__dict__.setdefault("_sig_cache", {}); now = time.time()
+        hit = cache.get(a)
+        if hit and now - hit[0] < 10: return hit[1]
+        with self.lock: items = list((self.sec_px.get(a) or {}).items())[-seconds:]
+        import math
+        rets = [math.log(items[i][1] / items[i - 1][1]) for i in range(1, len(items)) if items[i][0] - items[i - 1][0] == 1 and items[i - 1][1] > 0]
+        if len(rets) < 60: val = 1.5e-4
+        else:
+            m = sum(rets) / len(rets); val = max(math.sqrt(sum((r - m) ** 2 for r in rets) / (len(rets) - 1)), 3e-5)
+        cache[a] = (now, val); return val
 
     def at(self, a, ts):
         """Spot price at (or just before) a timestamp, from the recent history."""

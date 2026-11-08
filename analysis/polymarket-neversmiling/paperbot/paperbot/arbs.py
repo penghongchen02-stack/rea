@@ -377,13 +377,12 @@ class SettleLock(ArbBase):
         for (asset, T), items in groups.items():
             left = T - now
             if left > 12 or left < 0.5: continue
-            known, n = self.idx.avg(asset, T - 60, T)
-            if n < 55 or known is None: continue
-            its, S = self.idx.last(asset)
-            if S is None: continue
-            r = 60 - n; sig = max(self.idx.sigma(asset), 1.5e-4)
-            b = (5 * sig * math.sqrt(r / 3.0) + 1e-4) * S if r > 0 else 0.0
-            lo = (known * n + r * (S - b)) / 60.0; hi = (known * n + r * (S + b)) / 60.0
+            from .fair import settle_estimate
+            est = settle_estimate(asset, T, self.idx, self.spot, now)
+            if est is None: continue
+            mean, sd, n, info = est
+            if n < 55: continue
+            b = 5 * sd + 1e-4 * mean; lo = mean - b; hi = mean + b
             self.stats["groups"] += 1
             quant = 2 * 10 ** (-getattr(items[0][1], "decimals", 2))
             for K, m, src in items:

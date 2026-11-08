@@ -19,14 +19,16 @@ class LockBase(ArbBase):
     N_MIN = 45; K_SD = 4.0; BASIS = 1e-4; HORIZON_S = 25; MIN_EDGE = 0.005; MAX_SETS = 100.0; PERIOD = 1.0
 
     def bounds(self, asset, T):
-        """(lo, hi, n): bounds of the final 60-second average, or None if too few seconds are published."""
-        known, n = self.idx.avg(asset, T - 60, T)
-        if known is None or n < self.N_MIN: return None
-        its, S = self.idx.last(asset)
-        if S is None: return None
-        r = max(0, 60 - n); sig = max(self.idx.sigma(asset), 1.5e-4)
-        b = (self.K_SD * sig * math.sqrt(r / 3.0) + self.BASIS) * S if r > 0 else 0.0
-        return (known * n + r * (S - b)) / 60.0, (known * n + r * (S + b)) / 60.0, n
+        """(lo, hi, n): bounds of the settlement value from the corrected estimator (fair.settle_estimate): mean of the
+        rolling average at T-1 with the seconds still to come as a random walk, K_SD standard deviations each way plus
+        a basis allowance. None until N_MIN of the 60 seconds are pinned."""
+        from .fair import settle_estimate
+        est = settle_estimate(asset, T, self.idx, self.spot, time.time())
+        if est is None: return None
+        mean, sd, n, info = est
+        if n < self.N_MIN: return None
+        b = self.K_SD * sd + self.BASIS * mean
+        return mean - b, mean + b, n
 
     def value(self, m, lo, hi):
         """Locked payout of m given the bounds, else None. Up/Down and Above: average >= K; range: both bounds inside."""
