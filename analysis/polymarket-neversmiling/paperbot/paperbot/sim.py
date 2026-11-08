@@ -103,7 +103,7 @@ class Account:
         price = round(max(0.01, min(0.99, price)), 2); qty = round(qty if fixed else self.size_for(price, qty), 2)
         if qty < market.min_qty: return None
         need = self.cash_needed(market.slug, side, price, qty)
-        if need > self.buying_power() + 1e-9:
+        if need > 1e-9 and need > self.buying_power() + 1e-9:
             self.rejected += 1; return None
         o = Order(market.slug, side, price, qty, post_only, tag)
         # crossing?
@@ -126,7 +126,7 @@ class Account:
         o = Order(market.slug, side, limit if limit is not None else px, round(qty if fixed else self.size_for(px, qty), 2), False, tag)
         if o.qty < market.min_qty: return None
         need = self.cash_needed(market.slug, side, o.price, o.qty)
-        if need > self.buying_power() + 1e-9: self.rejected += 1; return None
+        if need > 1e-9 and need > self.buying_power() + 1e-9: self.rejected += 1; return None
         self._take(market, o); return o
 
     def _take(self, market, o):
