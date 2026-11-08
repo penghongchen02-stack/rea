@@ -319,6 +319,7 @@ class XArb:
                     bid_a, ask_a, _, _ = self.quotes(a, sa); bid_b, ask_b, _, _ = self.quotes(b, sb)
                     if ask_a is None or bid_b is None: continue
                     prem = bid_b - ask_a - theta * ask_a * (1 - ask_a) - theta * bid_b * (1 - bid_b)
+                    if prem > self.stats.get("best_gap_c", -99): self.stats["best_gap_c"] = round(prem * 100, 2)
                     if prem < self.MIN_EDGE: continue
                     key = (a.slug, b.slug)
                     if self.repeats[key] >= self.MAX_REPEATS: continue
@@ -333,7 +334,8 @@ class XArb:
                     ask_a = a.best_ask; bid_b = b.best_bid
                     if ask_a is None or bid_b is None: self.stats["no_live_quote"] += 1; continue
                     prem = bid_b - ask_a - theta * ask_a * (1 - ask_a) - theta * bid_b * (1 - bid_b)
-                    depth = min(a.offers[0][1], b.bids[0][1])
+                    lk = self.acct.liq_key; av_a = a.avail("buy", lk); av_b = b.avail("sell", lk)
+                    depth = min(av_a[0][1] if av_a and av_a[0][0] <= ask_a else 0.0, av_b[0][1] if av_b and av_b[0][0] >= bid_b else 0.0)
                     self.opps.appendleft({"ts": now, "T": T, "asset": asset, "buy": a.slug, "K_a": Ka, "ask_a": ask_a, "sell": b.slug, "K_b": Kb, "bid_b": bid_b, "prem": round(prem, 4), "depth": round(depth, 2)})
                     if prem < self.MIN_EDGE: self.stats["vanished"] += 1; continue
                     n = min(self.acct.size_for(ask_a, self.MAX_SETS), depth, self.acct.affordable_sets([("buy", ask_a), ("sell", bid_b)]))
@@ -341,7 +343,12 @@ class XArb:
                     if n < 0.01: self.stats["unaffordable"] += 1; continue
                     o1 = self.acct.take(a, "buy", n, limit=ask_a, tag=f"xarb-buy K{Ka:.0f}", fixed=True)
                     o2 = self.acct.take(b, "sell", n, limit=bid_b, tag=f"xarb-sell K{Kb:.0f}", fixed=True)
-                    if (o1 and o1.filled > 0) or (o2 and o2.filled > 0):
+                    f1 = o1.filled if o1 else 0.0; f2 = o2.filled if o2 else 0.0
+                    if abs(f1 - f2) > 0.009:      # never hold a naked leg
+                        self.stats["unwound"] += 1
+                        if f1 > f2: self.acct.take(a, "sell", round(f1 - f2, 2), limit=None, tag="xarb-unwind", fixed=True)
+                        else: self.acct.take(b, "buy", round(f2 - f1, 2), limit=None, tag="xarb-unwind", fixed=True)
+                    if f1 > 0 or f2 > 0:
                         self.stats["trades"] += 1; self.repeats[key] += 1
                         log.info("xarb T=%d buy %s (K %.2f) @%.2f sell %s (K %.2f) @%.2f prem %.3f x %.2f", T, a.slug, Ka, ask_a, b.slug, Kb, bid_b, prem, n)
     def snapshot(self): return {"stats": dict(self.stats), "recent": list(self.opps)[:10]}

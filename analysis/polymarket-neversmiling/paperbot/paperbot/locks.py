@@ -51,7 +51,7 @@ class LockBase(ArbBase):
 
     def take_locked(self, m, v, now, sweep=False):
         """Buy a $1 contract under 1 - fee - edge, sell a $0 contract above fee + edge; best level or every level."""
-        uni = self.acct.universe; key = m.slug
+        uni = self.acct.liq_key; key = m.slug
         if self.repeats[key] >= self.MAX_REPEATS: return
         side = "buy" if v >= 0.5 else "sell"
         levels = m.avail(side, uni)
