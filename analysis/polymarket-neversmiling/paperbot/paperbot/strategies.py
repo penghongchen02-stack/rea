@@ -344,6 +344,10 @@ class Param(LastCallHold):
         super().__init__(account, seed=seed)
         self.name = name; self.t_lo = t_lo; self.t_hi = t_hi; self.z_min = z_min; self.max_price = max_price; self.entry = entry
         self.durs = set(durs); self.assets = set(assets); self.n_min = n_min; self.clip = clip; self.max_pos = max_pos; self.edge = edge
+        # 02:25Z: sampled z against the book: the market is already at $0.90-0.97 by the time the model reaches z 1.5, so
+        # every cap below $0.95 (with a 3-cent edge) never fills. Caps are raised to $0.95 with a 1.5-cent edge, except
+        # the two bots whose whole idea is the cheap side (v_cheap, v_open_mom).
+        if name not in ("v_cheap", "v_open_mom"): self.max_price = max(self.max_price, 0.95); self.edge = min(self.edge, 0.015)
 
     def on_tick(self, market, ctx, now):
         if market.asset not in self.assets or market.dur not in self.durs: return
@@ -748,12 +752,12 @@ class Stairstep(LastCallHold):
         p, det = p_up(market, ctx["index"], ctx["spot"], now)
         if p is None or det.get("index_age", 99) > 8: return
         z = det["z"]; st["next_take"] = now + 3; theta = acct.theta; q = self.pos(slug); mid = (bb + ba) / 2
-        cap = 0.80 if left > 60 else 0.90; step = st.setdefault("steps", 0)
+        cap = 0.93 if left > 60 else 0.96; step = st.setdefault("steps", 0)
         if step >= 3: return
-        if z >= 1.5 and mid > 0.5 and ba <= cap and 1 - ba - theta * ba * (1 - ba) > 0.03 and q < self.max_pos:
+        if z >= 1.5 and mid > 0.5 and ba <= cap and 1 - ba - theta * ba * (1 - ba) > 0.015 and q < self.max_pos:
             o = acct.take(market, "buy", self.clip, limit=ba, tag=f"stair-up {ba:.2f} z{z:.1f}")
             if o and o.filled > 0: st["steps"] = step + 1
-        elif z <= -1.5 and mid < 0.5 and 1 - bb <= cap and bb - theta * bb * (1 - bb) > 0.03 and -q < self.max_pos:
+        elif z <= -1.5 and mid < 0.5 and 1 - bb <= cap and bb - theta * bb * (1 - bb) > 0.015 and -q < self.max_pos:
             o = acct.take(market, "sell", self.clip, limit=bb, tag=f"stair-down {1-bb:.2f} z{z:.1f}")
             if o and o.filled > 0: st["steps"] = step + 1
 
@@ -848,9 +852,9 @@ class MultiEntry(LastCallHold):
         p, det = p_up(market, ctx["index"], ctx["spot"], now)
         if p is None or det.get("index_age", 99) > 8: return
         z = det["z"]; st["next_take"] = now + 10; theta = acct.theta; q = self.pos(slug); mid = (bb + ba) / 2
-        if z >= 1.5 and mid > 0.5 and ba <= 0.90 and 1 - ba - theta * ba * (1 - ba) > 0.03 and q < self.max_pos:
+        if z >= 1.5 and mid > 0.5 and ba <= 0.95 and 1 - ba - theta * ba * (1 - ba) > 0.015 and q < self.max_pos:
             acct.take(market, "buy", self.clip, limit=ba, tag=f"multi-up {ba:.2f} z{z:.1f}")
-        elif z <= -1.5 and mid < 0.5 and 1 - bb <= 0.90 and bb - theta * bb * (1 - bb) > 0.03 and -q < self.max_pos:
+        elif z <= -1.5 and mid < 0.5 and 1 - bb <= 0.95 and bb - theta * bb * (1 - bb) > 0.015 and -q < self.max_pos:
             acct.take(market, "sell", self.clip, limit=bb, tag=f"multi-down {1-bb:.2f} z{z:.1f}")
 
 
