@@ -193,10 +193,9 @@ class Engine:
             ms = (raw or {}).get("markets") or []
             if not ms or not ms[0].get("assetPriceTerms"): continue
             m = feeds.Market(ms[0])
-            if m.end < time.time() + 2:
-                if self.settle_market(m): log.info("settled orphan %s after restart", slug)
-            else:
-                with self.mf.lock: self.mf.markets[slug] = m
+            if m.end < time.time() + 2 and self.settle_market(m): log.info("settled orphan %s after restart", slug); continue
+            # not settleable yet (the exchange publishes within about a minute): track it so the loop keeps retrying
+            with self.mf.lock: self.mf.markets[slug] = m
 
     # ---- main loop -----------------------------------------------------------
     def loop(self):
