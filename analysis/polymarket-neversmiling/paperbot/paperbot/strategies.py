@@ -381,16 +381,16 @@ class Param(LastCallHold):
 
 SWEEP = {
     # name:            (t_lo, t_hi, z_min, max_price, entry,  durs,        assets,                        n_min)
-    "v_mid_take":      (90,   180,  3.0,   0.85,      "take", (300,),      ("btc", "eth"),                0),
-    "v_mid_rest":      (90,   180,  3.0,   0.85,      "rest", (300,),      ("btc", "eth"),                0),
+    "v_mid_take":      (90,   180,  1.5,   0.85,      "take", (300,),      ("btc", "eth"),                0),
+    "v_mid_rest":      (90,   180,  1.5,   0.85,      "rest", (300,),      ("btc", "eth"),                0),
     "v_early_z2":      (30,   90,   2.0,   0.90,      "take", (300,),      ("btc", "eth"),                0),
-    "v_early_rest":    (30,   90,   3.0,   0.90,      "rest", (300,),      ("btc", "eth"),                0),
-    "v_15m_early":     (60,   180,  3.0,   0.90,      "take", (900,),      ("btc", "eth"),                0),
-    "v_15m_rest":      (60,   180,  3.0,   0.90,      "rest", (900,),      ("btc", "eth"),                0),
-    "v_open_mom":      (210,  280,  2.0,   0.65,      "take", (300,),      ("btc", "eth"),                0),
-    "v_cheap":         (60,   280,  3.0,   0.70,      "take", (300, 900),  ("btc", "eth"),                0),
+    "v_early_rest":    (30,   90,   1.5,   0.90,      "rest", (300,),      ("btc", "eth"),                0),
+    "v_15m_early":     (60,   180,  1.5,   0.90,      "take", (900,),      ("btc", "eth"),                0),
+    "v_15m_rest":      (60,   180,  1.5,   0.90,      "rest", (900,),      ("btc", "eth"),                0),
+    "v_open_mom":      (210,  280,  1.0,   0.65,      "take", (300,),      ("btc", "eth"),                0),
+    "v_cheap":         (60,   280,  1.5,   0.70,      "take", (300, 900),  ("btc", "eth"),                0),
     "v_all_assets":    (30,   90,   3.0,   0.90,      "take", (300,),      ("btc", "eth", "sol", "xrp"),  0),
-    "v_strict":        (30,   120,  4.0,   0.92,      "take", (300, 900),  ("btc", "eth"),                0),
+    "v_strict":        (30,   120,  2.0,   0.92,      "take", (300, 900),  ("btc", "eth"),                0),
     # looser round (added 14:10Z after an hour with almost no fills): same idea, more room to act
     "v_loose_z2":      (30,   120,  2.0,   0.95,      "take", (300,),      ("btc", "eth"),                0),
     "v_loose_rest":    (30,   120,  2.0,   0.95,      "rest", (300,),      ("btc", "eth"),                0),
@@ -450,6 +450,10 @@ def random_bots(n=5, seed=2026):
     return out
 
 RANDOM_BOTS = random_bots()
+# 01:58Z: the draws with z >= 2.5 never fired in 500 windows; loosened to 1.5 (labels updated)
+for _k, (_kind, _p, _label) in list(RANDOM_BOTS.items()):
+    if _kind == "model" and _p["z_min"] > 2.0:
+        RANDOM_BOTS[_k] = (_kind, {**_p, "z_min": 1.5}, __import__("re").sub(r"model z\d\.\d", "model z1.5", _label))
 
 
 class PickOff(LastCallHold):
@@ -539,9 +543,18 @@ class BurstLean(Base):
         if not cb_now or not cb_then: return
         up_lean = cb_now >= cb_then; theta = acct.theta
         pair = ba + (1 - bb) + theta * ba * (1 - ba) + theta * bb * (1 - bb)      # buy Up at ask and Down at (1 - bid)
-        if pair > self.pair_cap: return
         q = self.pos(slug)
         n_up, n_dn = ((2, 1) if up_lean else (1, 2)) if self.lean else (1, 1)
+        if pair > self.pair_cap:
+            # US adaptation (01:58Z): without rebates the pair never costs under $1, so take one side only: the side spot
+            # is leaning toward (lean bots) or the cheaper side (two-sided bots), and only while it costs <= $0.60
+            if self.lean: side = "buy" if up_lean else "sell"
+            else: side = "buy" if ba <= 1 - bb else "sell"
+            px = ba if side == "buy" else 1 - bb
+            if px > 0.60: return
+            if side == "buy" and q + self.clip <= self.max_pos: acct.take(market, "buy", self.clip, limit=ba, tag="burst-one-up")
+            elif side == "sell" and -q + self.clip <= self.max_pos: acct.take(market, "sell", self.clip, limit=bb, tag="burst-one-down")
+            return
         if q + n_up * self.clip <= self.max_pos: acct.take(market, "buy", n_up * self.clip, limit=ba, tag=f"burst-up{'*' if up_lean else ''}")
         if -q + n_dn * self.clip <= self.max_pos: acct.take(market, "sell", n_dn * self.clip, limit=bb, tag=f"burst-down{'*' if not up_lean else ''}")
 
@@ -612,8 +625,8 @@ def build_registry(pos_mult=1.0):
         if kind == "model": reg[k] = (lambda k=k, params=params: scaled(Param, k, params["t_lo"], params["t_hi"], params["z_min"], params["max_price"], params["entry"], params["durs"], params["assets"], 0, clip=params["clip"]))()
         else: reg[k] = (lambda k=k, params=params: scaled(MarketFollow, k, params["t_lo"], params["t_hi"], params["p_lo"], params["p_hi"], params["z_min"]))()
     reg["pickoff"] = scaled(PickOff)
-    reg["hourly_last"] = scaled(Param, "hourly_last", 30, 120, 2.5, 0.90, "take", (3600,), ("btc", "eth"), 0)
-    reg["hourly_rest"] = scaled(Param, "hourly_rest", 30, 120, 2.5, 0.90, "rest", (3600,), ("btc", "eth"), 0)
+    reg["hourly_last"] = scaled(Param, "hourly_last", 30, 120, 1.5, 0.90, "take", (3600,), ("btc", "eth"), 0)
+    reg["hourly_rest"] = scaled(Param, "hourly_rest", 30, 120, 1.5, 0.90, "rest", (3600,), ("btc", "eth"), 0)
     reg["hourly_follow80"] = scaled(MarketFollow, "hourly_follow80", 60, 180, 0.75, 0.85, None, durs=(3600,))
     reg["scalper_with"] = scaled(Scalper, "scalper_with", fade=False); reg["scalper_fade"] = scaled(Scalper, "scalper_fade", fade=True)
     reg["burst_lean"] = scaled(BurstLean); reg["fair_value"] = scaled(FairValue); reg["crouch"] = scaled(Crouch)
@@ -622,19 +635,19 @@ def build_registry(pos_mult=1.0):
     reg["whiskas_taker"] = scaled(BurstLean, name="whiskas_taker", assets=("btc", "eth"), durs=(300,), lean=True, clip=1.0, pair_cap=0.97, period=(4, 8))
     reg["bonereaper"] = scaled(Bonereaper); reg["almach"] = scaled(Almach); reg["arcsine"] = scaled(Arcsine)
     # constructive round (no rebates assumed anywhere)
-    reg["consensus"] = scaled(Param, "consensus", 30, 90, 3.0, 0.90, "take", (300,), ("btc", "eth"), 0)
+    reg["consensus"] = scaled(Param, "consensus", 30, 90, 1.5, 0.90, "take", (300,), ("btc", "eth"), 0)
     reg["stairstep"] = scaled(Stairstep); reg["lastcent"] = scaled(LastCent)
-    reg["quarter"] = scaled(Param, "quarter", 45, 150, 2.5, 0.88, "take", (900,), ("btc", "eth"), 0)
+    reg["quarter"] = scaled(Param, "quarter", 45, 150, 1.5, 0.88, "take", (900,), ("btc", "eth"), 0)
     reg["guardrail"] = scaled(Guardrail)
     # high-volume round built on the rules that stayed green (no rebates)
     reg["consensus_z2"] = scaled(Param, "consensus_z2", 30, 90, 2.0, 0.90, "take", (300,), ("btc", "eth"), 0)
     reg["consensus_wide"] = scaled(Param, "consensus_wide", 20, 120, 2.5, 0.93, "take", (300,), ("btc", "eth"), 0)
     reg["multi_entry"] = scaled(MultiEntry)
     reg["all_coins_z2"] = scaled(Param, "all_coins_z2", 30, 90, 2.0, 0.90, "take", (300,), ("btc", "eth", "sol", "xrp"), 0)
-    reg["all_horizons"] = scaled(Param, "all_horizons", 30, 120, 2.5, 0.90, "take", (300, 900, 3600), ("btc", "eth"), 0)
+    reg["all_horizons"] = scaled(Param, "all_horizons", 30, 120, 1.5, 0.90, "take", (300, 900, 3600), ("btc", "eth"), 0)
     reg["guardrail_wide"] = scaled(Guardrail, name="guardrail_wide", t_lo=60, t_hi=240, p_lo=0.55, p_hi=0.80, z_min=1.0, tp=0.04)
     reg["scalper_tp2"] = scaled(Scalper, "scalper_tp2", fade=False, margin=0.03, tp=0.02)
-    reg["momentum_cut"] = scaled(Guardrail, name="momentum_cut", t_lo=200, t_hi=285, p_lo=0.52, p_hi=0.65, z_min=2.0, tp=0.05)
+    reg["momentum_cut"] = scaled(Guardrail, name="momentum_cut", t_lo=200, t_hi=285, p_lo=0.52, p_hi=0.65, z_min=1.0, tp=0.05)
     reg["rest_ladder"] = scaled(RestLadder)
     reg["crouch_wide"] = scaled(Crouch, name="crouch_wide", frac=0.40, p_lo=0.75, p_hi=0.93, z_min=1.5)
     # drop-in bots: paperbot/bots/*.py with REGISTRY = {name: factory(account)}
@@ -737,10 +750,10 @@ class Stairstep(LastCallHold):
         z = det["z"]; st["next_take"] = now + 3; theta = acct.theta; q = self.pos(slug); mid = (bb + ba) / 2
         cap = 0.80 if left > 60 else 0.90; step = st.setdefault("steps", 0)
         if step >= 3: return
-        if z >= 3 and mid > 0.5 and ba <= cap and 1 - ba - theta * ba * (1 - ba) > 0.03 and q < self.max_pos:
+        if z >= 1.5 and mid > 0.5 and ba <= cap and 1 - ba - theta * ba * (1 - ba) > 0.03 and q < self.max_pos:
             o = acct.take(market, "buy", self.clip, limit=ba, tag=f"stair-up {ba:.2f} z{z:.1f}")
             if o and o.filled > 0: st["steps"] = step + 1
-        elif z <= -3 and mid < 0.5 and 1 - bb <= cap and bb - theta * bb * (1 - bb) > 0.03 and -q < self.max_pos:
+        elif z <= -1.5 and mid < 0.5 and 1 - bb <= cap and bb - theta * bb * (1 - bb) > 0.03 and -q < self.max_pos:
             o = acct.take(market, "sell", self.clip, limit=bb, tag=f"stair-down {1-bb:.2f} z{z:.1f}")
             if o and o.filled > 0: st["steps"] = step + 1
 
@@ -761,22 +774,22 @@ class LastCent(LastCallHold):
         bb, ba = market.best_bid, market.best_ask
         if bb is None or ba is None: return
         p, det = p_up(market, ctx["index"], ctx["spot"], now)
-        if p is None or det.get("n_known", 0) < 40: return
+        if p is None or det.get("n_known", 0) < 30: return
         z = det["z"]; n = det["n_known"]; theta = acct.theta; q = self.pos(slug); tick = market.tick
-        if abs(z) < 4:
+        if abs(z) < 2.5:
             acct.cancel_all(slug); return
         resting = [o for o in acct.open_orders(slug) if o.tag.startswith("cent")]
         if z >= 4 and q < self.max_pos:
-            if n >= 50 and ba <= 0.97 and 1 - ba - theta * ba * (1 - ba) > 0.015:
+            if n >= 40 and ba <= 0.98 and 1 - ba - theta * ba * (1 - ba) > 0.01:
                 acct.cancel_all(slug); acct.take(market, "buy", self.clip, limit=ba, tag=f"cent-cross-up {ba:.2f}")
             elif not resting:
-                want = min(0.96, max(0.94, round(bb + tick, 2)))
+                want = min(0.97, max(0.93, round(bb + tick, 2)))
                 if want < ba: acct.place(market, "buy", want, self.clip, post_only=True, tag=f"cent-rest-up {want:.2f}")
         elif z <= -4 and -q < self.max_pos:
-            if n >= 50 and bb >= 0.03 and bb - theta * bb * (1 - bb) > 0.015:
+            if n >= 40 and bb >= 0.02 and bb - theta * bb * (1 - bb) > 0.01:
                 acct.cancel_all(slug); acct.take(market, "sell", self.clip, limit=bb, tag=f"cent-cross-down {1-bb:.2f}")
             elif not resting:
-                want = max(0.04, min(0.06, round(ba - tick, 2)))
+                want = max(0.03, min(0.07, round(ba - tick, 2)))
                 if want > bb: acct.place(market, "sell", want, self.clip, post_only=True, tag=f"cent-rest-down {1-want:.2f}")
 
 
@@ -784,7 +797,7 @@ class Guardrail(LastCallHold):
     """Constructive #53: follow the 60-75c leader 4 to 2 minutes out when the model agrees (z >= 1.5), rest a
     take-profit 5 cents better (maker), and cut the position at market the moment the model flips sign."""
     name = "guardrail"
-    def __init__(self, account, seed=63, name="guardrail", t_lo=120, t_hi=240, p_lo=0.60, p_hi=0.75, z_min=1.5, tp=0.05, durs=(300,)):
+    def __init__(self, account, seed=63, name="guardrail", t_lo=120, t_hi=240, p_lo=0.60, p_hi=0.75, z_min=0.5, tp=0.05, durs=(300,)):
         super().__init__(account, seed=seed); self.clip = 2.0; self.max_pos = 2.0
         self.name = name; self.t_lo = t_lo; self.t_hi = t_hi; self.p_lo = p_lo; self.p_hi = p_hi; self.z_min = z_min; self.tp = tp; self.durs = set(durs)
     def on_tick(self, market, ctx, now):
@@ -835,9 +848,9 @@ class MultiEntry(LastCallHold):
         p, det = p_up(market, ctx["index"], ctx["spot"], now)
         if p is None or det.get("index_age", 99) > 8: return
         z = det["z"]; st["next_take"] = now + 10; theta = acct.theta; q = self.pos(slug); mid = (bb + ba) / 2
-        if z >= 2.5 and mid > 0.5 and ba <= 0.90 and 1 - ba - theta * ba * (1 - ba) > 0.03 and q < self.max_pos:
+        if z >= 1.5 and mid > 0.5 and ba <= 0.90 and 1 - ba - theta * ba * (1 - ba) > 0.03 and q < self.max_pos:
             acct.take(market, "buy", self.clip, limit=ba, tag=f"multi-up {ba:.2f} z{z:.1f}")
-        elif z <= -2.5 and mid < 0.5 and 1 - bb <= 0.90 and bb - theta * bb * (1 - bb) > 0.03 and -q < self.max_pos:
+        elif z <= -1.5 and mid < 0.5 and 1 - bb <= 0.90 and bb - theta * bb * (1 - bb) > 0.03 and -q < self.max_pos:
             acct.take(market, "sell", self.clip, limit=bb, tag=f"multi-down {1-bb:.2f} z{z:.1f}")
 
 
