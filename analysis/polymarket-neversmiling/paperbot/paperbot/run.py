@@ -23,6 +23,10 @@ UNIVERSES = [
      "size_min": float(os.environ.get("PAPERBOT_SIZE_MIN", "0.1")), "size_max": float(os.environ.get("PAPERBOT_SIZE_MAX", "10"))},
     {"name": "dollar30", "port": int(os.environ.get("PAPERBOT_PORT3", "8082")), "size_mode": "dollar", "dir": os.path.join(DATA, "dollar30"), "pos_mult": 15.0,
      "size_min": 0.1, "size_max": 30.0, "cash": float(os.environ.get("PAPERBOT_CASH3", "1000"))},
+    # every order a random $0.10-$1,000; $30,000 per bot so one maximum order is about 3% of the account,
+    # the same proportion as the $30 / $1,000 universe
+    {"name": "dollar1000", "port": int(os.environ.get("PAPERBOT_PORT4", "8083")), "size_mode": "dollar", "dir": os.path.join(DATA, "dollar1000"), "pos_mult": 500.0,
+     "size_min": 0.1, "size_max": 1000.0, "cash": float(os.environ.get("PAPERBOT_CASH4", "30000"))},
 ]
 os.makedirs(DATA, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s",
