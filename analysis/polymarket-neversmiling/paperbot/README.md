@@ -28,9 +28,9 @@ Tier 1 fee (0.095 × qty × p × (1−p)); no rebates. Settlement uses the marke
 
 ## Bots and universes (current)
 
-75 paper accounts now run on one engine in three universes: `std` (port 8080, fixed contract
+80 paper accounts now run on one engine in three universes: `std` (port 8080, fixed contract
 clips, $100 each), `dollar` (8081, every order a random $0.10-$10) and `dollar30` (8082,
-$0.10-$30 with $1,000 each). The dashboard names every bot (1-75). Bots 31, 64-75 form the
+$0.10-$30 with $1,000 each). The dashboard names every bot (1-80). Bots 31, 64-80 form the
 arbitrage family (`paperbot/ladder.py`, `paperbot/arbs.py`): they trade only relations fixed
 by the settlement rules (dominance between contracts sharing a settlement instant, bucket
 tiling, mutual exclusion, one-touch versus strike, and the bounded 60-second average in the

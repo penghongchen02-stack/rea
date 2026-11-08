@@ -501,12 +501,15 @@ class XArbFast(ArbBase):
                     if legs_done > 1: self.stats["walked_levels"] += legs_done - 1
 
 
-ARB_BOTS = ("xarb_tight", "xarb_windows", "xarb_maker_bid", "xarb_maker_ask", "touch_arb", "touch_ladder", "range_arb", "settle_lock", "ladder_tight", "window_tile", "xarb_fast")
+ARB_BOTS = ("xarb_tight", "xarb_windows", "xarb_maker_bid", "xarb_maker_ask", "touch_arb", "touch_ladder", "range_arb", "settle_lock", "ladder_tight", "window_tile", "xarb_fast",
+            "lock_fast", "lock_sweep", "lock_early", "lock_rest", "lock_strikes")
 
 
 def make_arbs(accounts, engine):
     """One scanner per arbitrage bot, bound to that bot's account in this universe."""
-    return {
+    from .locks import LOCK_BOTS
+    out = {k: cls(accounts[k], engine) for k, cls in LOCK_BOTS.items()}
+    out.update({
         "xarb_tight": XArbTight(accounts["xarb_tight"], engine.mf, engine.lf),
         "xarb_windows": XArbWindows(accounts["xarb_windows"], engine.mf, engine.lf),
         "xarb_maker_bid": XArbMakerBid(accounts["xarb_maker_bid"], engine),
@@ -518,4 +521,5 @@ def make_arbs(accounts, engine):
         "ladder_tight": LadderTight(accounts["ladder_tight"], engine.lf),
         "window_tile": WindowTile(accounts["window_tile"], engine),
         "xarb_fast": XArbFast(accounts["xarb_fast"], engine),
-    }
+    })
+    return out
