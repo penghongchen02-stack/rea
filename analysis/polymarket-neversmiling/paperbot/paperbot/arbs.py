@@ -54,20 +54,32 @@ class ArbBase:
         n = math.floor(n * 100) / 100
         if n < 0.01: self.stats["unaffordable"] += 1; return False
         self.opps.appendleft({"ts": time.time(), "kind": label, "legs": [m.slug for m, _, _, _ in legs], "edge": round(edge, 4), "n": round(n, 2)})
-        filled = 0; got = []
-        for m, side, limit, tag in legs:
-            o = self.acct.take(m, side, n, limit=limit, tag=tag, fixed=True)
-            f = o.filled if o else 0.0; got.append(f)
+        filled = 0; got = [0.0] * len(legs)
+        # send the thinnest leg first and size every later leg to what it actually filled, so a set can only end
+        # unequal if a later leg comes up short (then the surplus is unwound below and the bot stops this pass)
+        lk = self.acct.liq_key
+        def depth_at(m, side, limit):
+            return sum(q for px, q in m.avail(side, lk) if (px <= limit + 1e-9 if side == "buy" else px >= limit - 1e-9))
+        order = sorted(range(len(legs)), key=lambda i: depth_at(legs[i][0], legs[i][1], legs[i][2]))
+        want = n
+        for i in order:
+            m, side, limit, tag = legs[i]
+            if want < 0.01: break
+            o = self.acct.take(m, side, round(want, 2), limit=limit, tag=tag, fixed=True)
+            f = o.filled if o else 0.0; got[i] = f
             if f > 0: filled += 1
+            want = min(want, f)
         if filled:
             self.stats["trades"] += 1; self.repeats[key] += 1
             log.info("%s %s edge %.4f x %.2f: %s", self.name, label, edge, n, ", ".join(f"{s} {m.slug}@{l:.2f}" for m, s, l, _ in legs))
             # never hold a naked leg: unwind whatever filled beyond the thinnest leg, at market
             least = min(got)
+            legged = False
             for (m, side, limit, tag), f in zip(legs, got):
                 if f - least > 0.009:
-                    self.stats["unwound"] += 1
+                    self.stats["unwound"] += 1; legged = True
                     self.acct.take(m, "sell" if side == "buy" else "buy", round(f - least, 2), limit=None, tag=f"unwind {tag}", fixed=True)
+            if legged or least < 0.01: return False      # stop walking this pair this pass
         return bool(filled)
 
     def pull(self, st):
