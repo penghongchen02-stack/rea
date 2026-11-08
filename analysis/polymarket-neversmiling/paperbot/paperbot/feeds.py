@@ -318,9 +318,11 @@ class SpotFeed:
             if len(rets) < 60: return None
             m = sum(rets) / len(rets); return math.sqrt(sum((r - m) ** 2 for r in rets) / (len(rets) - 1)) / math.sqrt(step)
         # 1-second returns understate volatility when moves trend within a few seconds; take the larger of the
-        # 1-second and the 10-second (scaled) estimate, floored at 5e-5 (about 1.3% a day)
+        # 1-second and the 10-second (scaled) estimate. Floor 1e-5: the realised |settlement - price to beat| of the
+        # BTC 5-minute windows (median $13, 139 windows) matches sigma = 1.5e-5, so a higher floor would triple the
+        # model's uncertainty and silence every z-based entry.
         s1, s10 = sd(1), sd(10)
-        val = max([v for v in (s1, s10) if v is not None] + [5e-5]) if (s1 or s10) else 1.5e-4
+        val = max([v for v in (s1, s10) if v is not None] + [1e-5]) if (s1 or s10) else 5e-5
         cache[a] = (now, val); return val
 
     def at(self, a, ts):
