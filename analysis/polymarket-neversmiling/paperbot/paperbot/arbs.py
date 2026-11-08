@@ -116,12 +116,19 @@ class XArbMakerBid(ArbBase):
         for slug, st in list(self.rest.items()):
             o = st["o"]; b = st["b"]; due = o.filled - st["hedged"]
             if due > 0.009:
-                if not self.live(b, now) or b.best_bid is None: continue
-                h = acct.take(b, "sell", round(due, 2), limit=None, tag=f"xmb-hedge K{st['Kb']:.0f}", fixed=True)
-                if h and h.filled > 0:
-                    st["hedged"] += h.filled; self.stats["hedged"] += 1; self.hedged_total[slug] = self.hedged_total.get(slug, 0.0) + h.filled
-                    log.info("xarb_maker_bid filled %s @%.2f x %.2f, hedged sell %s @%.2f", slug, o.price, h.filled, b.slug, h.price)
-            if o.remaining <= 1e-9 and due <= 0.009: del self.rest[slug]
+                st.setdefault("due_since", now); done = False
+                if self.live(b, now) and b.best_bid is not None:
+                    h = acct.take(b, "sell", round(due, 2), limit=None, tag=f"xmb-hedge K{st['Kb']:.0f}", fixed=True)
+                    if h and h.filled > 0:
+                        st["hedged"] += h.filled; self.stats["hedged"] += 1; self.hedged_total[slug] = self.hedged_total.get(slug, 0.0) + h.filled; done = True
+                        log.info("xarb_maker_bid filled %s @%.2f x %.2f, hedged sell %s @%.2f", slug, o.price, h.filled, b.slug, h.price)
+                if not done and now - st["due_since"] > 8:      # no hedge available: give the leg back at market, never hold it naked
+                    a = self.mf.markets.get(slug)
+                    if a is not None and a.best_bid is not None:
+                        u = acct.take(a, "sell", round(due, 2), limit=None, tag="xmb-unwind", fixed=True)
+                        if u and u.filled > 0: st["hedged"] += u.filled; self.stats["unwound"] += 1
+                if o.filled - st["hedged"] <= 0.009: st.pop("due_since", None)
+            if o.remaining <= 1e-9 and o.filled - st["hedged"] <= 0.009: del self.rest[slug]
         # 2) (re)place resting bids
         for (asset, T), items in groups.items():
             if len(items) < 2: continue
@@ -146,7 +153,8 @@ class XArbMakerBid(ArbBase):
                 if st and st["o"].filled - st["hedged"] > 0.009: continue      # hedge the old order's fills first
                 if st and st["o"].remaining > 1e-9: self.pull(st)
                 if self.hedged_total.get(a.slug, 0.0) >= self.MAX_HEDGED: continue
-                n = round(acct.size_for(p, self.MAX_SETS), 2)
+                n = round(min(acct.size_for(p, self.MAX_SETS), acct.affordable_sets([("buy", p), ("sell", bid_b)])), 2)
+                if n < 0.01: continue
                 o = acct.place(a, "buy", p, n, post_only=True, tag=f"xmb-rest K{Ka:.0f} vs K{Kb:.0f}", fixed=True)
                 if o is None: continue
                 self.stats["rested"] += 1; self.rest[a.slug] = {"o": o, "b": b, "Kb": Kb, "hedged": 0.0}
@@ -165,12 +173,19 @@ class XArbMakerAsk(ArbBase):
         for slug, st in list(self.rest.items()):
             o = st["o"]; a = st["a"]; due = o.filled - st["hedged"]
             if due > 0.009:
-                if not self.live(a, now) or a.best_ask is None: continue
-                h = acct.take(a, "buy", round(due, 2), limit=None, tag=f"xma-hedge K{st['Ka']:.0f}", fixed=True)
-                if h and h.filled > 0:
-                    st["hedged"] += h.filled; self.stats["hedged"] += 1; self.hedged_total[slug] = self.hedged_total.get(slug, 0.0) + h.filled
-                    log.info("xarb_maker_ask filled %s @%.2f x %.2f, hedged buy %s @%.2f", slug, o.price, h.filled, a.slug, h.price)
-            if o.remaining <= 1e-9 and due <= 0.009: del self.rest[slug]
+                st.setdefault("due_since", now); done = False
+                if self.live(a, now) and a.best_ask is not None:
+                    h = acct.take(a, "buy", round(due, 2), limit=None, tag=f"xma-hedge K{st['Ka']:.0f}", fixed=True)
+                    if h and h.filled > 0:
+                        st["hedged"] += h.filled; self.stats["hedged"] += 1; self.hedged_total[slug] = self.hedged_total.get(slug, 0.0) + h.filled; done = True
+                        log.info("xarb_maker_ask filled %s @%.2f x %.2f, hedged buy %s @%.2f", slug, o.price, h.filled, a.slug, h.price)
+                if not done and now - st["due_since"] > 8:
+                    b = self.mf.markets.get(slug)
+                    if b is not None and b.best_ask is not None:
+                        u = acct.take(b, "buy", round(due, 2), limit=None, tag="xma-unwind", fixed=True)
+                        if u and u.filled > 0: st["hedged"] += u.filled; self.stats["unwound"] += 1
+                if o.filled - st["hedged"] <= 0.009: st.pop("due_since", None)
+            if o.remaining <= 1e-9 and o.filled - st["hedged"] <= 0.009: del self.rest[slug]
         for (asset, T), items in groups.items():
             if len(items) < 2: continue
             self.stats["groups"] += 1
@@ -194,7 +209,8 @@ class XArbMakerAsk(ArbBase):
                 if st and st["o"].filled - st["hedged"] > 0.009: continue
                 if st and st["o"].remaining > 1e-9: self.pull(st)
                 if self.hedged_total.get(b.slug, 0.0) >= self.MAX_HEDGED: continue
-                n = round(acct.size_for(p, self.MAX_SETS), 2)
+                n = round(min(acct.size_for(p, self.MAX_SETS), acct.affordable_sets([("sell", p), ("buy", ask_a)])), 2)
+                if n < 0.01: continue
                 o = acct.place(b, "sell", p, n, post_only=True, tag=f"xma-rest K{Kb:.0f} vs K{Ka:.0f}", fixed=True)
                 if o is None: continue
                 self.stats["rested"] += 1; self.rest[b.slug] = {"o": o, "a": a, "Ka": Ka, "hedged": 0.0}

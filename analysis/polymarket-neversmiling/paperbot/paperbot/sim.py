@@ -159,11 +159,21 @@ class Account:
         """Match resting orders against the latest book and inferred tape."""
         for o in list(self.open_orders(market.slug)):
             if o.remaining <= 1e-9: continue
-            # 1) book crossed through our level: someone traded through it; we are filled at our price
+            # 1) book crossed through our level: the displayed size at or through our price trades with us at our
+            #    price (never more than the exchange shows), and that size is consumed
             if o.side == "buy" and market.best_ask is not None and market.best_ask <= o.price:
-                self._fill(market, o, o.price, o.remaining, maker=True); continue
+                got = 0.0
+                for px, q in market.avail("buy", self.liq_key):
+                    if px > o.price or o.remaining <= 1e-9: break
+                    fq = min(q, o.remaining); self._fill(market, o, o.price, fq, maker=True); got += fq
+                    k = (self.liq_key, "buy", px); market.consumed[k] = market.consumed.get(k, 0.0) + fq
+                continue
             if o.side == "sell" and market.best_bid is not None and market.best_bid >= o.price:
-                self._fill(market, o, o.price, o.remaining, maker=True); continue
+                for px, q in market.avail("sell", self.liq_key):
+                    if px < o.price or o.remaining <= 1e-9: break
+                    fq = min(q, o.remaining); self._fill(market, o, o.price, fq, maker=True)
+                    k = (self.liq_key, "sell", px); market.consumed[k] = market.consumed.get(k, 0.0) + fq
+                continue
             # 2) trades printed at our price or better since we placed: they consume queue ahead, then us
             recent = []
             for ts, px, q in reversed(market.tape):
