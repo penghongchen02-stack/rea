@@ -125,16 +125,20 @@ class LockRest(LockBase):
                 if st: acct.cancel(st["o"].id); del self.rest[m.slug]; self.stats["pulled"] += 1
                 continue
             self.stats["bounded"] += 1; live.add(m.slug); tick = m.tick
-            if m.best_bid is None or m.best_ask is None: self.stats["no_book"] += 1; continue
-            if v >= 0.5: side, p = "buy", min(0.97, round(m.best_bid + tick, 2))
-            else: side, p = "sell", max(0.03, round(m.best_ask - tick, 2))
+            # a locked window usually has one side of the book empty (nobody offers a $1 contract): rest at the cap then
+            if v >= 0.5: side, p = "buy", (min(0.97, round(m.best_bid + tick, 2)) if m.best_bid is not None else 0.97)
+            else: side, p = "sell", (max(0.03, round(m.best_ask - tick, 2)) if m.best_ask is not None else 0.03)
+            if m.best_bid is None and m.best_ask is None: self.stats["no_book"] += 1; continue
             # improving by a tick would cross a one-tick spread: join the best price instead (still a maker order)
-            if side == "buy" and p >= m.best_ask: p = round(m.best_bid, 2)
-            if side == "sell" and p <= m.best_bid: p = round(m.best_ask, 2)
-            if (side == "buy" and (p > 0.97 or p >= m.best_ask)) or (side == "sell" and (p < 0.03 or p <= m.best_bid)): self.stats["no_room"] += 1; continue
+            if side == "buy" and m.best_ask is not None and p >= m.best_ask: p = round(m.best_bid, 2) if m.best_bid is not None else p
+            if side == "sell" and m.best_bid is not None and p <= m.best_bid: p = round(m.best_ask, 2) if m.best_ask is not None else p
+            if (side == "buy" and (p > 0.97 or (m.best_ask is not None and p >= m.best_ask))) or \
+               (side == "sell" and (p < 0.03 or (m.best_bid is not None and p <= m.best_bid))): self.stats["no_room"] += 1; continue
             if st and st["o"].remaining > 1e-9 and abs(st["o"].price - p) < 1e-9: continue
             if st: acct.cancel(st["o"].id)
-            n = round(acct.size_for(p, self.MAX_SETS), 2)
+            unit = p if side == "buy" else 1 - p          # several coins lock at once: size to what is still free
+            n = math.floor(min(acct.size_for(p, self.MAX_SETS), acct.buying_power() * 0.95 / unit) * 100) / 100
+            if n < max(0.01, m.min_qty): self.stats["unaffordable"] += 1; continue
             o = acct.place(m, side, p, n, post_only=True, tag=f"lockrest-{side} v{v:.0f}", fixed=True)
             if o is None: self.stats["place_failed"] += 1; continue
             self.rest[m.slug] = {"o": o}; self.stats["rested"] += 1

@@ -398,7 +398,7 @@ class SettleLock(ArbBase):
     its last print (plus a basis allowance). If the lower bound is already at or above K the contract pays $1,
     if the upper bound is below K it pays $0; buy or sell anything priced against that, windows and hourly strikes
     alike. Pure settlement arithmetic, no direction model."""
-    name = "settle_lock"; MIN_EDGE = 0.01; MAX_SETS = 20.0; MAX_REPEATS = 3; PERIOD = 1.0; BUDGET = 2
+    name = "settle_lock"; MIN_EDGE = 0.01; MAX_SETS = 20.0; MAX_REPEATS = 3; PERIOD = 1.0; BUDGET = 6
 
     def run(self, now):
         groups = XArb.contracts(self, now, min_left=0.5)     # it acts in the last 12 s: keep windows to the end
