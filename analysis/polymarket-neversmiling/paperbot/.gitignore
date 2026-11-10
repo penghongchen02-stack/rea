@@ -1,4 +1,5 @@
 paperbot-data/
+paperbot-data-run*/
 paperbot-data-stdout.log
 __pycache__/
 dashboard-*.png
