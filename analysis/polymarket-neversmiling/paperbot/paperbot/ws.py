@@ -65,14 +65,14 @@ class WSBooks:
                         if now - last_sync > 2:
                             last_sync = now
                             wanted = set(self.mf.markets); have = set().union(*self.subs.values()) if self.subs else set()
-                            # drop batches that no longer contain any wanted market, add batches for new markets
-                            for rid, slugs in list(self.subs.items()):
-                                if not (slugs & wanted):
-                                    await ws.send(self._unsub_msg(rid)); del self.subs[rid]
-                            new = sorted(wanted - have)
-                            for i in range(0, len(new), 100):
-                                rid_n += 1; rid = f"md-{rid_n}"; batch = set(new[i:i + 100])
-                                await ws.send(self._sub_msg(rid, batch)); self.subs[rid] = batch
+                            # the server caps subscriptions per connection, so when the market set changes, replace every
+                            # request with the fewest batches of at most 100 slugs instead of adding one request per change
+                            if wanted != have:
+                                for rid in list(self.subs): await ws.send(self._unsub_msg(rid))
+                                self.subs = {}; slugs = sorted(wanted)
+                                for i in range(0, len(slugs), 100):
+                                    rid_n += 1; rid = f"md-{rid_n}"; batch = set(slugs[i:i + 100])
+                                    await ws.send(self._sub_msg(rid, batch)); self.subs[rid] = batch
                         try: raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
                         except asyncio.TimeoutError:
                             if self.last_msg and now - self.last_msg > 60: raise RuntimeError("no messages for 60 s")
@@ -84,7 +84,9 @@ class WSBooks:
                             continue
                         if msg.get("error"):
                             self.errors += 1; log.warning("markets websocket error: %s", msg)
-                            if not self.snake and ("subscription" in str(msg).lower() or "unknown" in str(msg).lower()):
+                            text = str(msg).lower()
+                            # a field-format rejection switches to snake_case; the subscription cap is not one
+                            if not self.snake and "max subscriptions" not in text and ("subscription" in text or "unknown" in text):
                                 self.snake = True; self.subs = {}; log.info("markets websocket: retrying with snake_case fields")
                             continue
                         self.apply(msg)

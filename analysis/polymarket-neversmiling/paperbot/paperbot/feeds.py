@@ -109,6 +109,15 @@ class Market:
             return settle_px >= self.strike if self.direction != "down" else settle_px <= self.strike
         return None
 
+    def trades_after(self, ts):
+        """Tape entries newer than ts, oldest first. The order-book stream thread appends to the tape while the engine
+        loop reads it; list() copies the deque in one step, so readers never iterate the live deque."""
+        out = []
+        for t in reversed(list(self.tape)):
+            if t[0] <= ts: break
+            out.append(t)
+        out.reverse(); return out
+
     def apply_book(self, md):
         bids = [(float(b["px"]["value"]), float(b["qty"])) for b in md.get("bids", [])]
         offers = [(float(b["px"]["value"]), float(b["qty"])) for b in md.get("offers", [])]

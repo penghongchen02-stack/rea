@@ -185,11 +185,7 @@ class Account:
                     k = (self.liq_key, "sell", px); market.consumed[k] = market.consumed.get(k, 0.0) + fq
                 continue
             # 2) trades printed at our price or better since we placed: they consume queue ahead, then us
-            recent = []
-            for ts, px, q in reversed(market.tape):
-                if ts <= o.ts: break
-                recent.append((ts, px, q))
-            for ts, px, q in reversed(recent):
+            for ts, px, q in market.trades_after(o.ts):
                 if o.side == "buy" and px <= o.price + 1e-9 or o.side == "sell" and px >= o.price - 1e-9:
                     if (o.side == "buy" and px < o.price - 1e-9) or (o.side == "sell" and px > o.price + 1e-9):
                         self._fill(market, o, o.price, o.remaining, maker=True); break
