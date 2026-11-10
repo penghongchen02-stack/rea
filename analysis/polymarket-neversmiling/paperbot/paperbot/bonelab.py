@@ -1,4 +1,4 @@
-"""Bonereaper lab: 200 variants of the Bonereaper replica (bot 45) trading side by side in their own universe
+"""Bonereaper lab: 220 variants of the Bonereaper replica (bot 45) trading side by side in their own universe
 (port 8084, $1,000 each), to find which of its rules make or lose money.
 
 Every variant keeps the core idea: buy the side of a BTC Up/Down window that the market prices cheaply when the
@@ -32,12 +32,13 @@ CASH = 1000.0
 class BoneVar(LastCallHold):
     def __init__(self, account, name, band=(0.07, 0.70), edge=0.03, window=(10, None), horizons=(300, 900, 3600),
                  assets=("btc",), sizing=("clip",), cap=None, period=6.0, once=False, stop=None, n_min=0, seed=0,
-                 tp_c=None, sl_c=None, tp_x=None, sl_x=None, max_pos=14.0, shrink=1.0):
+                 tp_c=None, sl_c=None, tp_x=None, sl_x=None, max_pos=14.0, shrink=1.0, max_edge=None, late=None):
         super().__init__(account, seed=seed)
         self.name = name; self.lo, self.hi = band; self.edge = edge; self.t_min, self.t_max = window
         self.durs = set(horizons); self.assets = set(assets); self.sizing = sizing; self.period = period; self.once = once
         self.stop = stop; self.n_min = n_min; self.peak = None; self.stopped = False
         self.cap = cap if cap is not None else (None if sizing[0] == "clip" else 0.15 * CASH)
+        self.max_edge = max_edge; self.late = late
         self.max_pos = max_pos; self.shrink = shrink; self.tp_c = tp_c; self.sl_c = sl_c; self.tp_x = tp_x; self.sl_x = sl_x
 
     def exits(self, market, st):
@@ -84,9 +85,15 @@ class BoneVar(LastCallHold):
         if self.shrink < 1.0:      # blend the model with the market's own price: the lab showed the model overrates long shots
             p = self.shrink * p + (1 - self.shrink) * (bb + ba) / 2
         st["next_take"] = now + self.period; theta = acct.theta; q = self.pos(slug)
-        if self.lo <= ba <= self.hi and p - ba - theta * ba * (1 - ba) > self.edge and q >= 0:
+        # edge window: a floor and an optional cap (round 5: a large early gap meant the model was wrong); once `late`
+        # = (n_seconds, floor[, cap]) settlement seconds are pinned, that floor/cap replaces the early one
+        e_lo, e_hi = self.edge, self.max_edge
+        if self.late is not None and det.get("n_known", 0) >= self.late[0]:
+            e_lo = self.late[1]; e_hi = self.late[2] if len(self.late) > 2 else None
+        ok = lambda e: e > e_lo and (e_hi is None or e <= e_hi)
+        if self.lo <= ba <= self.hi and ok(p - ba - theta * ba * (1 - ba)) and q >= 0:
             side, px = "buy", ba
-        elif self.lo <= 1 - bb <= self.hi and (1 - p) - (1 - bb) - theta * bb * (1 - bb) > self.edge and q <= 0:
+        elif self.lo <= 1 - bb <= self.hi and ok((1 - p) - (1 - bb) - theta * bb * (1 - bb)) and q <= 0:
             side, px = "sell", 1 - bb
         else: return
         n = self.contracts(px)
@@ -332,6 +339,42 @@ _R4 += [
 ]
 assert len(_R4) == 60, len(_R4)
 VARIANTS.update({f"br{141 + i}": r for i, r in enumerate(_R4)})
+
+# ---- round 5 (br201-br220): the edge fix ------------------------------------------------------------------------------
+# On 5-minute 40-60c entries with 2-5 min left, a 3c-or-less edge paid back $1.29 per $1 (66% won) while a 7c edge
+# paid $0.46 (25% won, the model claimed 60%): early, a big gap between model and market is mostly a model error.
+# Fixes: cap the edge early (trade only when model and market roughly agree), allow a big edge only once settlement
+# seconds are pinned, blend the model toward the market, and stay out of the last 60 s at coin-flip prices.
+R5 = dict(horizons=(300,), assets=("btc", "eth"), band=(0.40, 0.60), window=(120, 290), sizing=(M, 0.1, 100.0),
+          cap=100.0, period=3.0)
+def r(**kw): return {**R5, **kw}
+VARIANTS.update({
+    # cap the edge, 2-5 min left
+    "br201": ("R5 fix: edge 1-4c (capped), 2-5 min left, BTC+ETH", r(edge=0.01, max_edge=0.04)),
+    "br202": ("R5 fix: edge 0-3c (capped), 2-5 min left", r(edge=0.0, max_edge=0.03)),
+    "br203": ("R5 fix: edge 1-3c, 2-5 min left, BTC only", r(edge=0.01, max_edge=0.03, assets=("btc",))),
+    "br204": ("R5 fix: edge 1-3c, 2-5 min left, ETH only", r(edge=0.01, max_edge=0.03, assets=("eth",))),
+    "br205": ("R5 fix: edge 2-5c, 2-5 min left", r(edge=0.02, max_edge=0.05)),
+    "br206": ("R5 fix: edge 1-4c, 45-55c only", r(edge=0.01, max_edge=0.04, band=(0.45, 0.55))),
+    "br207": ("R5 fix: edge 1-4c, first 2 min only", r(edge=0.01, max_edge=0.04, window=(180, 290))),
+    "br208": ("R5 fix: edge 1-4c, every 2 s, $1-$30 orders", r(edge=0.01, max_edge=0.04, period=2.0, sizing=(M, 1.0, 30.0))),
+    # capped early, big edge late
+    "br209": ("R5 fix: 1-4c early, 7c+ once 20 s pinned, to 10 s left", r(edge=0.01, max_edge=0.04, window=(10, 290), late=(20, 0.07))),
+    "br210": ("R5 fix: 1-3c early, 5c+ once 15 s pinned, to 10 s left", r(edge=0.01, max_edge=0.03, window=(10, 290), late=(15, 0.05))),
+    "br211": ("R5 fix: 1-4c early, 10c+ once 30 s pinned, 40-70c", r(edge=0.01, max_edge=0.04, window=(10, 290), late=(30, 0.10), band=(0.40, 0.70))),
+    "br212": ("R5 late only: edge 7c+, 20+ s pinned, 40-70c", r(edge=9.0, window=(10, 60), late=(20, 0.07), band=(0.40, 0.70))),
+    "br213": ("R5 late only: edge 5c+, 30+ s pinned, 30-70c", r(edge=9.0, window=(10, 60), late=(30, 0.05), band=(0.30, 0.70))),
+    # blend + cap
+    "br214": ("R5 fix: model 70/30 with market, edge 1-4c", r(shrink=0.7, edge=0.01, max_edge=0.04)),
+    "br215": ("R5 fix: model 50/50 with market, edge 0-3c", r(shrink=0.5, edge=0.0, max_edge=0.03)),
+    # brakes and sizing with the cap
+    "br216": ("R5 fix: edge 1-4c, 1% orders, cap $40", r(edge=0.01, max_edge=0.04, sizing=("pct", 0.01), cap=40.0)),
+    "br217": ("R5 fix: edge 1-4c, stop after 25% drawdown", r(edge=0.01, max_edge=0.04, stop=0.25)),
+    "br218": ("R5 fix: edge 1-4c, one entry per window", r(edge=0.01, max_edge=0.04, once=True)),
+    "br219": ("R5 fix: edge 1-4c, 1-5 min left (not last 60 s)", r(edge=0.01, max_edge=0.04, window=(60, 290))),
+    # control: same as br201 without the cap
+    "br220": ("R5 control: edge 1c+, no cap, 2-5 min left", r(edge=0.01)),
+})
 
 LAB_LABELS = {k: v[0] for k, v in VARIANTS.items()}
 

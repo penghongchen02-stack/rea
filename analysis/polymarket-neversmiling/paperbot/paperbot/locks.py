@@ -125,15 +125,18 @@ class LockRest(LockBase):
                 if st: acct.cancel(st["o"].id); del self.rest[m.slug]; self.stats["pulled"] += 1
                 continue
             self.stats["bounded"] += 1; live.add(m.slug); tick = m.tick
-            if m.best_bid is None or m.best_ask is None: continue
+            if m.best_bid is None or m.best_ask is None: self.stats["no_book"] += 1; continue
             if v >= 0.5: side, p = "buy", min(0.97, round(m.best_bid + tick, 2))
             else: side, p = "sell", max(0.03, round(m.best_ask - tick, 2))
-            if (side == "buy" and p >= m.best_ask) or (side == "sell" and p <= m.best_bid): continue   # would cross: the takers' job
+            # improving by a tick would cross a one-tick spread: join the best price instead (still a maker order)
+            if side == "buy" and p >= m.best_ask: p = round(m.best_bid, 2)
+            if side == "sell" and p <= m.best_bid: p = round(m.best_ask, 2)
+            if (side == "buy" and (p > 0.97 or p >= m.best_ask)) or (side == "sell" and (p < 0.03 or p <= m.best_bid)): self.stats["no_room"] += 1; continue
             if st and st["o"].remaining > 1e-9 and abs(st["o"].price - p) < 1e-9: continue
             if st: acct.cancel(st["o"].id)
             n = round(acct.size_for(p, self.MAX_SETS), 2)
             o = acct.place(m, side, p, n, post_only=True, tag=f"lockrest-{side} v{v:.0f}", fixed=True)
-            if o is None: continue
+            if o is None: self.stats["place_failed"] += 1; continue
             self.rest[m.slug] = {"o": o}; self.stats["rested"] += 1
         for slug in list(self.rest):
             if slug not in live and slug not in self.mf.markets: del self.rest[slug]
@@ -147,7 +150,7 @@ class LockStrikes(LockBase):
     seconds published, 4-sd bound, up to 100 per contract."""
     name = "lock_strikes"; N_MIN = 45; K_SD = 4.0; HORIZON_S = 30; MIN_EDGE = 0.005; MAX_SETS = 100.0; MAX_REPEATS = 10; BUDGET = 8
     def run(self, now):
-        groups = XArb.contracts(self, now)
+        groups = XArb.contracts(self, now, min_left=0.5)
         ladders = {(a, int(e)): legs for (a, e), legs in self.lf.ladders().items()}
         for (asset, T), items in groups.items():
             if not (0.5 <= T - now <= self.HORIZON_S): continue

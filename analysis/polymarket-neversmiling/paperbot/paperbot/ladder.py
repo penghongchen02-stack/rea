@@ -306,16 +306,16 @@ class XArb:
     def __init__(self, account, mf, lf):
         self.acct = account; self.mf = mf; self.lf = lf; self.stats = collections.Counter(); self.opps = collections.deque(maxlen=50); self.repeats = collections.Counter()
 
-    def contracts(self, now):
+    def contracts(self, now, min_left=8):
         groups = collections.defaultdict(list)
         for m in list(self.mf.markets.values()):
-            if m.kind == "updown" and m.p2b is not None and m.end - now > 8 and m.book_ts > now - 5:
+            if m.kind == "updown" and m.p2b is not None and m.end - now > min_left and m.book_ts > now - 5:
                 groups[(m.asset, int(m.end))].append((m.p2b, m, "live"))
         if now - self.lf.last_discover > 60:
             try: self.lf.discover()
             except Exception as e: log.warning("xarb discover: %s", e)
         for m in list(self.lf.legs.values()):
-            if m.market_type.endswith("ABOVE_BELOW") and m.strike is not None and (m.asset, int(m.end)) in groups and m.end - now > 8:
+            if m.market_type.endswith("ABOVE_BELOW") and m.strike is not None and (m.asset, int(m.end)) in groups and m.end - now > min_left:
                 groups[(m.asset, int(m.end))].append((m.strike, m, "list"))
         return groups
 

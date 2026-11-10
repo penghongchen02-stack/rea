@@ -401,7 +401,7 @@ class SettleLock(ArbBase):
     name = "settle_lock"; MIN_EDGE = 0.01; MAX_SETS = 20.0; MAX_REPEATS = 3; PERIOD = 1.0; BUDGET = 2
 
     def run(self, now):
-        groups = XArb.contracts(self, now)
+        groups = XArb.contracts(self, now, min_left=0.5)     # it acts in the last 12 s: keep windows to the end
         for (asset, T), items in groups.items():
             left = T - now
             if left > 12 or left < 0.5: continue
