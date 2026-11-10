@@ -1,4 +1,4 @@
-"""Bonereaper lab: 110 variants of the Bonereaper replica (bot 45) trading side by side in their own universe
+"""Bonereaper lab: 140 variants of the Bonereaper replica (bot 45) trading side by side in their own universe
 (port 8084, $1,000 each), to find which of its rules make or lose money.
 
 Every variant keeps the core idea: buy the side of a BTC Up/Down window that the market prices cheaply when the
@@ -246,6 +246,53 @@ VARIANTS.update({
     "br108": ("35-50c, edge 2c", v(band=(0.35, 0.50), edge=0.02)),
     "br109": ("50-65c, edge 2c", v(band=(0.50, 0.65), edge=0.02)),
     "br110": ("40-60c, no edge required (band only)", v(band=(0.40, 0.60), edge=-1.0)),
+})
+# ---- round 3 (br111-br140): 40-60c only, from the first ~6 hours of 40-60c entries --------------------------------
+# What the 40-60c entries showed: 5-minute BTC windows with 2-5 minutes left paid back $1.77 per $1 (the bulk of the
+# sample); 15-minute windows entered with more than 5 minutes left paid back $0.55; the band without the model (br110)
+# lost everything; other coins (br82, br99) and early take-profit/stop-loss exits (br56) were below $1; larger edges
+# (7-10c) and 5-minute-only (br35) were the best. So the default here: BTC 5-minute windows, 2-5 minutes left, model
+# required, 5c edge, $0.10-$100 orders capped at $100 per window, held to settlement.
+G = dict(band=(0.40, 0.60), horizons=(300,), window=(120, 290), edge=0.05, sizing=(M, 0.1, 100.0), cap=100.0, period=3.0)
+def g(**kw): return {**G, **kw}
+VARIANTS.update({
+    # U. edge, on the default (5m, 2-5 min left)
+    "br111": ("R3 40-60c 5m, 2-5 min left, edge 3c", g(edge=0.03)),
+    "br112": ("R3 40-60c 5m, 2-5 min left, edge 5c (round-3 default)", g()),
+    "br113": ("R3 40-60c 5m, 2-5 min left, edge 7c", g(edge=0.07)),
+    "br114": ("R3 40-60c 5m, 2-5 min left, edge 10c", g(edge=0.10)),
+    # V. narrower bands inside 40-60c
+    "br115": ("R3 40-50c, 5m, 2-5 min left, edge 5c", g(band=(0.40, 0.50))),
+    "br116": ("R3 50-60c, 5m, 2-5 min left, edge 5c", g(band=(0.50, 0.60))),
+    "br117": ("R3 45-55c, 5m, 2-5 min left, edge 5c", g(band=(0.45, 0.55))),
+    "br118": ("R3 42-58c, 5m, 2-5 min left, edge 7c", g(band=(0.42, 0.58), edge=0.07)),
+    # W. minute rules
+    "br119": ("R3 40-60c 5m, first 2 min only (3-5 min left)", g(window=(180, 290))),
+    "br120": ("R3 40-60c 5m, 1-4 min left", g(window=(60, 240))),
+    "br121": ("R3 40-60c 5m, any time except last 60 s", g(window=(60, 290))),
+    "br122": ("R3 40-60c 15m, last 5 min only (not last 30 s)", g(horizons=(900,), window=(30, 300))),
+    "br123": ("R3 40-60c 15m, 2-5 min left, edge 7c", g(horizons=(900,), window=(120, 300), edge=0.07)),
+    "br124": ("R3 40-60c 5m 2-5 min + 15m last 5 min", g(horizons=(300, 900), window=(30, 300))),
+    # X. sizing
+    "br125": ("R3 default, 1% orders", g(sizing=("pct", 0.01), cap=40.0)),
+    "br126": ("R3 default, 2% orders", g(sizing=("pct", 0.02), cap=60.0)),
+    "br127": ("R3 default, $1-$50 orders", g(sizing=(M, 1.0, 50.0))),
+    "br128": ("R3 default, 5-contract clips, 60 per window", g(sizing=("clip", 5.0), cap=None, max_pos=60.0)),
+    "br129": ("R3 default, $0.10-$100, cap $50 per window", g(cap=50.0)),
+    # Y. pace
+    "br130": ("R3 edge 7c, entry every 2 s", g(edge=0.07, period=2.0)),
+    "br131": ("R3 edge 7c, entry every 6 s", g(edge=0.07, period=6.0)),
+    "br132": ("R3 edge 7c, entry every 10 s", g(edge=0.07, period=10.0)),
+    "br133": ("R3 edge 5c, one entry per window", g(once=True)),
+    # Z. model blend and brakes
+    "br134": ("R3 default, model 70/30 with market", g(shrink=0.7, edge=0.03)),
+    "br135": ("R3 default, model 50/50 with market", g(shrink=0.5, edge=0.02)),
+    "br136": ("R3 default, stop after 30% drawdown", g(stop=0.30)),
+    "br137": ("R3 edge 7c, stop after 20% drawdown, 1% orders", g(edge=0.07, stop=0.20, sizing=("pct", 0.01), cap=40.0)),
+    # AA. checks
+    "br138": ("R3 default on ETH instead of BTC", g(assets=("eth",), edge=0.07)),
+    "br139": ("R3 default with take profit +25c", g(tp_c=0.25)),
+    "br140": ("R3 control: 40-60c, 5m+15m, any time, edge 5c", g(horizons=(300, 900), window=(10, None))),
 })
 LAB_LABELS = {k: v[0] for k, v in VARIANTS.items()}
 
