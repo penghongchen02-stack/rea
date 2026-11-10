@@ -84,6 +84,11 @@ class Universe:
                     for slug, ps in s.get("positions", {}).items():
                         pos = a.positions[slug]; pos.qty = ps["qty"]; pos.avg = ps["avg"]; pos.realized = ps["realized"]; pos.fees = ps["fees"]; pos.fills = ps["fills"]; pos.closed = ps["closed"]
                     a.settlements = s.get("settlements", [])
+                    if "n_settled" in s: a.n_settled = s["n_settled"]; a.n_won = s["n_won"]; a.realized_closed = s["realized_closed"]
+                    else:   # older snapshot: rebuild the totals from the closed positions, then drop them
+                        cl = [p for p in a.positions.values() if p.closed]
+                        a.n_settled = sum(1 for p in cl if p.fills); a.n_won = sum(1 for p in cl if p.realized > 0); a.realized_closed = sum(p.realized for p in cl)
+                    for slug in [k for k, p in a.positions.items() if p.closed]: del a.positions[slug]
                 self.started = snap.get("started", self.started)
                 for row in self.store.query("select ts, bot, equity from equity order by ts"): self.equity_hist.append(row)
                 log.info("[%s] resumed state from %s", self.name, p)
@@ -93,7 +98,8 @@ class Universe:
         snap = {"started": self.started, "accounts": {}}
         for name, a in self.accounts.items():
             snap["accounts"][name] = {"cash": a.cash, "fees": a.fees, "maker_fills": a.maker_fills, "taker_fills": a.taker_fills, "start_cash": a.start_cash,
-                "positions": {s: {"qty": p.qty, "avg": p.avg, "realized": p.realized, "fees": p.fees, "fills": p.fills, "closed": p.closed} for s, p in a.positions.items()},
+                "positions": {s: {"qty": p.qty, "avg": p.avg, "realized": p.realized, "fees": p.fees, "fills": p.fills, "closed": p.closed} for s, p in a.positions.items() if not p.closed},
+                "n_settled": a.n_settled, "n_won": a.n_won, "realized_closed": a.realized_closed,
                 "settlements": a.settlements[-500:]}
         tmp = os.path.join(self.dir, "accounts.json.tmp"); json.dump(snap, open(tmp, "w")); os.replace(tmp, os.path.join(self.dir, "accounts.json"))
 

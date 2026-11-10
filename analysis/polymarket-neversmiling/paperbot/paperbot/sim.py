@@ -32,6 +32,7 @@ class Account:
         self.positions = collections.defaultdict(Position); self.orders = {}; self.fills = []; self.settlements = []
         self.fees = 0.0; self.maker_fills = 0; self.taker_fills = 0; self.rejected = 0; self.events = collections.deque(maxlen=200)
         self.universe = "std"   # set by the Universe
+        self.n_settled = 0; self.n_won = 0; self.realized_closed = 0.0   # running totals, so settled positions can be dropped
     @property
     def liq_key(self):
         """Liquidity consumption is tracked per account: each bot is evaluated as if it alone traded against the
@@ -199,8 +200,8 @@ class Account:
 
     # ---- settlement -----------------------------------------------------
     def settle(self, market, up, settle_px):
-        self.cancel_all(market.slug); p = self.positions[market.slug]
-        if p.closed: return 0.0
+        self.cancel_all(market.slug); p = self.positions.get(market.slug)
+        if p is None or p.closed: return 0.0      # never traded this market: nothing to settle or record
         pnl = 0.0
         if abs(p.qty) > 1e-9:
             payout = 1.0 if up else 0.0
@@ -211,7 +212,11 @@ class Account:
         rec = {"ts": time.time(), "bot": self.name, "slug": market.slug, "asset": market.asset, "horizon": market.horizon, "up": up,
                "p2b": market.p2b, "settle_px": settle_px, "final_qty": round(p.qty, 2), "pnl_settle": round(pnl, 4),
                "pnl_total": round(p.realized, 4), "fees": round(p.fees, 4), "fills": p.fills}
-        self.settlements.append(rec); return rec
+        self.settlements.append(rec)
+        if len(self.settlements) > 1000: del self.settlements[:-500]
+        self.n_settled += 1; self.n_won += 1 if p.realized > 0 else 0; self.realized_closed += p.realized
+        del self.positions[market.slug]           # settled: its result is in cash and the running totals
+        return rec
 
     def snapshot(self, markets):
         eq = self.equity(markets)
@@ -220,5 +225,5 @@ class Account:
         return {"name": self.name, "cash": round(self.cash, 4), "equity": round(eq, 4), "pnl": round(eq - self.start_cash, 4),
                 "buying_power": round(self.buying_power(), 4), "fees": round(self.fees, 4), "maker_fills": self.maker_fills,
                 "taker_fills": self.taker_fills, "rejected": self.rejected, "open_orders": len(self.orders), "open_positions": openpos,
-                "markets_settled": len(self.settlements), "markets_won": sum(1 for s in self.settlements if s["pnl_total"] > 0),
-                "realized": round(sum(p.realized for p in self.positions.values()), 4)}
+                "markets_settled": self.n_settled, "markets_won": self.n_won,
+                "realized": round(self.realized_closed + sum(p.realized for p in self.positions.values()), 4)}
