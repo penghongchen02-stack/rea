@@ -1,4 +1,4 @@
-"""Bonereaper lab: 140 variants of the Bonereaper replica (bot 45) trading side by side in their own universe
+"""Bonereaper lab: 200 variants of the Bonereaper replica (bot 45) trading side by side in their own universe
 (port 8084, $1,000 each), to find which of its rules make or lose money.
 
 Every variant keeps the core idea: buy the side of a BTC Up/Down window that the market prices cheaply when the
@@ -294,6 +294,45 @@ VARIANTS.update({
     "br139": ("R3 default with take profit +25c", g(tp_c=0.25)),
     "br140": ("R3 control: 40-60c, 5m+15m, any time, edge 5c", g(horizons=(300, 900), window=(10, None))),
 })
+# ---- round 4 (br141-br200): 5-minute BTC and ETH only ----------------------------------------------------------------
+# A grid over coin x price band x minute rule at a 5c edge, then edges, pace/size settings that add trades, and brakes.
+# Minute rules are seconds left in the 5-minute window: first 2 min (180-290), 2-5 min left (120-290), middle (60-180),
+# last 2 min (10-120).
+H5 = dict(horizons=(300,), sizing=(M, 0.1, 100.0), cap=100.0, period=3.0, edge=0.05)
+def h(**kw): return {**H5, **kw}
+_WIN = [("first 2 min", (180, 290)), ("2-5 min left", (120, 290)), ("middle", (60, 180)), ("last 2 min", (10, 120))]
+_R4 = []
+for _c, _bands in (("BTC", [(0.40, 0.60), (0.40, 0.50), (0.50, 0.60), (0.30, 0.40), (0.60, 0.70)]),
+                   ("ETH", [(0.40, 0.60), (0.40, 0.50), (0.50, 0.60), (0.30, 0.40)])):
+    for _b in _bands:
+        for _wl, _w in _WIN:
+            _R4.append((f"R4 {_c} 5m {_b[0]*100:.0f}-{_b[1]*100:.0f}c, {_wl}, edge 5c", h(assets=(_c.lower(),), band=_b, window=_w)))
+for _b in [(0.40, 0.60), (0.45, 0.55)]:
+    for _e in (0.03, 0.05, 0.07, 0.10):
+        _R4.append((f"R4 BTC+ETH 5m {_b[0]*100:.0f}-{_b[1]*100:.0f}c, 2-5 min left, edge {_e*100:.0f}c",
+                    h(assets=("btc", "eth"), band=_b, window=(120, 290), edge=_e)))
+_BE = dict(assets=("btc", "eth"), band=(0.40, 0.60), window=(120, 290))
+_R4 += [
+    ("R4 BTC+ETH 40-60c, entry every 1 s", h(**_BE, period=1.0)),
+    ("R4 BTC+ETH 40-60c, entry every 2 s", h(**_BE, period=2.0)),
+    ("R4 BTC+ETH 40-60c, 0.5% orders, every 2 s", h(**_BE, period=2.0, sizing=("pct", 0.005), cap=40.0)),
+    ("R4 BTC+ETH 40-60c, $1-$20 orders, every 2 s", h(**_BE, period=2.0, sizing=(M, 1.0, 20.0), cap=60.0)),
+    ("R4 BTC+ETH 40-60c, cap $200 per window", h(**_BE, cap=200.0)),
+    ("R4 BTC+ETH 35-65c, edge 5c, 1-5 min left", h(assets=("btc", "eth"), band=(0.35, 0.65), window=(60, 290))),
+    ("R4 BTC+ETH 40-60c, model 70/30 with market, edge 3c", h(**_BE, shrink=0.7, edge=0.03)),
+    ("R4 BTC+ETH 40-60c, whole window, edge 5c", h(assets=("btc", "eth"), band=(0.40, 0.60), window=(10, 290))),
+    ("R4 BTC+ETH 40-60c, stop after 20% drawdown", h(**_BE, stop=0.20)),
+    ("R4 BTC+ETH 40-60c, stop after 35% drawdown", h(**_BE, stop=0.35)),
+    ("R4 BTC+ETH 40-60c, one entry per window", h(**_BE, once=True)),
+    ("R4 BTC+ETH 40-60c, take profit +20c", h(**_BE, tp_c=0.20)),
+    ("R4 BTC+ETH 40-60c, stop loss -20c", h(**_BE, sl_c=0.20)),
+    ("R4 BTC+ETH 40-70c, last 60 s, 20+ settlement s known, edge 7c", h(assets=("btc", "eth"), band=(0.40, 0.70), window=(5, 60), n_min=20, edge=0.07)),
+    ("R4 BTC+ETH 40-60c, edge 7c, 1% orders, cap $40", h(**_BE, edge=0.07, sizing=("pct", 0.01), cap=40.0)),
+    ("R4 BTC+ETH 40-60c, edge 10c, $0.10-$200, cap $200", h(**_BE, edge=0.10, sizing=(M, 0.1, 200.0), cap=200.0)),
+]
+assert len(_R4) == 60, len(_R4)
+VARIANTS.update({f"br{141 + i}": r for i, r in enumerate(_R4)})
+
 LAB_LABELS = {k: v[0] for k, v in VARIANTS.items()}
 
 
