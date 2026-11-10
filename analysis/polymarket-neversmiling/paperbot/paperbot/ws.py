@@ -12,7 +12,7 @@ URL = "wss://api.polymarket.us/v1/ws/markets"; PATH = "/v1/ws/markets"
 KEY_ID = os.environ.get("POLYMARKET_KEY_ID"); SECRET = os.environ.get("POLYMARKET_SECRET_KEY")
 
 
-def available(): return bool(KEY_ID and SECRET)
+def available(): return bool(KEY_ID and SECRET) and "PASTE" not in (KEY_ID + SECRET).upper()   # placeholders left in the settings
 
 
 def auth_headers(path=PATH):
