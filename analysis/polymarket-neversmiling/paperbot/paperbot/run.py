@@ -17,6 +17,9 @@ from .fair import p_up
 DATA = os.environ.get("PAPERBOT_DATA", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot-data"))
 WEB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web")
 START_CASH = float(os.environ.get("PAPERBOT_CASH", "100"))
+TOP20 = ["almach", "xarb_windows", "xarb_fast", "v_mid_rest", "xarb_tight", "v_mid_take", "lock_sweep", "lock_strikes",
+         "pickoff", "lock_fast", "quarter", "v_15m_early", "lock_early", "v_strict", "xarb", "lastcall_rest", "v_early_z2",
+         "v_mid_z2", "consensus_z2", "final"]
 UNIVERSES = [
     {"name": "std", "port": int(os.environ.get("PAPERBOT_PORT", "8080")), "size_mode": "contracts", "dir": DATA, "pos_mult": 1.0},
     {"name": "dollar", "port": int(os.environ.get("PAPERBOT_PORT2", "8081")), "size_mode": "dollar", "dir": os.path.join(DATA, "dollar"), "pos_mult": 5.0,
@@ -30,6 +33,10 @@ UNIVERSES = [
     # Bonereaper lab: only the 50 Bonereaper variants (paperbot/bonelab.py), $1,000 each; each variant sizes its own orders
     {"name": "bonelab", "port": int(os.environ.get("PAPERBOT_PORT5", "8084")), "size_mode": "contracts", "dir": os.path.join(DATA, "bonelab"),
      "cash": 1000.0, "registry": "bonelab"},
+    # Top 20: the 20 best non-Bonereaper bots of run 4 (mean return across the four universes at 11:20Z on 11-10),
+    # $5,000 each; every order a random $1-$150 (3% of the account at most, the dollar30/dollar1000 proportion)
+    {"name": "top20", "port": int(os.environ.get("PAPERBOT_PORT6", "8085")), "size_mode": "dollar", "dir": os.path.join(DATA, "top20"),
+     "pos_mult": 75.0, "size_min": 1.0, "size_max": 150.0, "cash": 5000.0, "only": TOP20},
 ]
 os.makedirs(DATA, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -77,6 +84,14 @@ class Universe:
             self.touch_model = LadderTouch(self.accounts["touch_model"], engine.lf, engine.idx, engine.spot)
             self.xarb = XArb(self.accounts["xarb"], engine.mf, engine.lf)
             self.arbs = make_arbs(self.accounts, engine)
+        only = cfg.get("only")
+        if only:     # a hand-picked universe: keep only the listed bots (scanners are built above, then dropped)
+            self.accounts = {k: a for k, a in self.accounts.items() if k in only}
+            self.arbs = {k: v for k, v in self.arbs.items() if k in only}
+            for attr in ("ladder", "ladder_model", "touch_model", "xarb"):
+                if attr not in only: setattr(self, attr, None)
+            self.active = [k for k in self.active if k in only]
+            self.strats = [st for st in self.strats if st.acct.name in only]
         self.equity_hist = collections.deque(maxlen=20000); self.last_state = {}; self.started = time.time()
         self.labels = {}
         try:
