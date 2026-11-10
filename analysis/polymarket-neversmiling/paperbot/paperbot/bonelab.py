@@ -1,4 +1,4 @@
-"""Bonereaper lab: 60 variants of the Bonereaper replica (bot 45) trading side by side in their own universe
+"""Bonereaper lab: 110 variants of the Bonereaper replica (bot 45) trading side by side in their own universe
 (port 8084, $1,000 each), to find which of its rules make or lose money.
 
 Every variant keeps the core idea: buy the side of a BTC Up/Down window that the market prices cheaply when the
@@ -16,6 +16,8 @@ Each variant changes one or a few knobs:
   cap       most a single window may hold, in dollars (clip sizing: 14 contracts)
   period    seconds between entries in one window (original 6 s); once = one entry per window
   stop      stop trading for good after cash falls this fraction below its peak
+  shrink    weight on the model when estimating the true price, the rest on the market mid (1.0 = model only)
+  max_pos   contracts a window may hold with clip sizing (original 14)
   tp / sl   take-profit / stop-loss on an open position, checked every tick: in cents of the side's price
             (tp_c, sl_c) or as a multiple of the entry price (tp_x: sell at entry x (1 + tp_x); sl_x: sell at
             entry x (1 - sl_x)); after an exit the variant does not re-enter that window
@@ -30,13 +32,13 @@ CASH = 1000.0
 class BoneVar(LastCallHold):
     def __init__(self, account, name, band=(0.07, 0.70), edge=0.03, window=(10, None), horizons=(300, 900, 3600),
                  assets=("btc",), sizing=("clip",), cap=None, period=6.0, once=False, stop=None, n_min=0, seed=0,
-                 tp_c=None, sl_c=None, tp_x=None, sl_x=None):
+                 tp_c=None, sl_c=None, tp_x=None, sl_x=None, max_pos=14.0, shrink=1.0):
         super().__init__(account, seed=seed)
         self.name = name; self.lo, self.hi = band; self.edge = edge; self.t_min, self.t_max = window
         self.durs = set(horizons); self.assets = set(assets); self.sizing = sizing; self.period = period; self.once = once
         self.stop = stop; self.n_min = n_min; self.peak = None; self.stopped = False
         self.cap = cap if cap is not None else (None if sizing[0] == "clip" else 0.15 * CASH)
-        self.max_pos = 14.0; self.tp_c = tp_c; self.sl_c = sl_c; self.tp_x = tp_x; self.sl_x = sl_x
+        self.max_pos = max_pos; self.shrink = shrink; self.tp_c = tp_c; self.sl_c = sl_c; self.tp_x = tp_x; self.sl_x = sl_x
 
     def exits(self, market, st):
         """Take-profit / stop-loss on the open position (long YES = bought Up, short YES = bought Down)."""
@@ -58,7 +60,7 @@ class BoneVar(LastCallHold):
 
     def contracts(self, price):
         kind = self.sizing[0]
-        if kind == "clip": return 10.0 if self.rng.random() < 0.1 else 2.0
+        if kind == "clip": return float(self.sizing[1]) if len(self.sizing) > 1 else (10.0 if self.rng.random() < 0.1 else 2.0)
         if kind == "usd":
             lo, hi = self.sizing[1], self.sizing[2]
             return math.exp(self.rng.uniform(math.log(lo), math.log(hi))) / price
@@ -79,6 +81,8 @@ class BoneVar(LastCallHold):
         if bb is None or ba is None: return
         p, det = p_up(market, ctx["index"], ctx["spot"], now)
         if p is None or det.get("n_known", 0) < self.n_min: return
+        if self.shrink < 1.0:      # blend the model with the market's own price: the lab showed the model overrates long shots
+            p = self.shrink * p + (1 - self.shrink) * (bb + ba) / 2
         st["next_take"] = now + self.period; theta = acct.theta; q = self.pos(slug)
         if self.lo <= ba <= self.hi and p - ba - theta * ba * (1 - ba) > self.edge and q >= 0:
             side, px = "buy", ba
@@ -174,6 +178,75 @@ VARIANTS = {
     "br60": ("Edge 5c, 2% orders, take profit at 2x, stop loss at half", {"edge": 0.05, "sizing": ("pct", 0.02), "cap": 40.0, "tp_x": 1.0, "sl_x": 0.5}),
 }
 
+
+# ---- round 2 (br61-br110), built from the first 4.5 hours of the lab -------------------------------------------
+# Lesson from the losers: below 40c the side bought won far less often than its price implied (20-40c returned
+# 47-63 cents per dollar), while 40-60c returned $1.36-$1.45. Large or percentage orders on the original rules went
+# broke within hours. Round 2 centres on 40-60c, trades more often (entries every 2-3 s, bigger per-window limits),
+# keeps orders small, varies the edge and the minute rules, and tests blending the model with the market price.
+F = dict(period=3.0, max_pos=40.0)          # "trade more" defaults for round 2
+def v(**kw): return {**F, **kw}
+VARIANTS.update({
+    # L. price bands around coin-flip
+    "br61": ("40-60c, edge 3c, every 3 s", v(band=(0.40, 0.60), edge=0.03)),
+    "br62": ("40-60c, edge 2c, every 3 s", v(band=(0.40, 0.60), edge=0.02)),
+    "br63": ("40-60c, edge 1c, every 2 s", v(band=(0.40, 0.60), edge=0.01, period=2.0)),
+    "br64": ("40-60c, edge 5c, every 3 s", v(band=(0.40, 0.60), edge=0.05)),
+    "br65": ("45-55c, edge 2c, every 2 s", v(band=(0.45, 0.55), edge=0.02, period=2.0)),
+    "br66": ("45-55c, edge 3c, every 3 s", v(band=(0.45, 0.55), edge=0.03)),
+    "br67": ("50-60c, edge 2c", v(band=(0.50, 0.60), edge=0.02)),
+    "br68": ("40-50c, edge 2c", v(band=(0.40, 0.50), edge=0.02)),
+    "br69": ("35-65c, edge 3c", v(band=(0.35, 0.65), edge=0.03)),
+    "br70": ("45-65c, edge 3c", v(band=(0.45, 0.65), edge=0.03)),
+    "br71": ("40-70c, edge 3c", v(band=(0.40, 0.70), edge=0.03)),
+    # M. minute rules (40-60c, edge 2c)
+    "br72": ("40-60c, edge 2c, last 3 minutes", v(band=(0.40, 0.60), edge=0.02, window=(10, 180))),
+    "br73": ("40-60c, edge 2c, last 2 minutes", v(band=(0.40, 0.60), edge=0.02, window=(10, 120))),
+    "br74": ("40-60c, edge 2c, last 60 seconds", v(band=(0.40, 0.60), edge=0.02, window=(5, 60), period=2.0)),
+    "br75": ("40-60c, edge 2c, first half (150 s+ left)", v(band=(0.40, 0.60), edge=0.02, window=(150, None))),
+    "br76": ("40-60c, edge 2c, middle (60-180 s left)", v(band=(0.40, 0.60), edge=0.02, window=(60, 180))),
+    "br77": ("40-60c, edge 2c, any time but the last 20 s", v(band=(0.40, 0.60), edge=0.02, window=(20, None))),
+    # N. horizons and coins
+    "br78": ("40-60c, edge 2c, 5-minute windows", v(band=(0.40, 0.60), edge=0.02, horizons=(300,))),
+    "br79": ("40-60c, edge 2c, 15-minute windows", v(band=(0.40, 0.60), edge=0.02, horizons=(900,))),
+    "br80": ("40-60c, edge 2c, 1-hour windows", v(band=(0.40, 0.60), edge=0.02, horizons=(3600,))),
+    "br81": ("40-60c, edge 2c, BTC + ETH", v(band=(0.40, 0.60), edge=0.02, assets=("btc", "eth"))),
+    "br82": ("40-60c, edge 2c, all four coins", v(band=(0.40, 0.60), edge=0.02, assets=("btc", "eth", "sol", "xrp"))),
+    "br83": ("45-55c, edge 2c, all four coins, every 2 s", v(band=(0.45, 0.55), edge=0.02, assets=("btc", "eth", "sol", "xrp"), period=2.0)),
+    # O. small sizing, many trades
+    "br84": ("40-60c, edge 2c, orders $1-$5", v(band=(0.40, 0.60), edge=0.02, sizing=(M, 1.0, 5.0), cap=30.0)),
+    "br85": ("40-60c, edge 2c, 0.5% orders, 3% per window", v(band=(0.40, 0.60), edge=0.02, sizing=("pct", 0.005), cap=30.0)),
+    "br86": ("40-60c, edge 2c, 1% orders, 4% per window", v(band=(0.40, 0.60), edge=0.02, sizing=("pct", 0.01), cap=40.0)),
+    "br87": ("40-60c, edge 2c, orders $0.10-$10", v(band=(0.40, 0.60), edge=0.02, sizing=(M, 0.1, 10.0), cap=30.0)),
+    "br88": ("40-60c, edge 2c, 5-contract clips, 60 per window", v(band=(0.40, 0.60), edge=0.02, sizing=("clip", 5.0), max_pos=60.0)),
+    # P. model blended with the market (fix suggested by the losers)
+    "br89": ("40-60c, edge 2c, model 50/50 with market", v(band=(0.40, 0.60), edge=0.02, shrink=0.5)),
+    "br90": ("30-70c, edge 2c, model 50/50 with market", v(band=(0.30, 0.70), edge=0.02, shrink=0.5)),
+    "br91": ("Original band 7-70c, model 50/50 with market", v(band=(0.07, 0.70), edge=0.03, shrink=0.5)),
+    "br92": ("Original band 7-70c, model 30/70 with market", v(band=(0.07, 0.70), edge=0.03, shrink=0.3)),
+    "br93": ("25-75c, edge 2c, model 50/50 with market", v(band=(0.25, 0.75), edge=0.02, shrink=0.5)),
+    # Q. favourite side
+    "br94": ("Favourite 50-70c, edge 2c", v(band=(0.50, 0.70), edge=0.02)),
+    "br95": ("Favourite 55-75c, edge 2c", v(band=(0.55, 0.75), edge=0.02)),
+    # R. model-confirmed final minute
+    "br96": ("40-60c, edge 2c, 20+ settlement seconds known, every 2 s", v(band=(0.40, 0.60), edge=0.02, n_min=20, period=2.0)),
+    "br97": ("40-60c, edge 1c, 40+ settlement seconds known, every 2 s", v(band=(0.40, 0.60), edge=0.01, n_min=40, period=2.0)),
+    # S. combinations
+    "br98": ("40-60c, 2c, last 3 min, 1%, BTC+ETH, every 2 s", v(band=(0.40, 0.60), edge=0.02, window=(10, 180), sizing=("pct", 0.01), cap=40.0, assets=("btc", "eth"), period=2.0)),
+    "br99": ("45-55c, 2c, all coins, $1-$5, every 2 s", v(band=(0.45, 0.55), edge=0.02, assets=("btc", "eth", "sol", "xrp"), sizing=(M, 1.0, 5.0), cap=30.0, period=2.0)),
+    "br100": ("40-60c, 3c, 5m+15m, BTC+ETH, 0.5%", v(band=(0.40, 0.60), edge=0.03, horizons=(300, 900), assets=("btc", "eth"), sizing=("pct", 0.005), cap=30.0)),
+    "br101": ("40-60c, 2c, blended model, last 2 min, 1%", v(band=(0.40, 0.60), edge=0.02, shrink=0.5, window=(10, 120), sizing=("pct", 0.01), cap=40.0)),
+    # T. exits and controls on 40-60c
+    "br102": ("40-60c, edge 2c, take profit +10c", v(band=(0.40, 0.60), edge=0.02, tp_c=0.10)),
+    "br103": ("40-60c, edge 2c, stop loss -10c", v(band=(0.40, 0.60), edge=0.02, sl_c=0.10)),
+    "br104": ("40-60c, edge 2c, TP +15c / SL -10c", v(band=(0.40, 0.60), edge=0.02, tp_c=0.15, sl_c=0.10)),
+    "br105": ("40-60c, edge 2c, stop after 30% drawdown", v(band=(0.40, 0.60), edge=0.02, stop=0.30)),
+    "br106": ("40-60c, edge 2c, one entry per window", v(band=(0.40, 0.60), edge=0.02, once=True)),
+    "br107": ("40-60c, edge 3c, original pace (every 6 s, 14 max)", {"band": (0.40, 0.60), "edge": 0.03}),
+    "br108": ("35-50c, edge 2c", v(band=(0.35, 0.50), edge=0.02)),
+    "br109": ("50-65c, edge 2c", v(band=(0.50, 0.65), edge=0.02)),
+    "br110": ("40-60c, no edge required (band only)", v(band=(0.40, 0.60), edge=-1.0)),
+})
 LAB_LABELS = {k: v[0] for k, v in VARIANTS.items()}
 
 
