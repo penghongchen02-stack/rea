@@ -27,6 +27,9 @@ UNIVERSES = [
     # the same proportion as the $30 / $1,000 universe
     {"name": "dollar1000", "port": int(os.environ.get("PAPERBOT_PORT4", "8083")), "size_mode": "dollar", "dir": os.path.join(DATA, "dollar1000"), "pos_mult": 500.0,
      "size_min": 0.1, "size_max": 1000.0, "cash": float(os.environ.get("PAPERBOT_CASH4", "30000"))},
+    # Bonereaper lab: only the 50 Bonereaper variants (paperbot/bonelab.py), $1,000 each; each variant sizes its own orders
+    {"name": "bonelab", "port": int(os.environ.get("PAPERBOT_PORT5", "8084")), "size_mode": "contracts", "dir": os.path.join(DATA, "bonelab"),
+     "cash": 1000.0, "registry": "bonelab"},
 ]
 os.makedirs(DATA, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -56,21 +59,31 @@ class Universe:
         self.store = Store(os.path.join(self.dir, "paper.db")); self.engine = engine
         self.cash = cfg.get("cash", START_CASH)
         mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0))
-        reg = build_registry(cfg.get("pos_mult", 1.0))
-        self.accounts = {k: mk(k) for k in list(reg) + list(LADDER_BOTS) + list(ARB_BOTS)}
+        self.lab = cfg.get("registry") == "bonelab"
+        if self.lab:
+            from .bonelab import build_lab_registry
+            reg = build_lab_registry(); self.accounts = {k: mk(k) for k in reg}
+        else:
+            reg = build_registry(cfg.get("pos_mult", 1.0))
+            self.accounts = {k: mk(k) for k in list(reg) + list(LADDER_BOTS) + list(ARB_BOTS)}
         for a in self.accounts.values(): a.universe = self.name
         active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
         self.active = list(self.accounts) if active == ["all"] else active
         self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
-        self.ladder = LadderArb(self.accounts["ladder"], engine.lf); self.ladder_model = LadderModel(self.accounts["ladder_model"], engine.lf, engine.idx, engine.spot)
-        self.touch_model = LadderTouch(self.accounts["touch_model"], engine.lf, engine.idx, engine.spot)
-        self.xarb = XArb(self.accounts["xarb"], engine.mf, engine.lf)
-        self.arbs = make_arbs(self.accounts, engine)
+        if self.lab:
+            self.ladder = self.ladder_model = self.touch_model = self.xarb = None; self.arbs = {}
+        else:
+            self.ladder = LadderArb(self.accounts["ladder"], engine.lf); self.ladder_model = LadderModel(self.accounts["ladder_model"], engine.lf, engine.idx, engine.spot)
+            self.touch_model = LadderTouch(self.accounts["touch_model"], engine.lf, engine.idx, engine.spot)
+            self.xarb = XArb(self.accounts["xarb"], engine.mf, engine.lf)
+            self.arbs = make_arbs(self.accounts, engine)
         self.equity_hist = collections.deque(maxlen=20000); self.last_state = {}; self.started = time.time()
         self.labels = {}
         try:
             from .strategies import RANDOM_BOTS; self.labels = {k: v[2] for k, v in RANDOM_BOTS.items()}
         except Exception: pass
+        if self.lab:
+            from .bonelab import LAB_LABELS; self.labels = dict(LAB_LABELS)
         self._load()
 
     def _load(self):
@@ -125,7 +138,7 @@ class Universe:
             "accounts": {n: a.snapshot(engine.mf.markets) for n, a in self.accounts.items()}, "markets": mk, "index": idx, "spot": spot,
             "feeds": {"index_age": round(now - engine.idx.last_ok, 1) if engine.idx.last_ok else None, "coinbase_connected": engine.spot.connected, "coinbase_msgs": engine.spot.msgs,
                       "books_polled": len(engine.mf.markets), "brti_crosscheck": engine.crosscheck, "stream": engine.ws.status()},
-            "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot(), "ladder_model": self.ladder_model.snapshot(), "touch_model": self.touch_model.snapshot(), "xarb": self.xarb.snapshot(), "arbs": {k: v.snapshot() for k, v in self.arbs.items()},
+            "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot() if self.ladder else {}, "ladder_model": self.ladder_model.snapshot() if self.ladder_model else {}, "touch_model": self.touch_model.snapshot() if self.touch_model else {}, "xarb": self.xarb.snapshot() if self.xarb else {}, "arbs": {k: v.snapshot() for k, v in self.arbs.items()},
             "config": {"universe": self.name, "size_mode": self.cfg["size_mode"], "size_range": [self.cfg.get("size_min"), self.cfg.get("size_max")], "active": self.active, "labels": self.labels,
                        "start_cash": self.cash, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
 
