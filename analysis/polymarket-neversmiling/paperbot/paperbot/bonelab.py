@@ -1,4 +1,4 @@
-"""Bonereaper lab: 50 variants of the Bonereaper replica (bot 45) trading side by side in their own universe
+"""Bonereaper lab: 60 variants of the Bonereaper replica (bot 45) trading side by side in their own universe
 (port 8084, $1,000 each), to find which of its rules make or lose money.
 
 Every variant keeps the core idea: buy the side of a BTC Up/Down window that the market prices cheaply when the
@@ -16,6 +16,9 @@ Each variant changes one or a few knobs:
   cap       most a single window may hold, in dollars (clip sizing: 14 contracts)
   period    seconds between entries in one window (original 6 s); once = one entry per window
   stop      stop trading for good after cash falls this fraction below its peak
+  tp / sl   take-profit / stop-loss on an open position, checked every tick: in cents of the side's price
+            (tp_c, sl_c) or as a multiple of the entry price (tp_x: sell at entry x (1 + tp_x); sl_x: sell at
+            entry x (1 - sl_x)); after an exit the variant does not re-enter that window
 """
 import math
 from .strategies import LastCallHold
@@ -26,13 +29,32 @@ CASH = 1000.0
 
 class BoneVar(LastCallHold):
     def __init__(self, account, name, band=(0.07, 0.70), edge=0.03, window=(10, None), horizons=(300, 900, 3600),
-                 assets=("btc",), sizing=("clip",), cap=None, period=6.0, once=False, stop=None, n_min=0, seed=0):
+                 assets=("btc",), sizing=("clip",), cap=None, period=6.0, once=False, stop=None, n_min=0, seed=0,
+                 tp_c=None, sl_c=None, tp_x=None, sl_x=None):
         super().__init__(account, seed=seed)
         self.name = name; self.lo, self.hi = band; self.edge = edge; self.t_min, self.t_max = window
         self.durs = set(horizons); self.assets = set(assets); self.sizing = sizing; self.period = period; self.once = once
         self.stop = stop; self.n_min = n_min; self.peak = None; self.stopped = False
         self.cap = cap if cap is not None else (None if sizing[0] == "clip" else 0.15 * CASH)
-        self.max_pos = 14.0
+        self.max_pos = 14.0; self.tp_c = tp_c; self.sl_c = sl_c; self.tp_x = tp_x; self.sl_x = sl_x
+
+    def exits(self, market, st):
+        """Take-profit / stop-loss on the open position (long YES = bought Up, short YES = bought Down)."""
+        if not any(v is not None for v in (self.tp_c, self.sl_c, self.tp_x, self.sl_x)): return False
+        pos = self.acct.positions.get(market.slug)
+        if not pos or pos.closed or abs(pos.qty) < 1e-9: return False
+        if pos.qty > 0: entry, now_px, side, lim = pos.avg, market.best_bid, "sell", market.best_bid
+        else: entry, now_px, side, lim = 1 - pos.avg, (1 - market.best_ask) if market.best_ask is not None else None, "buy", market.best_ask
+        if now_px is None: return False
+        hit = None
+        if self.tp_c is not None and now_px >= entry + self.tp_c: hit = "tp"
+        if self.tp_x is not None and now_px >= entry * (1 + self.tp_x): hit = "tp"
+        if self.sl_c is not None and now_px <= entry - self.sl_c: hit = "sl"
+        if self.sl_x is not None and now_px <= entry * (1 - self.sl_x): hit = "sl"
+        if hit is None: return False
+        o = self.acct.take(market, side, round(abs(pos.qty), 2), limit=lim, tag=f"{self.name} {hit} {now_px:.2f} from {entry:.2f}", fixed=True)
+        if o and o.filled > 0: st["exited"] = True
+        return True
 
     def contracts(self, price):
         kind = self.sizing[0]
@@ -47,6 +69,7 @@ class BoneVar(LastCallHold):
         slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
         if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
         self.manage(market, ctx, now)
+        if self.exits(market, st) or st.get("exited"): return
         if self.stopped or now < st["next_take"] or (self.once and st.get("done")): return
         if self.stop is not None:
             self.peak = max(self.peak or acct.cash, acct.cash)
@@ -138,6 +161,17 @@ VARIANTS = {
     "br48": ("20-50c, edge 5c, last 60 s, 1% orders", {"band": (0.20, 0.50), "edge": 0.05, "window": (5, 60), "sizing": ("pct", 0.01), "cap": 20.0}),
     "br49": ("Model-confirmed (20+ settlement s known), 2% orders", {"n_min": 20, "sizing": ("pct", 0.02), "cap": 40.0}),
     "br50": ("40-60c, edge 5c, $0.10-$100", {"band": (0.40, 0.60), "edge": 0.05, "sizing": (M, 0.1, 100.0)}),
+    # K. take-profit / stop-loss (original rules otherwise)
+    "br51": ("Take profit +10c", {"tp_c": 0.10}),
+    "br52": ("Take profit +20c", {"tp_c": 0.20}),
+    "br53": ("Take profit when the price doubles", {"tp_x": 1.0}),
+    "br54": ("Stop loss -10c", {"sl_c": 0.10}),
+    "br55": ("Stop loss when the price halves", {"sl_x": 0.5}),
+    "br56": ("Take profit +15c, stop loss -10c", {"tp_c": 0.15, "sl_c": 0.10}),
+    "br57": ("Take profit at 2x, stop loss at half", {"tp_x": 1.0, "sl_x": 0.5}),
+    "br58": ("30-40c, take profit +15c, stop loss -10c", {"band": (0.30, 0.40), "tp_c": 0.15, "sl_c": 0.10}),
+    "br59": ("$0.10-$100, take profit +20c, stop loss -15c", {"sizing": (M, 0.1, 100.0), "tp_c": 0.20, "sl_c": 0.15}),
+    "br60": ("Edge 5c, 2% orders, take profit at 2x, stop loss at half", {"edge": 0.05, "sizing": ("pct", 0.02), "cap": 40.0, "tp_x": 1.0, "sl_x": 0.5}),
 }
 
 LAB_LABELS = {k: v[0] for k, v in VARIANTS.items()}
