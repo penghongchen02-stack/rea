@@ -348,8 +348,66 @@ class Engine:
                 self.errors += 1; log.exception("loop: %s", e)
             time.sleep(max(0.0, 1.0 - (time.time() - t0)))
 
+    def summary(self):
+        """One compact JSON for the phone dashboard (web/mobile.html on PAPERBOT_PORT_MOBILE): key and feed health, live
+        5-minute windows, every universe's totals and top bots, the champion and the tryout. Built from the states the
+        loop already holds; no key values, only whether the signed stream is connected."""
+        now = time.time(); S = {u.name: u.last_state for u in self.universes if u.last_state}
+        base = S.get("std") or next(iter(S.values()), {})
+        feeds = base.get("feeds", {}); stream = feeds.get("stream") or {}
+        live = {}
+        for slug, m in (base.get("markets") or {}).items():
+            if m.get("horizon") != "5m" or m.get("remaining", 0) <= 0: continue
+            cur = live.get(m["asset"])
+            if cur is None or m["remaining"] < cur["remaining"]:
+                live[m["asset"]] = {k: m.get(k) for k in ("slug", "asset", "start", "end", "p2b", "bid", "ask", "last", "p_up", "remaining")}
+        for a_, m in live.items(): m["index"] = (base.get("index") or {}).get(a_, {}).get("value"); m["spot"] = (base.get("spot") or {}).get(a_, {}).get("value")
+        unis = []
+        for u in self.universes:
+            st = S.get(u.name) or {}; acc = st.get("accounts") or {}
+            rank = sorted(acc.values(), key=lambda a: -a.get("pnl", 0))
+            unis.append({"name": u.name, "port": u.port, "bots": len(acc), "start_cash": u.cash, "net": round(sum(a.get("pnl", 0) for a in acc.values()), 2),
+                         "up": sum(1 for a in acc.values() if a.get("pnl", 0) > 0), "down": sum(1 for a in acc.values() if a.get("pnl", 0) < 0),
+                         "top": [{"name": a["name"], "pnl": round(a["pnl"], 2), "settled": a.get("markets_settled"), "won": a.get("markets_won")} for a in rank[:3]],
+                         "worst": [{"name": a["name"], "pnl": round(a["pnl"], 2)} for a in rank[-1:]]})
+        champ = None
+        cs = S.get("champion") or {}
+        if cs.get("champion"):
+            c = cs["champion"]; acct = (cs.get("accounts") or {}).get("champion", {})
+            champ = {"paused": c.get("paused"), "current": c.get("current") and {k: c["current"].get(k) for k in ("key", "hired", "reason")},
+                     "pnl_since_hire": c.get("pnl_since_hire"), "next_review_in": c.get("next_review_in"), "equity": acct.get("equity"),
+                     "open": len(acct.get("open_positions") or {}), "days": c.get("days"), "history": (c.get("history") or [])[:6]}
+        tr = None
+        ts = S.get("tryout") or {}
+        if ts.get("tryout"):
+            T = ts["tryout"]
+            mem = sorted(({"name": n, **{k: m.get(k) for k in ("n", "pnl", "edge", "coins", "coins_up", "hours", "hours_up", "passed", "why", "joined", "where")}}
+                          for n, m in (T.get("members") or {}).items()), key=lambda m: (not m["passed"], -(m["pnl"] or 0)))
+            tr = {"min_windows": T.get("min_windows"), "next_review_in": T.get("next_review_in"), "members": mem, "dropped": (T.get("dropped") or [])[:6]}
+        recent = sorted((r for st in (S.get("champion") or {}, S.get("tryout") or {}) for r in (st.get("settlements") or [])), key=lambda r: -r.get("ts", 0))[:12]
+        return {"ts": now, "uptime": round(now - self.started), "errors": self.errors, "loop": self.loop_count,
+                "key": {"set": bool(os.environ.get("POLYMARKET_KEY_ID")) and bool(os.environ.get("POLYMARKET_SECRET_KEY")),
+                        "accepted": bool(stream.get("connected")) and stream.get("age") is not None and stream["age"] < 30},
+                "stream": stream, "feeds": {k: feeds.get(k) for k in ("index_age", "coinbase_connected", "books_polled")}, "crosscheck": feeds.get("brti_crosscheck"),
+                "live": live, "universes": unis, "champion": champ, "tryout": tr,
+                "recent": [{k: r.get(k) for k in ("ts", "bot", "asset", "horizon", "up", "pnl_total")} for r in recent]}
+
+    def t_mobile(self):
+        eng = self
+        class H(http.server.SimpleHTTPRequestHandler):
+            def __init__(s, *a, **kw): super().__init__(*a, directory=WEB, **kw)
+            def log_message(s, *a): pass
+            def do_GET(s):
+                if s.path.startswith("/summary.json"):
+                    body = json.dumps(eng.summary()).encode(); s.send_response(200); s.send_header("Content-Type", "application/json")
+                    s.send_header("Cache-Control", "no-store"); s.send_header("Content-Length", str(len(body))); s.end_headers(); s.wfile.write(body); return
+                if s.path == "/" or s.path.startswith("/?"): s.path = "/mobile.html"
+                super().do_GET()
+        port = int(os.environ.get("PAPERBOT_PORT_MOBILE", "8090"))
+        srv = http.server.ThreadingHTTPServer(("0.0.0.0", port), H); log.info("phone dashboard on port %d", port); srv.serve_forever()
+
     def start(self):
-        for fn in (self.t_index, self.t_discover, self.t_crosscheck, self.spot.run, self.ws.run):
+        for fn in (self.t_index, self.t_discover, self.t_crosscheck, self.spot.run, self.ws.run, self.t_mobile):
             threading.Thread(target=fn, daemon=True).start()
         for u in self.universes: threading.Thread(target=self.t_http, args=(u,), daemon=True).start()
         time.sleep(3)
