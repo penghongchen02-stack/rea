@@ -93,6 +93,6 @@ if(E.culls.length&&E.culls[0].families)h+='<div><b>Families</b>: '+Object.entrie
 if(!E.culls.length)h+='<span style="color:var(--muted)">No cull yet. Children appear here after the first one.</span><br>';
 for(const c of E.culls){h+='<div style="margin-top:6px"><b>'+hm(c.ts)+'</b> removed: '+c.removed.map(r=>esc(r[0])+' '+pl(r[1])).join(', ')+'<br>&nbsp;&nbsp;added: '+c.added.map(a=>esc(a[0])+' &larr; '+esc(a[1])+' ('+mut(a[2])+')').join('; ')+'</div>'}
 const L=Object.entries(E.lessons||{}).filter(([k,v])=>v.up[1]+v.down[1]>0).sort((a,b)=>Math.abs(b[1].lean_up-0.5)-Math.abs(a[1].lean_up-0.5)).slice(0,10);
-if(L.length){h+='<div style="margin-top:8px"><b>Learned leanings</b> (excess return vs the median of children that moved a setting up or down)<br>'+L.map(([k,v])=>esc(k.replace('|',' &middot; '))+': up '+(v.up[1]?(v.up[0]/v.up[1]*100).toFixed(2)+'% (n='+v.up[1]+')':'-')+', down '+(v.down[1]?(v.down[0]/v.down[1]*100).toFixed(2)+'% (n='+v.down[1]+')':'-')+' &rarr; next step up with p='+v.lean_up).join('<br>')+'</div>'}
+if(L.length){h+='<div style="margin-top:8px"><b>Learned leanings</b> (excess return vs the median of children that moved a setting up or down)<br>'+L.map(([k,v])=>esc(k).replace('|',' &middot; ')+': up '+(v.up[1]?(v.up[0]/v.up[1]*100).toFixed(2)+'% (n='+v.up[1]+')':'-')+', down '+(v.down[1]?(v.down[0]/v.down[1]*100).toFixed(2)+'% (n='+v.down[1]+')':'-')+' &rarr; next step up with p='+v.lean_up).join('<br>')+'</div>'}
 document.getElementById('evo').innerHTML=h};})();
 </script></body></html>
