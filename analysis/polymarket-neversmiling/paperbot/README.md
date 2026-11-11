@@ -78,12 +78,12 @@ median and P95, capped at the reported maximum) and capping dollars per market (
 
 | replica | coins / windows | style |
 |---|---|---|
-| rep_whiskas | BTC, ETH 5m | rests bids on both sides when the pair costs <= $0.98, legs below $0.90, 2x tilt on a signal; $250/market |
+| rep_whiskas | BTC 5m | (rebuilt from live trades) both sides early at a pair cost <= $1.02, then adds to the leading side at $0.60-0.92 up to 3x; $180/market |
 | rep_doggystyie | BTC 5m | rests both sides in the first 3 minutes; $15-50 fills, $200/market |
 | rep_neversmiling | 4 coins 5m, 15m | rests both sides at $0.30-0.70 in 10-90% of the window, 3x tilt, skips 14-16 UTC; $161/market |
-| rep_flippingsharks | BTC 5m | rests both sides, more on the cheaper one, 60-295 s before close, skips 4, 16, 19, 20 UTC; $222/market |
+| rep_flippingsharks | BTC 5m, ETH 5m, BTC 15m | (rebuilt from live trades) buys the cheap side (<= $0.40), buys the other side when the pair would cost <= $0.90 (locked profit); $60/market |
 | rep_bonereaper | BTC, ETH, SOL 5m, 15m | rests both sides when the pair is <= $1.10, tilt at 2x; 1% of bankroll ($10) per market |
-| rep_pbot6 | 4 coins 5m, 15m | takes the side the model prices 8c+ above its mid (3-8c small), hedge 60-120 s later if the pair < $0.98 |
+| rep_pbot6 | 4 coins 5m, 15m | one entry per window on the side the model prices 3c+ above its mid, only once 10+ settlement seconds are pinned; $30/market |
 | rep_slipme | BTC 5m | opens both sides (60 shares), adds to the favoured side, cheap hedges < $0.20, late adds < $0.97; $300/market |
 | rep_sirmartingale | BTC 5m, 15m, ETH 5m | one side 5c+ below fair value, averages down, sells into strength ($0.80 or +35c); off 23-02 UTC |
 | rep_btc5mscour | BTC 5m | last 120 s, buys the resolving side at $0.90-0.99 unless the lead is < 0.05%; $250/market |
@@ -92,7 +92,8 @@ The both-sides traders rest bids: on Polymarket US, Up and Down share one book, 
 spread, while resting a bid for Up and an offer of YES (a bid for Down) fills a pair at $1 minus the spread. Several of
 these traders earned their profit from liquidity rewards, which the simulation does not pay. The other 29 reports
 (sports, esports, weather, politics) cannot trade here. Since 11-11 22:40Z every tryout bot and the champion size their
-own orders (no $1-$30 range).
+own orders (no $1-$30 range). At 23:50Z rep_whiskas, rep_flippingsharks and rep_pbot6 were rebuilt and restarted on a
+fresh $1,000 after losing $768, $576 and $1,000 in their first hour; remove a tryout bot with `{"remove": key}` in add.json.
 
 ## Late favourite (late_fav)
 

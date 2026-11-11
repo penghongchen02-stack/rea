@@ -4,7 +4,8 @@ Each trades its own coins, window lengths and style, and sizes its own orders fr
 They run in the tryout universe with $1,000 each. The other reports (sports, esports, weather, politics) cannot trade
 here: the engine only sees crypto Up/Down markets.
 
-Both-sides traders (Whiskas, Doggystyie, NeverSmiling, FlippingSharks, Bonereaper) rest bids on both sides (see Pair),
+Both-sides traders (Doggystyie, NeverSmiling, Bonereaper) rest bids on both sides (see Pair); Whiskas and FlippingSharks
+were rebuilt 11-11 23:50Z from their live trades (they take),
 as their reports describe them providing liquidity; the others take.
 
 Up/Down on one market is one YES position here: buying Down is selling YES at the bid (cost 1 - bid per contract),
@@ -105,11 +106,29 @@ class Pair(Replica):
         st["spent"] = self.filled(st)
 
 
-class Whiskas(Pair):
-    """x-MoneyForWhiskas: BTC/ETH 5m, both sides within ~6 s, pair below $0.98, avoid $0.90+ legs, uniform $8 clips
-    (P95 $42, max $135), never sells; optional 2x tilt on a spot signal (report rules 1-7). Entries 30-295 s before close."""
-    name = "rep_whiskas"; ASSETS = ("btc", "eth"); LEFT_MIN = 30; LEFT_MAX = 295; PERIOD = 6.0     # rests both bids
-    SIZE = (8.20, 41.59, 134.53); MARKET_CAP = 250.0; PAIR_CAP = 0.98; BAND = (0.01, 0.90); TILT = 2.0; TILT_Z = 1.0
+class Whiskas(Replica):
+    """x-MoneyForWhiskas, rebuilt from its live trades (11-11, 12 h, 136 BTC 5m markets): it buys BOTH sides early (60% of
+    buys 3-5 min before close) at a pair cost near $1.00 (median $1.0018), then adds to the side that is winning as the
+    window runs (46% of its dollars at $0.70+; the side it held more of won 117 of 136). P/L came half from the pairs,
+    half from that lean. Here, taking (Up and Down share one book): 300-180 s before close, balanced clips on both sides
+    while the pair costs at most $1.02; 180-30 s before close, clips on the leading side priced $0.60-0.92 when the
+    model agrees, up to 3x the other side. Sizes from the report ($8.20 median, P95 $41.59); about $180 per market (live
+    average)."""
+    name = "rep_whiskas"; ASSETS = ("btc",); LEFT_MIN = 30; LEFT_MAX = 300; PERIOD = 6.0
+    SIZE = (8.20, 41.59, 134.53); MARKET_CAP = 180.0; PAIR_MAX = 1.02; LEAN_MAX = 3.0
+    def decide(self, market, st, p, det, now, left, bb, ba):
+        up_c, dn_c = ba, 1 - bb; u, d = st.get("up", 0.0), st.get("down", 0.0)
+        if left > 180:
+            if up_c + dn_c <= self.PAIR_MAX:
+                usd = self.dollars()
+                if u <= d: self.buy(market, st, "up", usd, f"{self.name} pair up {up_c:.2f}")
+                if d <= u + usd: self.buy(market, st, "down", usd, f"{self.name} pair down {dn_c:.2f}")
+            return
+        lead, c, other = ("up", up_c, d) if up_c >= dn_c else ("down", dn_c, u)
+        agrees = (p > 0.5) == (lead == "up")
+        mine = u if lead == "up" else d
+        if agrees and 0.60 <= c <= 0.92 and mine < self.LEAN_MAX * max(other, 1.0):
+            self.buy(market, st, lead, self.dollars(), f"{self.name} lean {lead} {c:.2f}")
 
 
 class Doggystyie(Pair):
@@ -132,12 +151,42 @@ class NeverSmiling(Pair):
         if 0.10 <= el <= 0.90: super().on_tick(market, ctx, now)
 
 
-class FlippingSharks(Pair):
-    """FlippingSharks: BTC 5m, both legs within ~7 s, more on the cheaper side (other leg 10-40%), 60-295 s before close,
-    skip 4, 16, 19, 20 UTC, hold (report rules 1-7). Fills median $4.21, P95 $74.81, max $222.75; about $222 per market.
-    (Live 11-11: now mostly one-sided cheap BTC/ETH; the report's rules are used.)"""
-    name = "rep_flippingsharks"; ASSETS = ("btc",); LEFT_MIN = 60; LEFT_MAX = 295; PERIOD = 7.0
-    SIZE = (4.21, 74.81, 222.75); MARKET_CAP = 222.0; PAIR_CAP = 1.00; CHEAP_WEIGHT = (0.10, 0.40); HOURS_OFF = (4, 16, 19, 20)
+class FlippingSharks(Replica):
+    """FlippingSharks, rebuilt from its live trades (11-11, 12 h, 158 markets: BTC 5m, ETH 5m, BTC 15m): it buys whichever
+    side is CHEAP (53% of its dollars at $0.10-0.40), one side at a time; when the price swings and the other side turns
+    cheap too, it buys that, so the pair costs well under $1 (median $0.48; 27 of 28 pairs under $1) and is locked profit
+    (it merged $2,914 of pairs back to cash). 130 of 158 markets stayed one-sided, losing small. Here, taking: with
+    30-300 s left (5m; the last 10 minutes of a 15m), buy the cheaper side at <= $0.40; holding one side, buy the other
+    as soon as both average costs add to <= PAIR_TARGET, sized to match the shares held; add to the held side only
+    below $0.30 and 5c under its average. Sizes from the report ($4.21 median, P95 $74.81); $60 per market (live
+    average about $46). Hours 4, 16, 19, 20 UTC skipped (report)."""
+    name = "rep_flippingsharks"; ASSETS = ("btc", "eth"); DURS = (FIVE, FIFTEEN); LEFT_MIN = 30; PERIOD = 7.0
+    SIZE = (4.21, 74.81, 222.75); MARKET_CAP = 60.0; CHEAP = 0.40; PAIR_TARGET = 0.90; HOURS_OFF = (4, 16, 19, 20)
+    def on_tick(self, market, ctx, now):
+        if market.asset == "eth" and market.dur == FIFTEEN: return          # live: BTC 5m, ETH 5m, BTC 15m only
+        if market.remaining(now) > (300 if market.dur == FIVE else 600): return
+        super().on_tick(market, ctx, now)
+    def decide(self, market, st, p, det, now, left, bb, ba):
+        cost = {"up": ba, "down": 1 - bb}; sh = st.setdefault("sh", {"up": 0.0, "down": 0.0})
+        held = [k for k in ("up", "down") if sh[k] > 0]
+        def take(side, usd, tag):
+            o = self.buy(market, st, side, usd, tag)
+            if o and o.filled > 0: sh[side] += o.filled
+        if not held:
+            side = min(cost, key=cost.get)
+            if cost[side] <= self.CHEAP: take(side, self.dollars(), f"{self.name} cheap {side} {cost[side]:.2f}")
+            return
+        if len(held) == 1:
+            h = held[0]; o_ = "down" if h == "up" else "up"; avg = st[h] / sh[h]
+            if avg + cost[o_] <= self.PAIR_TARGET:
+                take(o_, sh[h] * cost[o_], f"{self.name} flip {o_} {cost[o_]:.2f} pair {avg + cost[o_]:.2f}")
+            elif cost[h] <= 0.30 and cost[h] <= avg - 0.05:
+                take(h, self.dollars(), f"{self.name} add {h} {cost[h]:.2f}")
+            return
+        for k in ("up", "down"):            # both held: top up the lighter side while the pair stays cheap
+            o_ = "down" if k == "up" else "up"
+            if sh[k] < sh[o_] - 1 and st[o_] / sh[o_] + cost[k] <= self.PAIR_TARGET:
+                take(k, (sh[o_] - sh[k]) * cost[k], f"{self.name} balance {k} {cost[k]:.2f}")
 
 
 class Bonereaper(Pair):
@@ -150,18 +199,23 @@ class Bonereaper(Pair):
 
 
 class PBot6(Replica):
-    """PBOT-6: BTC/ETH/SOL/XRP 5m and 15m from the start of each window; the side whose model probability beats its
-    mid by 8c+ gets a high-conviction entry, 3-8c a small balanced entry; the other side is added 60-120 s later only if
-    the pair stays under $0.98; hold (report rules 1-7). Clips $1-50 (median $3.69, P95 $27.35, max $660)."""
-    name = "rep_pbot6"; ASSETS = ("btc", "eth", "sol", "xrp"); DURS = (FIVE, FIFTEEN); LEFT_MIN = 30; PERIOD = 3.0
-    SIZE = (3.69, 27.35, 660.0); MARKET_CAP = 150.0
+    """PBOT-6: BTC/ETH/SOL/XRP 5m and 15m; the side whose model probability beats its mid by 8c+ gets a high-conviction
+    entry, 3-8c a small balanced one; the other side is added 60-120 s later only if the pair stays under $0.98; hold
+    (report rules 1-7). Clips median $3.69, P95 $27.35. Rebuilt 11-11 23:50Z after the first version lost its $1,000 in
+    39 windows (it entered at the open, when the model has nothing pinned and an 8c gap is noise, and re-entered every
+    3 s up to $150 a window; live PBOT-6 lost 17% the same day the same way): now it enters only once at least 10 of
+    the settlement seconds are pinned, takes one entry per window, and caps a window at $30."""
+    name = "rep_pbot6"; ASSETS = ("btc", "eth", "sol", "xrp"); DURS = (FIVE, FIFTEEN); LEFT_MIN = 5; PERIOD = 3.0
+    SIZE = (3.69, 27.35, 660.0); MARKET_CAP = 30.0; MIN_KNOWN = 10
     def decide(self, market, st, p, det, now, left, bb, ba):
-        mid = (bb + ba) / 2; gap = p - mid
-        side = "up" if gap > 0 else "down"
-        if abs(gap) >= 0.08: self.buy(market, st, side, self.dollars(2.0), f"{self.name} high {side} gap {gap:+.2f}"); st.setdefault("t1", now)
-        elif abs(gap) >= 0.03 and not st.get("t1"): self.buy(market, st, side, self.dollars(0.5), f"{self.name} low {side} gap {gap:+.2f}"); st["t1"] = now
         t1 = st.get("t1")
-        if t1 and not st.get("hedged") and 60 <= now - t1 <= 120 and ba + (1 - bb) < 0.98:
+        if t1 is None:
+            if det.get("n_known", 0) < self.MIN_KNOWN: return
+            mid = (bb + ba) / 2; gap = p - mid; side = "up" if gap > 0 else "down"
+            if abs(gap) >= 0.08: self.buy(market, st, side, self.dollars(2.0), f"{self.name} high {side} gap {gap:+.2f}"); st["t1"] = now
+            elif abs(gap) >= 0.03: self.buy(market, st, side, self.dollars(0.5), f"{self.name} low {side} gap {gap:+.2f}"); st["t1"] = now
+            return
+        if not st.get("hedged") and 60 <= now - t1 <= 120 and ba + (1 - bb) < 0.98:
             other = "down" if st.get("up", 0) >= st.get("down", 0) else "up"
             self.buy(market, st, other, self.dollars(0.5), f"{self.name} hedge {other}"); st["hedged"] = True
 

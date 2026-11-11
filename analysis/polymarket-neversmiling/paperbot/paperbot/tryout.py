@@ -207,12 +207,17 @@ class Tryout:
         log.info("[tryout] review: dropped %s; added %s", out, added)
 
     def requested(self, now):
-        """A hand-added candidate: <dir>/add.json {"key", "base", "src", "genes"?} (consumed once); may exceed SIZE."""
+        """A hand-added candidate: <dir>/add.json {"key", "base", "src", "genes"?} (consumed once; may exceed SIZE), or
+        {"remove": key} to take one out."""
         p = os.path.join(self.u.dir, "add.json")
         if not os.path.exists(p): return
         try: req = json.load(open(p))
         except Exception as e: log.warning("[tryout] bad add.json: %s", e); req = None
         os.remove(p)
+        if req and req.get("remove"):        # take a bot out (to rebuild it); its account and record go with it
+            n = req["remove"]
+            if n in self.members: self._detach(n); self._stats_at = 0; self.save(); log.info("[tryout] removed %s by request", n)
+            return
         if not req or req.get("key") in self.members or req.get("base") not in self.builders().get(req.get("src"), {}):
             log.warning("[tryout] cannot add %s", req); return
         spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"],
