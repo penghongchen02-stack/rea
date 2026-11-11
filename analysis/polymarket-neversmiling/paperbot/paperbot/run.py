@@ -39,14 +39,14 @@ UNIVERSES = [
      "pos_mult": 75.0, "size_min": 1.0, "size_max": 150.0, "cash": 5000.0, "only": TOP20},
     # Evolution: the best 20 bots across every other dashboard, $1,000 each, every order a random $0.10-$50 (user's
     # choice, 11-11 09:10Z; was $200; position caps scaled like the top20 universe; Bonereaper-lab variants keep their own
-    # sizing). Every hour the bottom 5 are replaced by 3 children of the top 5 and 2 immigrants (paperbot/evolve.py).
+    # sizing; every bot that has a coin list trades all four coins, user's request 11-11 10:30Z). Every hour the bottom 5 are replaced by 3 children of the top 5 and 2 immigrants (paperbot/evolve.py).
     {"name": "evolve", "port": int(os.environ.get("PAPERBOT_PORT7", "8086")), "size_mode": "dollar", "dir": os.path.join(DATA, "evolve"),
-     "pos_mult": 100.0, "size_min": 0.1, "size_max": 50.0, "cash": 1000.0, "registry": "evolve"},
-    # Champion: one $1,000 bank, BTC/ETH/SOL/XRP 5m and 15m windows only (SOL/XRP added 11-11 10:25Z at the user's request), trading as the best-scoring bot of every other
+     "pos_mult": 100.0, "size_min": 0.1, "size_max": 50.0, "cash": 1000.0, "registry": "evolve", "coins": ["btc", "eth", "sol", "xrp"]},
+    # Champion: one $1,000 bank, BTC/ETH 5m and 15m windows only, trading as the best-scoring bot of every other
     # dashboard; reviewed hourly and replaced while it is losing (paperbot/champion.py). Orders $1-$30 (3% of the
     # bank at most, the dollar30 proportion).
     {"name": "champion", "port": int(os.environ.get("PAPERBOT_PORT8", "8087")), "size_mode": "dollar", "dir": os.path.join(DATA, "champion"),
-     "pos_mult": 15.0, "size_min": 1.0, "size_max": 30.0, "cash": 1000.0, "registry": "champion", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m", "15m"]},
+     "pos_mult": 15.0, "size_min": 1.0, "size_max": 30.0, "cash": 1000.0, "registry": "champion", "assets": ["btc", "eth"], "horizons": ["5m", "15m"]},
 ]
 os.makedirs(DATA, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s",

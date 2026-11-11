@@ -49,7 +49,7 @@ before any leg is sent, and unequal fills are unwound at market.
 
 The best 20 bots across every other dashboard (mean return over the universes each appears in, bots with at least
 one fill) start with $1,000 each; every order is a random $0.10-$50, and Bonereaper-lab variants keep their own
-sizing. Every hour 5 bots are removed and replaced by 3 children of the current top 5 (picked 5:4:3:2:1 by rank)
+sizing. Every bot with its own coin list (the Bonereaper-lab variants) trades BTC, ETH, SOL and XRP together. Every hour 5 bots are removed and replaced by 3 children of the current top 5 (picked 5:4:3:2:1 by rank)
 and 2 immigrants (the best bots of the other dashboards whose strategy is not here yet). Bots are ranked by a steady
 score: average realized P/L per settled market minus half its standard error, so consistent bots beat one lucky market.
 Bots with fewer than 5 settled markets are protected for their first 3 hours, and no strategy family (a seed and
@@ -63,8 +63,7 @@ stopped; `PAPERBOT_EVOLVE_PERIOD` (seconds) changes the cull interval.
 
 ## Champion universe (port 8087)
 
-One $1,000 bank that trades BTC, ETH, SOL and XRP 5-minute and 15-minute Up/Down windows (SOL and XRP added at
-the user's request; the hired bot's own coin list is widened to all four) (Polymarket US lists no
+One $1,000 bank that trades only BTC and ETH 5-minute and 15-minute Up/Down windows (Polymarket US lists no
 30-minute windows). It trades as the single best bot of every other dashboard: each strategy, and each evolved
 variant alive in the evolution universe, is scored on its settled 5m/15m markets of those coins only, with every market's
 P/L rescaled to a $1,000 account, as the mean per market minus half its standard error (at least 20 markets).

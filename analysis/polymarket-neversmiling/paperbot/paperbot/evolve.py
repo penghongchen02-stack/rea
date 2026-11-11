@@ -101,6 +101,8 @@ class Evolver:
         a.universe = self.u.name
         obj = self.builders()[spec["src"]][spec["base"]](a)
         for k, v in spec.get("genes", {}).items(): setattr(obj, k, v)
+        coins = self.cfg.get("coins")
+        if coins and isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(coins)   # BTC, ETH, SOL and XRP together
         return a, obj
 
     def _attach(self, spec):
