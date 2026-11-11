@@ -1,4 +1,4 @@
-"""Champion universe: one $1,000 account that trades only the configured coins' (BTC, ETH, SOL, XRP) 5- and 15-minute Up/Down windows with the
+"""Champion universe: one $1,000 account that trades only the configured coins (BTC, ETH, SOL, XRP) 5- and 15-minute Up/Down windows with the
 single best bot of every other dashboard, and replaces it every hour while it is losing.
 
 Choosing: every bot of every other dashboard (and every evolved variant alive in the evolution universe) is scored

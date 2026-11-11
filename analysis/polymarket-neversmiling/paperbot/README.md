@@ -63,7 +63,7 @@ stopped; `PAPERBOT_EVOLVE_PERIOD` (seconds) changes the cull interval.
 
 ## Champion universe (port 8087)
 
-One $1,000 bank that trades only BTC and ETH 5-minute and 15-minute Up/Down windows (Polymarket US lists no
+One $1,000 bank that trades only BTC, ETH, SOL and XRP 5-minute and 15-minute Up/Down windows (Polymarket US lists no
 30-minute windows). It trades as the single best bot of every other dashboard: each strategy, and each evolved
 variant alive in the evolution universe, is scored on its settled 5m/15m markets of those coins only, with every market's
 P/L rescaled to a $1,000 account, as the mean per market minus half its standard error (at least 20 markets).
