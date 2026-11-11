@@ -90,6 +90,7 @@ class Champion:
                     genes = spec.get("genes", {}); base = spec["base"]; src = spec["src"]
                     key = bot if genes else base
                 else:
+                    if bot not in u.accounts: continue                     # deleted from its dashboard
                     src = "lab" if u.name == "bonelab" and bot in b["lab"] else ("main" if bot in b["main"] else None)
                     if src is None: continue                                # scanners and ladder bots
                     genes = {}; base = key = bot

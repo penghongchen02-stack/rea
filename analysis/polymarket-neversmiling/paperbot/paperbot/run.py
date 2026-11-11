@@ -76,7 +76,7 @@ class Universe:
         self.store = Store(os.path.join(self.dir, "paper.db")); self.engine = engine
         self.cash = cfg.get("cash", START_CASH)
         mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0))
-        self.lab = cfg.get("registry") == "bonelab"; self.evolver = None; self.champion = None
+        self.lab = cfg.get("registry") == "bonelab"; self.evolver = None; self.champion = None; self.roster = None
         if cfg.get("registry") == "champion":   # one account; its strategy is hired and replaced by the Champion
             from .champion import Champion
             self.champion = Champion(self, engine)
@@ -121,6 +121,9 @@ class Universe:
             from .bonelab import LAB_LABELS; self.labels = dict(LAB_LABELS)
         if self.evolver is not None: self.labels = self.evolver.labels
         if self.champion is not None: self.labels = self.champion.labels; self.champion.restore()
+        if self.evolver is None and self.champion is None:     # deleted and added bots (paperbot/roster.py)
+            from .roster import Roster
+            self.roster = Roster(self, engine); self.roster.apply()
         self._load()
 
     def _load(self):
@@ -166,7 +169,7 @@ class Universe:
         spot = {a: dict(zip(("value", "ts"), engine.spot.last(a))) for a in feeds.ASSETS}
         hist = {}
         for ts, name, eq in self.equity_hist:
-            if self.evolver is None or name in self.accounts: hist.setdefault(name, []).append([round(ts), round(eq, 3)])
+            if name in self.accounts: hist.setdefault(name, []).append([round(ts), round(eq, 3)])
         for name in hist:
             if len(hist[name]) > 1500: step = len(hist[name]) // 1500 + 1; hist[name] = hist[name][::step] + hist[name][-1:]
         settles = []; fills = []
@@ -181,6 +184,7 @@ class Universe:
                        "start_cash": self.cash, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
         if self.evolver is not None: self.last_state["evolution"] = self.evolver.snapshot(now)
         if self.champion is not None: self.last_state["champion"] = self.champion.snapshot(now)
+        if self.roster is not None: self.last_state["roster"] = self.roster.snapshot()
 
 
 class Engine:
@@ -309,6 +313,9 @@ class Engine:
                     if u.evolver is not None:
                         try: u.evolver.tick(now)
                         except Exception as e: self.errors += 1; log.exception("[%s] evolve: %s", u.name, e)
+                    if u.roster is not None:
+                        try: u.roster.tick(now)
+                        except Exception as e: self.errors += 1; log.exception("[%s] roster: %s", u.name, e)
                     if u.champion is not None:
                         try: u.champion.tick(now)
                         except Exception as e: self.errors += 1; log.exception("[%s] champion: %s", u.name, e)

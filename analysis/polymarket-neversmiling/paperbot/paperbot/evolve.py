@@ -67,6 +67,25 @@ def mutate_value(rng, gene, v, d):
     return float(f"{nv:.4g}")
 
 
+def mutate_genes(rng, gs, inherited, lean=lambda gene: 0.5):
+    """Change 1-3 of a bot's tunable numbers. gs: its current genes (genes()); inherited: the settings it already
+    overrides. Returns (new overrides, [[gene, old, new], ...]); no mutations if every change broke a window or band."""
+    g2 = dict(inherited); muts = []
+    for gene in rng.sample(sorted(gs), min(len(gs), rng.choice((1, 1, 2, 3)))):
+        old = g2.get(gene, gs[gene]); d = 1 if rng.random() < lean(gene) else -1
+        new = mutate_value(rng, gene, old, d)
+        if new == old: continue
+        g2[gene] = new; muts.append([gene, old, new])
+    for lo, hi in PAIRS:        # keep windows and bands ordered
+        vlo = g2.get(lo, gs.get(lo)); vhi = g2.get(hi, gs.get(hi))
+        if _num(vlo) and _num(vhi) and vlo >= vhi:
+            muts = [m for m in muts if m[0] not in (lo, hi)]
+            for k in (lo, hi):
+                if k in inherited: g2[k] = inherited[k]
+                else: g2.pop(k, None)
+    return g2, muts
+
+
 class Evolver:
     def __init__(self, universe, engine):
         self.u = universe; self.engine = engine; self.cfg = universe.cfg; self.cash = universe.cash
@@ -218,19 +237,7 @@ class Evolver:
     def child(self, parent, now):
         p = self.members[parent]; _, obj = self._bot(p); gs = genes(obj, self.used)
         if not gs: return None
-        g2 = dict(p.get("genes", {})); muts = []
-        for gene in self.rng.sample(sorted(gs), min(len(gs), self.rng.choice((1, 1, 2, 3)))):
-            old = g2.get(gene, gs[gene]); d = 1 if self.rng.random() < self.lean(p["base"], gene) else -1
-            new = mutate_value(self.rng, gene, old, d)
-            if new == old: continue
-            g2[gene] = new; muts.append([gene, old, new])
-        for lo, hi in PAIRS:        # keep windows and bands ordered
-            vlo = g2.get(lo, gs.get(lo)); vhi = g2.get(hi, gs.get(hi))
-            if _num(vlo) and _num(vhi) and vlo >= vhi:
-                muts = [m for m in muts if m[0] not in (lo, hi)]
-                for k in (lo, hi):
-                    if k in p.get("genes", {}): g2[k] = p["genes"][k]
-                    else: g2.pop(k, None)
+        g2, muts = mutate_genes(self.rng, gs, p.get("genes", {}), lambda gene: self.lean(p["base"], gene))
         if not muts: return None
         self.counter += 1
         return {"name": f"{p['base']}_e{self.counter}", "base": p["base"], "src": p["src"], "genes": g2, "gen": p["gen"] + 1,

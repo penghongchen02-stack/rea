@@ -45,6 +45,15 @@ passes against the same book never fill more than the exchange showed; a level's
 over while the exchange still shows the same size there. Multi-leg sets are sized to what cash covers
 before any leg is sent, and unequal fills are unwound at market.
 
+## Deleting losing bots (std, dollar, dollar30, dollar1000, bonelab, top20)
+
+Writing `{"per": 5}` to a dashboard's `prune.json` (`paperbot-data/prune.json` for std, `paperbot-data/<name>/prune.json`
+for the others) deletes every bot whose P/L is below zero at that moment (open positions at mark) and adds one new
+bot for every 5 deleted (rounded up). Each new bot is a child of one of that dashboard's 5 most profitable bots with
+1-3 settings changed, like the evolution universe's children, on a fresh account; it is labelled with its parent and
+changes. Bots that never traded are kept. Deletions and new bots persist in `roster.json` (paperbot/roster.py).
+The first prune ran at 17:15Z on 11-11: 381 bots deleted, 60 added.
+
 ## Evolution universe (port 8086)
 
 The best 20 bots across every other dashboard (mean return over the universes each appears in, bots with at least
