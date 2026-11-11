@@ -70,5 +70,6 @@ P/L rescaled to a $1,000 account, as the mean per market minus half its standard
 Every hour, if the champion has not made money since it was hired (losing, or not trading), it is replaced by the best-scoring bot that has
 not been fired in the last 24 hours; a champion that is up keeps its job. The bank, open positions included,
 carries over between hires. Orders are $1-$30 (Bonereaper-lab variants keep their own contract sizing). The panel
-shows the current hire, P/L since hiring, daily P/L, past champions and the candidate board. Code:
-`paperbot/champion.py`; state: `paperbot-data/champion/champion.json`. Paper results do not guarantee live results.
+shows the current hire, P/L since hiring, daily P/L, past champions and the candidate board. To hire a bot by hand, write `{"key": "<bot>"}` to
+`paperbot-data/champion/hire.json` (any strategy, Bonereaper-lab variant or living evolve member); the hourly
+review still applies. Code: `paperbot/champion.py`; state: `paperbot-data/champion/champion.json`. Paper results do not guarantee live results.

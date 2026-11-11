@@ -110,9 +110,33 @@ class Champion:
     def pnl_since_hire(self):
         return self.acct.equity(self.engine.mf.markets) - self.current["eq_at_hire"] if self.current else 0.0
 
+    def requested(self, now):
+        """A hand-picked hire: <dir>/hire.json {"key": "<bot>"} (consumed once). The key may be any scored candidate,
+        a strategy name, or a member of the evolution universe (its evolved settings are copied)."""
+        p = os.path.join(self.u.dir, "hire.json")
+        if not os.path.exists(p): return
+        try: key = json.load(open(p))["key"]
+        except Exception as e: log.warning("[champion] bad hire.json: %s", e); os.remove(p); return
+        os.remove(p)
+        spec = next((c for c in self.candidates() if c["key"] == key), None)
+        if spec is None:
+            for u in self.engine.universes:
+                ev = getattr(u, "evolver", None)
+                if ev is not None and key in ev.members and ev.members[key]["src"] in self.builders():
+                    m = ev.members[key]; spec = {"key": key, "base": m["base"], "src": m["src"], "genes": m.get("genes", {}), "where": [u.name]}
+            b = self.builders()
+            if spec is None and key in b["main"]: spec = {"key": key, "base": key, "src": "main", "genes": {}, "where": []}
+            if spec is None and key in b["lab"]: spec = {"key": key, "base": key, "src": "lab", "genes": {}, "where": ["bonelab"]}
+        if spec is None: log.warning("[champion] requested hire %s: no such bot", key); return
+        cur = self.current
+        if cur and cur["key"] != key:
+            self.history.append({"key": cur["key"], "hired": cur["hired"], "fired": now, "pnl": round(self.pnl_since_hire(), 2), "why": "replaced by request"})
+        self.hire(spec, now, "picked by the user")
+
     def tick(self, now):
         eq = self.acct.equity(self.engine.mf.markets); day = time.strftime("%Y-%m-%d", time.gmtime(now))
         d = self.days.setdefault(day, {"open": round(eq, 4)}); d["last"] = round(eq, 4); d["pnl"] = round(eq - d["open"], 2)
+        self.requested(now)
         if self.current is None:
             if now < self.ready: return
             c = self.pick(now)
