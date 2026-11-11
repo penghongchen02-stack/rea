@@ -1,5 +1,6 @@
 """Tryout universe (port 8088): the champion's candidates traded side by side under the champion's exact rules
-(BTC, ETH, SOL and XRP 5-minute windows, $1,000 each, $1-$30 orders; Bonereaper-lab variants keep their own sizing),
+(BTC, ETH, SOL and XRP 5-minute windows, $1,000 each; since 11-11 22:40Z every bot sizes its own orders, and the
+replicas of the report traders (paperbot/reports.py) trade their own coins, window lengths and style),
 so every candidate sees the same markets at the same time and is judged on its own live results.
 
 Entry: the best SIZE bots of the pool, every strategy of the other dashboards plus evolve variants (alive or culled
@@ -35,7 +36,8 @@ def luck_k(n): return math.sqrt(2 * math.log(max(n, 2)))
 def builders(cfg):
     from .strategies import build_registry
     from .bonelab import build_lab_registry
-    return {"main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry()}
+    from .reports import build_report_registry
+    return {"main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry()}
 
 
 def pool(engine, skip, b, assets, horizons, min_markets=MIN_POOL, min_per_coin=0):
@@ -75,7 +77,7 @@ def pool(engine, skip, b, assets, horizons, min_markets=MIN_POOL, min_per_coin=0
 class Tryout:
     def __init__(self, universe, engine):
         self.u = universe; self.engine = engine; self.cfg = universe.cfg; self.cash = universe.cash
-        self.assets = tuple(self.cfg["assets"]); self.horizons = tuple(self.cfg["horizons"])
+        self.assets = tuple(self.cfg["assets"]); self.horizons = tuple(self.cfg.get("pool_horizons", self.cfg["horizons"]))
         self.path = os.path.join(universe.dir, "tryout.json")
         u = universe; u.accounts = {}; u.strats = []; u.arbs = {}; u.active = []
         u.ladder = u.ladder_model = u.touch_model = u.xarb = None
@@ -89,13 +91,14 @@ class Tryout:
     # ---- members ---------------------------------------------------------------
     def _attach(self, spec):
         from .sim import Account
-        n = spec["key"]; lab = spec["src"] == "lab"
-        a = Account(n, self.cash, size_mode="contracts" if lab else self.cfg["size_mode"], size_min=self.cfg.get("size_min", 1.0),
-                    size_max=self.cfg.get("size_max", 30.0))
+        n = spec["key"]
+        a = Account(n, self.cash, size_mode="contracts")          # every bot sizes its own orders (user, 11-11 22:40Z)
         a.universe = self.u.name
         obj = self.builders()[spec["src"]][spec["base"]](a)
         for k, v in spec.get("genes", {}).items(): setattr(obj, k, v)
-        if isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)
+        if spec["src"] != "rep":       # pool bots: the champion's coins and 5-minute windows; report replicas keep their own
+            if isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)
+            if isinstance(getattr(obj, "durs", None), (set, tuple, list)): obj.durs = {300}
         obj.name = n
         self.u.accounts[n] = a; self.u.active.append(n); self.u.strats.append(obj); self.members[n] = spec
         self.labels[n] = f"tryout since {time.strftime('%H:%MZ', time.gmtime(spec['joined']))}" + (f" ({', '.join(spec['where'])})" if spec.get("where") else "")

@@ -45,12 +45,14 @@ UNIVERSES = [
     # Champion: one $1,000 bank, BTC/ETH/SOL/XRP 5-minute windows only (user, 11-11 17:20Z), trading as the best-scoring bot of every other
     # dashboard; reviewed hourly and replaced while it is losing (paperbot/champion.py). Orders $1-$30 (3% of the
     # bank at most, the dollar30 proportion).
-    {"name": "champion", "port": int(os.environ.get("PAPERBOT_PORT8", "8087")), "size_mode": "dollar", "dir": os.path.join(DATA, "champion"),
-     "pos_mult": 15.0, "size_min": 1.0, "size_max": 30.0, "cash": 1000.0, "registry": "champion", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m"]},
+    {"name": "champion", "port": int(os.environ.get("PAPERBOT_PORT8", "8087")), "size_mode": "contracts", "dir": os.path.join(DATA, "champion"),
+     "pos_mult": 15.0, "cash": 1000.0, "registry": "champion", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m"]},
     # Tryout: the champion's candidates side by side under the champion's exact rules, $1,000 each; the champion hires
     # only bots that pass here (paperbot/tryout.py; user, 11-11 18:10Z).
-    {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "dollar", "dir": os.path.join(DATA, "tryout"),
-     "pos_mult": 15.0, "size_min": 1.0, "size_max": 30.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m"]},
+    # Every bot sizes its own orders (no $1-$30 range) and the report replicas trade their own coins and windows, so the
+    # universe passes 5- and 15-minute markets; pool bots are held to 5-minute windows (user, 11-11 22:40Z).
+    {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "contracts", "dir": os.path.join(DATA, "tryout"),
+     "pos_mult": 15.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m", "15m"], "pool_horizons": ["5m"]},
 ]
 os.makedirs(DATA, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s",

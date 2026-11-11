@@ -700,7 +700,7 @@ class LateFavourite(LastCallHold):
     MAX_PRICE, when the model's probability beats the price plus the taker fee by EDGE. Never both sides; at most
     WINDOW_CAP dollars per window; held to settlement with LastCallHold's protective exit (confidence collapses)."""
     name = "late_fav"
-    T_MAX = 60; T_MIN = 3; LEAD_BP = 5.0; MAX_PRICE = 0.97; EDGE = 0.01; WINDOW_CAP = 60.0; PERIOD = 2.0
+    T_MAX = 60; T_MIN = 3; LEAD_BP = 5.0; MAX_PRICE = 0.97; EDGE = 0.01; WINDOW_CAP = 60.0; PERIOD = 2.0; ORDER_USD = 20.0
     def __init__(self, account, assets=("btc", "eth", "sol", "xrp"), durs=(300,), seed=17):
         super().__init__(account, seed=seed); self.assets = set(assets); self.durs = set(durs)
     def on_tick(self, market, ctx, now):
@@ -718,9 +718,11 @@ class LateFavourite(LastCallHold):
         pos = acct.positions.get(slug); spent = abs(q) * (pos.avg if q > 0 else 1 - pos.avg) if pos and abs(q) > 1e-9 else 0.0
         if spent >= self.WINDOW_CAP: return
         if lead >= self.LEAD_BP and q >= 0 and ba <= self.MAX_PRICE and p - ba - theta * ba * (1 - ba) >= self.EDGE:
-            acct.take(market, "buy", self.clip, limit=ba, tag=f"late-up {lead:.1f}bp p{p:.3f}")
+            own = acct.size_mode != "dollar"     # own sizing outside the dollar dashboards: about ORDER_USD per order
+            acct.take(market, "buy", round(self.ORDER_USD / ba, 2) if own else self.clip, limit=ba, tag=f"late-up {lead:.1f}bp p{p:.3f}", fixed=own)
         elif lead <= -self.LEAD_BP and q <= 0 and 1 - bb <= self.MAX_PRICE and (1 - p) - (1 - bb) - theta * bb * (1 - bb) >= self.EDGE:
-            acct.take(market, "sell", self.clip, limit=bb, tag=f"late-down {-lead:.1f}bp p{1 - p:.3f}")
+            own = acct.size_mode != "dollar"
+            acct.take(market, "sell", round(self.ORDER_USD / (1 - bb), 2) if own else self.clip, limit=bb, tag=f"late-down {-lead:.1f}bp p{1 - p:.3f}", fixed=own)
 
 
 class Almach(LastCallHold):

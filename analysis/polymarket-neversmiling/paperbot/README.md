@@ -70,6 +70,30 @@ better. The dashboard's Evolution panel lists every cull and the learned leaning
 state: `paperbot-data/evolve/evolve.json` (members, lineage, graveyard, lessons). It runs until the engine is
 stopped; `PAPERBOT_EVOLVE_PERIOD` (seconds) changes the cull interval.
 
+## Report replicas in the tryout (paperbot/reports.py)
+
+Replicas of the nine crypto Up/Down traders in the PR&R reports trade in the tryout with $1,000 each, on their own coins
+and window lengths, sizing their own orders from each trader's reported fill sizes (log-normal through the reported
+median and P95, capped at the reported maximum) and capping dollars per market (user, 11-11 22:40Z):
+
+| replica | coins / windows | style |
+|---|---|---|
+| rep_whiskas | BTC, ETH 5m | rests bids on both sides when the pair costs <= $0.98, legs below $0.90, 2x tilt on a signal; $250/market |
+| rep_doggystyie | BTC 5m | rests both sides in the first 3 minutes; $15-50 fills, $200/market |
+| rep_neversmiling | 4 coins 5m, 15m | rests both sides at $0.30-0.70 in 10-90% of the window, 3x tilt, skips 14-16 UTC; $161/market |
+| rep_flippingsharks | BTC 5m | rests both sides, more on the cheaper one, 60-295 s before close, skips 4, 16, 19, 20 UTC; $222/market |
+| rep_bonereaper | BTC, ETH, SOL 5m, 15m | rests both sides when the pair is <= $1.10, tilt at 2x; 1% of bankroll ($10) per market |
+| rep_pbot6 | 4 coins 5m, 15m | takes the side the model prices 8c+ above its mid (3-8c small), hedge 60-120 s later if the pair < $0.98 |
+| rep_slipme | BTC 5m | opens both sides (60 shares), adds to the favoured side, cheap hedges < $0.20, late adds < $0.97; $300/market |
+| rep_sirmartingale | BTC 5m, 15m, ETH 5m | one side 5c+ below fair value, averages down, sells into strength ($0.80 or +35c); off 23-02 UTC |
+| rep_btc5mscour | BTC 5m | last 120 s, buys the resolving side at $0.90-0.99 unless the lead is < 0.05%; $250/market |
+
+The both-sides traders rest bids: on Polymarket US, Up and Down share one book, so taking both sides costs $1 plus the
+spread, while resting a bid for Up and an offer of YES (a bid for Down) fills a pair at $1 minus the spread. Several of
+these traders earned their profit from liquidity rewards, which the simulation does not pay. The other 29 reports
+(sports, esports, weather, politics) cannot trade here. Since 11-11 22:40Z every tryout bot and the champion size their
+own orders (no $1-$30 range).
+
 ## Late favourite (late_fav)
 
 From the PR&R trader reports (BTC5MScour, SLIP-ME) and their TWAP settlement study: 5-minute windows settle on an
@@ -91,7 +115,7 @@ held size instead of a new random amount. Earlier results on those dashboards in
 ## Tryout universe (port 8088)
 
 The champion's candidates trade side by side under the champion's exact rules (BTC, ETH, SOL and XRP 5-minute windows,
-$1,000 each, $1-$30 orders), so every candidate sees the same markets at the same time. The champion hires only bots
+$1,000 each; every bot sizes its own orders since 11-11 22:40Z), so every candidate sees the same markets at the same time. The champion hires only bots
 that pass here; if none has passed, it keeps its job. A bot passes with, all at once: at least 50 settled windows here,
 P/L above zero, profit on at least 3 of the 4 coins, profit in more than half of the hours it traded, a positive edge
 (share of windows its side won minus the average price it paid for that side), and profit in both the first and the
@@ -110,7 +134,7 @@ variant of the evolution universe (alive, or culled with its settings kept), is 
 P/L rescaled to a $1,000 account, as the mean per market minus half its standard error (at least 20 markets, and at least 5 on every one of the four coins).
 Every hour, if the champion has not made money since it was hired (losing, or not trading), it is replaced by the best bot that has passed the tryout
 (port 8088) and has not been fired in the last 24 hours (none passing: it stays); a champion that is up keeps its job. The bank, open positions included,
-carries over between hires. Orders are $1-$30 (Bonereaper-lab variants keep their own contract sizing). The panel
+carries over between hires. The hired bot sizes its own orders (since 11-11 22:40Z; was $1-$30). The panel
 shows the current hire, P/L since hiring, daily P/L, past champions and the candidate board. To hire a bot by hand, write `{"key": "<bot>"}` to
 `paperbot-data/champion/hire.json` (any strategy, Bonereaper-lab variant or evolve member; add `"base"`, `"src"` and `"genes"` to give settings explicitly); the hourly
 review still applies. Code: `paperbot/champion.py`; state: `paperbot-data/champion/champion.json`. Paper results do not guarantee live results.

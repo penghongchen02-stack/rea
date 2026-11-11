@@ -43,15 +43,16 @@ class Champion:
         if self._builders is None:
             from .strategies import build_registry
             from .bonelab import build_lab_registry
-            self._builders = {"main": build_registry(self.cfg.get("pos_mult", 15.0)), "lab": build_lab_registry()}
+            from .reports import build_report_registry
+            self._builders = {"main": build_registry(self.cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry()}
         return self._builders
 
     def hire(self, spec, now, reason):
         a = self.acct; a.cancel_all()
-        a.size_mode = "contracts" if spec["src"] == "lab" else "dollar"
+        a.size_mode = "contracts"           # the hired bot sizes its own orders, as in the tryout (user, 11-11 22:40Z)
         obj = self.builders()[spec["src"]][spec["base"]](a)
         for k, v in spec.get("genes", {}).items(): setattr(obj, k, v)
-        if isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)   # trade every coin of this universe
+        if spec["src"] != "rep" and isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)   # every coin here; replicas keep theirs
         obj.name = spec["key"]
         self.u.strats = [obj]
         eq = a.equity(self.engine.mf.markets)
