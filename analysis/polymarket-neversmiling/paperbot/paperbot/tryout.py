@@ -203,7 +203,21 @@ class Tryout:
         self.next_review = now + REVIEW; self.save()
         log.info("[tryout] review: dropped %s; added %s", out, added)
 
+    def requested(self, now):
+        """A hand-added candidate: <dir>/add.json {"key", "base", "src", "genes"?} (consumed once); may exceed SIZE."""
+        p = os.path.join(self.u.dir, "add.json")
+        if not os.path.exists(p): return
+        try: req = json.load(open(p))
+        except Exception as e: log.warning("[tryout] bad add.json: %s", e); req = None
+        os.remove(p)
+        if not req or req.get("key") in self.members or req.get("base") not in self.builders().get(req.get("src"), {}):
+            log.warning("[tryout] cannot add %s", req); return
+        spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"],
+                "joined": now, "entry_score": None, "entry_n": 0}
+        self._attach(spec); self._stats_at = 0; self.save(); log.info("[tryout] added %s by request", spec["key"])
+
     def tick(self, now):
+        self.requested(now)
         if not self.members:
             if now < self.ready: return
             added = self.fill(now); self.next_review = now + REVIEW; self.save()

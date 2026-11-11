@@ -36,7 +36,7 @@ class Champion:
         u = universe; u.accounts = {NAME: self.acct}; u.active = [NAME]; u.strats = []; u.arbs = {}
         u.ladder = u.ladder_model = u.touch_model = u.xarb = None
         self.current = None; self.history = []; self.days = {}; self.next_review = None; self.ready = time.time() + WARMUP
-        self.labels = {}; self.board = []; self._builders = None
+        self.labels = {}; self.board = []; self._builders = None; self.paused = False
 
     # ---- construction --------------------------------------------------------
     def builders(self):
@@ -57,7 +57,7 @@ class Champion:
         eq = a.equity(self.engine.mf.markets)
         self.current = dict(spec, hired=now, eq_at_hire=round(eq, 4), reason=reason)
         self.labels[NAME] = f"now trading as {spec['key']} (hired {time.strftime('%H:%MZ', time.gmtime(now))}; {reason})"
-        self.next_review = now + REVIEW; self.save()
+        self.next_review = now + REVIEW; self.paused = False; self.save()
         log.info("[champion] hired %s (%s)", spec["key"], reason)
 
     # ---- persistence ---------------------------------------------------------
@@ -65,7 +65,8 @@ class Champion:
         if not os.path.exists(self.path): return
         try:
             s = json.load(open(self.path))
-            self.history = s.get("history", []); self.days = s.get("days", {}); self.board = s.get("board", [])
+            self.history = s.get("history", []); self.days = s.get("days", {}); self.board = s.get("board", []); self.paused = s.get("paused", False)
+            if self.paused: self.labels[NAME] = "paused: waiting for a bot to pass the tryout"
             cur = s.get("current")
             if cur:
                 hired, eq0, nr = cur["hired"], cur["eq_at_hire"], s.get("next_review")
@@ -75,7 +76,7 @@ class Champion:
         except Exception as e: log.warning("[champion] could not restore: %s", e)
 
     def save(self):
-        s = {"current": self.current, "history": self.history[-500:], "days": self.days, "next_review": self.next_review, "board": self.board[:20]}
+        s = {"current": self.current, "paused": self.paused, "history": self.history[-500:], "days": self.days, "next_review": self.next_review, "board": self.board[:20]}
         tmp = self.path + ".tmp"; json.dump(s, open(tmp, "w")); os.replace(tmp, self.path)
 
     # ---- choosing --------------------------------------------------------------
@@ -110,9 +111,17 @@ class Champion:
         a strategy name, or a member of the evolution universe (its evolved settings are copied)."""
         p = os.path.join(self.u.dir, "hire.json")
         if not os.path.exists(p): return
-        try: req = json.load(open(p)); key = req["key"]
+        try: req = json.load(open(p)); key = req.get("key")
         except Exception as e: log.warning("[champion] bad hire.json: %s", e); os.remove(p); return
         os.remove(p)
+        if req.get("pause"):          # stop trading until a tryout bot passes; open positions still settle
+            cur = self.current
+            if cur:
+                self.history.append({"key": cur["key"], "hired": cur["hired"], "fired": now, "pnl": round(self.pnl_since_hire(), 2), "why": "paused by request"})
+            self.acct.cancel_all(); self.u.strats = []; self.current = None; self.paused = True; self.ready = now
+            self.labels[NAME] = "paused: waiting for a bot to pass the tryout"; self.save()
+            log.info("[champion] paused"); return
+        if not key: return
         cands = self.candidates(); self.board = cands[:20]
         spec = next((c for c in cands if c["key"] == key), None)
         if spec is None and req.get("base") in self.builders().get(req.get("src"), {}):   # explicit settings
@@ -155,7 +164,7 @@ class Champion:
 
     def snapshot(self, now):
         cur = self.current
-        return {"assets": list(self.assets), "horizons": list(self.horizons), "review": REVIEW, "min_markets": MIN_MARKETS,
+        return {"paused": self.paused, "assets": list(self.assets), "horizons": list(self.horizons), "review": REVIEW, "min_markets": MIN_MARKETS,
                 "ready_in": round(self.ready - now) if cur is None else None,
                 "current": cur and {k: cur.get(k) for k in ("key", "base", "src", "genes", "score", "mean", "n", "where", "hired", "reason")},
                 "pnl_since_hire": round(self.pnl_since_hire(), 2) if cur else None,

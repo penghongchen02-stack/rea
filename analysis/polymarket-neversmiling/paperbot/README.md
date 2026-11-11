@@ -70,6 +70,24 @@ better. The dashboard's Evolution panel lists every cull and the learned leaning
 state: `paperbot-data/evolve/evolve.json` (members, lineage, graveyard, lessons). It runs until the engine is
 stopped; `PAPERBOT_EVOLVE_PERIOD` (seconds) changes the cull interval.
 
+## Late favourite (late_fav)
+
+From the PR&R trader reports (BTC5MScour, SLIP-ME) and their TWAP settlement study: 5-minute windows settle on an
+average of the final seconds, so a clear leader late in the window rarely flips while thin leads stay near coin flips.
+In the last 60 seconds of a BTC/ETH/SOL/XRP 5-minute window, late_fav buys the side whose projected settlement leads
+the price to beat by at least 5 bp, at no more than 97c, when the model's probability beats the price plus the taker
+fee by 1c; one side only, at most $60 per window, held to settlement (protective exit if confidence collapses). It
+runs in every main dashboard and in the tryout; the champion hires it only if it passes the tryout.
+
+Champion pause: `{"pause": true}` in `paperbot-data/champion/hire.json` stops trading (open positions still settle);
+the champion resumes with the first bot that passes the tryout. Paused at 21:13Z on 11-11 at the user's request.
+Hand-add a tryout candidate with `{"key", "base", "src"}` in `paperbot-data/tryout/add.json`.
+
+Sizing fix (11-11 21:20Z): dollar-mode orders that sell YES (buy the Down side) were sized at the YES price, so a $30
+order on the 94c Down side became 500 contracts; 1,052 such fills exceeded their dashboard's maximum order in dollar,
+dollar30, top20 and tryout. Orders are now sized by what the side costs (1 - price for a sell), and exits keep the
+held size instead of a new random amount. Earlier results on those dashboards include the oversized Down orders.
+
 ## Tryout universe (port 8088)
 
 The champion's candidates trade side by side under the champion's exact rules (BTC, ETH, SOL and XRP 5-minute windows,

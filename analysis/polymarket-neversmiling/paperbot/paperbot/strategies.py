@@ -638,6 +638,7 @@ def build_registry(pos_mult=1.0):
     reg["b55f"] = scaled(BurstLean, name="b55f", assets=("btc", "eth", "sol", "xrp"), durs=(900,), lean=False, clip=2.0, pair_cap=0.98, period=(15, 30))
     reg["whiskas_taker"] = scaled(BurstLean, name="whiskas_taker", assets=("btc", "eth"), durs=(300,), lean=True, clip=1.0, pair_cap=0.97, period=(4, 8))
     reg["bonereaper"] = scaled(Bonereaper); reg["almach"] = scaled(Almach); reg["arcsine"] = scaled(Arcsine)
+    reg["late_fav"] = scaled(LateFavourite)
     # constructive round (no rebates assumed anywhere)
     reg["consensus"] = scaled(Param, "consensus", 30, 90, 1.5, 0.90, "take", (300,), ("btc", "eth"), 0)
     reg["stairstep"] = scaled(Stairstep); reg["lastcent"] = scaled(LastCent)
@@ -689,6 +690,37 @@ class Bonereaper(LastCallHold):
             acct.take(market, "buy", n, limit=ba, tag=f"bone-up {ba:.2f}")
         elif 0.07 <= 1 - bb <= 0.70 and (1 - p) - (1 - bb) - theta * bb * (1 - bb) > 0.03 and -q + n <= self.max_pos:
             acct.take(market, "sell", n, limit=bb, tag=f"bone-down {1-bb:.2f}")
+
+
+class LateFavourite(LastCallHold):
+    """Late favourite (user, 11-11 21:10Z), from the PR&R trader reports (BTC5MScour, SLIP-ME) and their TWAP settlement
+    study: 5-minute windows settle on an average of the final seconds, so a clear leader late in the window rarely
+    flips, while thin leads (under 1-2 bp) are still near coin flips. In the last T_MAX seconds of a 5-minute window,
+    buy the side whose projected settlement leads the price to beat by at least LEAD_BP basis points, at no more than
+    MAX_PRICE, when the model's probability beats the price plus the taker fee by EDGE. Never both sides; at most
+    WINDOW_CAP dollars per window; held to settlement with LastCallHold's protective exit (confidence collapses)."""
+    name = "late_fav"
+    T_MAX = 60; T_MIN = 3; LEAD_BP = 5.0; MAX_PRICE = 0.97; EDGE = 0.01; WINDOW_CAP = 60.0; PERIOD = 2.0
+    def __init__(self, account, assets=("btc", "eth", "sol", "xrp"), durs=(300,), seed=17):
+        super().__init__(account, seed=seed); self.assets = set(assets); self.durs = set(durs)
+    def on_tick(self, market, ctx, now):
+        if market.asset not in self.assets or market.dur not in self.durs: return
+        slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
+        if left < self.T_MIN or market.state not in (None, "MARKET_STATE_OPEN"): return
+        self.manage(market, ctx, now)
+        if left > self.T_MAX or now < st["next_take"]: return
+        bb, ba = market.best_bid, market.best_ask
+        if bb is None or ba is None: return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is None or det.get("index_age", 99) > 8 or not det.get("K"): return
+        st["next_take"] = now + self.PERIOD
+        lead = (det["mean"] - det["K"]) / det["K"] * 1e4; q = self.pos(slug); theta = acct.theta
+        pos = acct.positions.get(slug); spent = abs(q) * (pos.avg if q > 0 else 1 - pos.avg) if pos and abs(q) > 1e-9 else 0.0
+        if spent >= self.WINDOW_CAP: return
+        if lead >= self.LEAD_BP and q >= 0 and ba <= self.MAX_PRICE and p - ba - theta * ba * (1 - ba) >= self.EDGE:
+            acct.take(market, "buy", self.clip, limit=ba, tag=f"late-up {lead:.1f}bp p{p:.3f}")
+        elif lead <= -self.LEAD_BP and q <= 0 and 1 - bb <= self.MAX_PRICE and (1 - p) - (1 - bb) - theta * bb * (1 - bb) >= self.EDGE:
+            acct.take(market, "sell", self.clip, limit=bb, tag=f"late-down {-lead:.1f}bp p{1 - p:.3f}")
 
 
 class Almach(LastCallHold):

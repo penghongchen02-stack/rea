@@ -99,9 +99,19 @@ class Account:
         d = math.exp(self.rng.uniform(math.log(self.size_min), math.log(self.size_max)))
         return round(d / max(price, 0.01), 2)
 
+    def order_qty(self, slug, side, price, qty):
+        """Contracts for a strategy order in dollar mode. The part that closes a held position keeps the caller's
+        count (an exit must not be resized into a flip); the opening part is a random dollar amount divided by what
+        one contract of that side costs: the price for a buy, 1 - price for a sell (a short YES is a long NO). Sizing
+        a sell at its YES price made a $30 order on the 94c Down side 500 contracts (11-11 21:20Z)."""
+        if self.size_mode != "dollar": return qty
+        p = self.positions.get(slug); held = p.qty if p and not p.closed else 0.0
+        if (side == "sell" and held > 1e-9) or (side == "buy" and held < -1e-9): return min(qty, abs(held))
+        return self.size_for(price if side == "buy" else 1 - price, qty)
+
     def place(self, market, side, price, qty, post_only=False, tag="", fixed=False):
         """fixed=True keeps the caller's contract count (arbitrage legs must match); otherwise dollar universes resize."""
-        price = round(max(0.01, min(0.99, price)), 2); qty = round(qty if fixed else self.size_for(price, qty), 2)
+        price = round(max(0.01, min(0.99, price)), 2); qty = round(qty if fixed else self.order_qty(market.slug, side, price, qty), 2)
         if qty < market.min_qty: return None
         need = self.cash_needed(market.slug, side, price, qty)
         if need > 1e-9 and need > self.buying_power() + 1e-9:
@@ -124,7 +134,7 @@ class Account:
         px = market.best_ask if side == "buy" else market.best_bid
         if px is None: return None
         if limit is not None and ((side == "buy" and px > limit) or (side == "sell" and px < limit)): return None
-        o = Order(market.slug, side, limit if limit is not None else px, round(qty if fixed else self.size_for(px, qty), 2), False, tag)
+        o = Order(market.slug, side, limit if limit is not None else px, round(qty if fixed else self.order_qty(market.slug, side, px, qty), 2), False, tag)
         if o.qty < market.min_qty: return None
         need = self.cash_needed(market.slug, side, o.price, o.qty)
         if need > 1e-9 and need > self.buying_power() + 1e-9: self.rejected += 1; return None

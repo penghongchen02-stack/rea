@@ -106,7 +106,7 @@ const pl=v=>'<span style="color:'+(v>=0?'#1baf7a':'#e34948')+'">'+(v>=0?'+':'')+
 const hm=t=>new Date(t*1000).toISOString().slice(11,16)+'Z';
 render=function(){base();const C=S.champion,card=document.getElementById('champcard');if(!C){card.style.display='none';return}card.style.display='';
 let h='';const c=C.current;
-if(!c)h+='Choosing the first champion'+(C.ready_in!=null?' in '+mmss(C.ready_in):'')+'&hellip;<br>';
+if(!c)h+=(C.paused?'<b>Paused</b>: not trading; it resumes with the first bot that passes the tryout (port 8088). Open positions still settle.':'Choosing the first champion'+(C.ready_in!=null?' in '+mmss(C.ready_in):'')+'&hellip;')+'<br>';
 else h+='<b>Trading as '+esc(c.key)+'</b> since '+hm(c.hired)+' &middot; P/L since hired '+pl(C.pnl_since_hire)+' &middot; next review in '+mmss(C.next_review_in)+'<br><span style="color:var(--muted)">'+esc(c.reason)+(c.where?' &middot; data from '+esc(c.where.join(', ')):'')+'</span><br>';
 h+='<span style="color:var(--muted)">Every hour: if the champion has not made money since it was hired (losing or not trading), it is replaced by the best bot that has passed the tryout (port 8088) and was not fired in the last 24 h; if none has passed, it keeps its job. Board score = average P/L per settled BTC/ETH/SOL/XRP 5-minute market (rescaled to a $1,000 account) minus sqrt(2 ln N) standard errors, at least '+C.min_markets+' markets and 5 on every coin.</span>';
 const D=Object.entries(C.days||{});if(D.length)h+='<div style="margin-top:6px"><b>Daily P/L (UTC)</b>: '+D.map(([d,v])=>d+' '+pl(v.pnl||0)).join(' &middot; ')+'</div>';
