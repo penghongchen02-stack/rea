@@ -42,6 +42,11 @@ UNIVERSES = [
     # sizing). Every hour the bottom 5 are replaced by 3 children of the top 5 and 2 immigrants (paperbot/evolve.py).
     {"name": "evolve", "port": int(os.environ.get("PAPERBOT_PORT7", "8086")), "size_mode": "dollar", "dir": os.path.join(DATA, "evolve"),
      "pos_mult": 100.0, "size_min": 0.1, "size_max": 50.0, "cash": 1000.0, "registry": "evolve"},
+    # Champion: one $1,000 bank, BTC/ETH 5m and 15m windows only, trading as the best-scoring bot of every other
+    # dashboard; reviewed hourly and replaced while it is losing (paperbot/champion.py). Orders $1-$30 (3% of the
+    # bank at most, the dollar30 proportion).
+    {"name": "champion", "port": int(os.environ.get("PAPERBOT_PORT8", "8087")), "size_mode": "dollar", "dir": os.path.join(DATA, "champion"),
+     "pos_mult": 15.0, "size_min": 1.0, "size_max": 30.0, "cash": 1000.0, "registry": "champion", "assets": ["btc", "eth"], "horizons": ["5m", "15m"]},
 ]
 os.makedirs(DATA, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -71,8 +76,11 @@ class Universe:
         self.store = Store(os.path.join(self.dir, "paper.db")); self.engine = engine
         self.cash = cfg.get("cash", START_CASH)
         mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0))
-        self.lab = cfg.get("registry") == "bonelab"; self.evolver = None
-        if cfg.get("registry") == "evolve":     # members are created and replaced at run time by the Evolver
+        self.lab = cfg.get("registry") == "bonelab"; self.evolver = None; self.champion = None
+        if cfg.get("registry") == "champion":   # one account; its strategy is hired and replaced by the Champion
+            from .champion import Champion
+            self.champion = Champion(self, engine)
+        elif cfg.get("registry") == "evolve":     # members are created and replaced at run time by the Evolver
             from .evolve import Evolver
             self.accounts = {}; self.strats = []; self.arbs = {}; self.active = []
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None
@@ -84,11 +92,11 @@ class Universe:
             reg = build_registry(cfg.get("pos_mult", 1.0))
             self.accounts = {k: mk(k) for k in list(reg) + list(LADDER_BOTS) + list(ARB_BOTS)}
         for a in self.accounts.values(): a.universe = self.name
-        if self.evolver is None:
+        if self.evolver is None and self.champion is None:
             active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
             self.active = list(self.accounts) if active == ["all"] else active
             self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
-        if self.evolver is not None: pass        # the Evolver built its own scanners
+        if self.evolver is not None or self.champion is not None: pass        # built their own members
         elif self.lab:
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None; self.arbs = {}
         else:
@@ -112,6 +120,7 @@ class Universe:
         if self.lab:
             from .bonelab import LAB_LABELS; self.labels = dict(LAB_LABELS)
         if self.evolver is not None: self.labels = self.evolver.labels
+        if self.champion is not None: self.labels = self.champion.labels; self.champion.restore()
         self._load()
 
     def _load(self):
@@ -171,6 +180,7 @@ class Universe:
             "config": {"universe": self.name, "size_mode": self.cfg["size_mode"], "size_range": [self.cfg.get("size_min"), self.cfg.get("size_max")], "active": self.active, "labels": self.labels,
                        "start_cash": self.cash, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
         if self.evolver is not None: self.last_state["evolution"] = self.evolver.snapshot(now)
+        if self.champion is not None: self.last_state["champion"] = self.champion.snapshot(now)
 
 
 class Engine:
@@ -286,6 +296,7 @@ class Engine:
                     for u, a in self.all_accounts(): a.on_book(m)
                     if m.kind != "updown": continue
                     for u in self.universes:
+                        if "assets" in u.cfg and (m.asset not in u.cfg["assets"] or m.horizon not in u.cfg["horizons"]): continue
                         for s in u.strats:
                             try: s.on_tick(m, ctx, now)
                             except Exception as e: self.errors += 1; log.exception("[%s] strategy %s on %s: %s", u.name, s.name, m.slug, e)
@@ -298,6 +309,9 @@ class Engine:
                     if u.evolver is not None:
                         try: u.evolver.tick(now)
                         except Exception as e: self.errors += 1; log.exception("[%s] evolve: %s", u.name, e)
+                    if u.champion is not None:
+                        try: u.champion.tick(now)
+                        except Exception as e: self.errors += 1; log.exception("[%s] champion: %s", u.name, e)
                 if now - last_eq >= 5:
                     for u in self.universes:
                         for a in u.accounts.values():

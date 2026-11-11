@@ -26,6 +26,7 @@ canvas{width:100%;height:260px;display:block}.tip{position:absolute;pointer-even
 <div class="sub">$100 each, live Polymarket US crypto Up/Down markets (BTC, ETH, SOL, XRP · 5m and 15m). Add <span class="mono">?bots=whiskas</span> (or any comma list of old, improved, final, whiskas, lastcall, lastcall_tilt, lastcall_hold, lastcall_rest) to the URL to focus on some bots. Settlement index: CF Benchmarks BRTI and the other reference indices as served by Polymarket US, checked against cfbenchmarks.com. Fast signal: Coinbase spot. Fees: Tier 1 taker coefficient 0.095, no rebates.</div>
 <div class="chips" id="chips"></div>
 <div class="card" style="margin-bottom:14px"><h2>Leaderboard (all bots, by P/L)</h2><div class="wrap"><table id="lb"><thead><tr><th>Bot</th><th>key</th><th>Equity</th><th>P/L</th><th>Fees</th><th>Fills</th><th>Windows</th><th>Profitable</th></tr></thead><tbody></tbody></table></div></div>
+<div class="card" id="champcard" style="margin-bottom:14px;display:none"><h2>Champion ($1,000 bank, BTC/ETH 5m and 15m only)</h2><div id="champ" class="mono" style="font-size:12px;line-height:1.6"></div></div>
 <div class="card" id="evocard" style="margin-bottom:14px;display:none"><h2>Evolution (bottom 5 replaced by 3 children of the top 5 and 2 immigrants)</h2><div id="evo" class="mono" style="font-size:12px;line-height:1.6"></div></div>
 <div class="card" style="margin-bottom:14px"><h2>Ladder arbitrage scanner</h2><div id="ladder" class="mono" style="font-size:12px"></div></div>
 <div class="grid" id="bots"></div>
@@ -95,4 +96,20 @@ for(const c of E.culls){h+='<div style="margin-top:6px"><b>'+hm(c.ts)+'</b> remo
 const L=Object.entries(E.lessons||{}).filter(([k,v])=>v.up[1]+v.down[1]>0).sort((a,b)=>Math.abs(b[1].lean_up-0.5)-Math.abs(a[1].lean_up-0.5)).slice(0,10);
 if(L.length){h+='<div style="margin-top:8px"><b>Learned leanings</b> (excess return vs the median of children that moved a setting up or down)<br>'+L.map(([k,v])=>esc(k).replace('|',' &middot; ')+': up '+(v.up[1]?(v.up[0]/v.up[1]*100).toFixed(2)+'% (n='+v.up[1]+')':'-')+', down '+(v.down[1]?(v.down[0]/v.down[1]*100).toFixed(2)+'% (n='+v.down[1]+')':'-')+' &rarr; next step up with p='+v.lean_up).join('<br>')+'</div>'}
 document.getElementById('evo').innerHTML=h};})();
+</script>
+<script>
+// Champion panel: shown only when the universe reports a "champion" block (port 8087).
+(function(){const base=render;const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]);
+const mmss=s=>s==null?'-':(s<0?'due':Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s');
+const pl=v=>'<span style="color:'+(v>=0?'#1baf7a':'#e34948')+'">'+(v>=0?'+':'')+v.toFixed(2)+'</span>';
+const hm=t=>new Date(t*1000).toISOString().slice(11,16)+'Z';
+render=function(){base();const C=S.champion,card=document.getElementById('champcard');if(!C){card.style.display='none';return}card.style.display='';
+let h='';const c=C.current;
+if(!c)h+='Choosing the first champion'+(C.ready_in!=null?' in '+mmss(C.ready_in):'')+'&hellip;<br>';
+else h+='<b>Trading as '+esc(c.key)+'</b> since '+hm(c.hired)+' &middot; P/L since hired '+pl(C.pnl_since_hire)+' &middot; next review in '+mmss(C.next_review_in)+'<br><span style="color:var(--muted)">'+esc(c.reason)+(c.where?' &middot; data from '+esc(c.where.join(', ')):'')+'</span><br>';
+h+='<span style="color:var(--muted)">Every hour: if the champion is losing since it was hired, it is replaced by the best-scoring bot not fired in the last 24 h. Score = average P/L per settled BTC/ETH 5m/15m market (rescaled to a $1,000 account) minus half its standard error, at least '+C.min_markets+' markets.</span>';
+const D=Object.entries(C.days||{});if(D.length)h+='<div style="margin-top:6px"><b>Daily P/L (UTC)</b>: '+D.map(([d,v])=>d+' '+pl(v.pnl||0)).join(' &middot; ')+'</div>';
+if((C.history||[]).length)h+='<div style="margin-top:6px"><b>Past champions</b><br>'+C.history.map(x=>esc(x.key)+' '+hm(x.hired)+'&ndash;'+(x.fired?hm(x.fired):'')+' '+pl(x.pnl)).join('<br>')+'</div>';
+if((C.board||[]).length)h+='<div style="margin-top:6px"><b>Candidates</b> (score / mean per market, markets)<br>'+C.board.map((x,i)=>(i+1)+'. '+esc(x.key)+' '+pl(x.score)+' / '+pl(x.mean)+', n='+x.n+' <span style="color:var(--muted)">('+esc(x.where.join(', '))+')</span>').join('<br>')+'</div>';
+document.getElementById('champ').innerHTML=h};})();
 </script></body></html>
