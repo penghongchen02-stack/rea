@@ -37,11 +37,11 @@ UNIVERSES = [
     # $5,000 each; every order a random $1-$150 (3% of the account at most, the dollar30/dollar1000 proportion)
     {"name": "top20", "port": int(os.environ.get("PAPERBOT_PORT6", "8085")), "size_mode": "dollar", "dir": os.path.join(DATA, "top20"),
      "pos_mult": 75.0, "size_min": 1.0, "size_max": 150.0, "cash": 5000.0, "only": TOP20},
-    # Evolution: the best 20 bots across every other dashboard, $1,000 each, orders $0.10-$30 (the dollar30 sizing;
-    # Bonereaper-lab variants keep their own sizing). Every 30 minutes the bottom 5 are replaced by mutated children
-    # of the top 5 (paperbot/evolve.py).
+    # Evolution: the best 20 bots across every other dashboard, $1,000 each, every order a random $0.10-$200 (user's
+    # choice, 11-11 04:40Z; position caps scaled like the top20 universe; Bonereaper-lab variants keep their own
+    # sizing). Every 30 minutes the bottom 5 are replaced by mutated children of the top 5 (paperbot/evolve.py).
     {"name": "evolve", "port": int(os.environ.get("PAPERBOT_PORT7", "8086")), "size_mode": "dollar", "dir": os.path.join(DATA, "evolve"),
-     "pos_mult": 15.0, "size_min": 0.1, "size_max": 30.0, "cash": 1000.0, "registry": "evolve"},
+     "pos_mult": 100.0, "size_min": 0.1, "size_max": 200.0, "cash": 1000.0, "registry": "evolve"},
 ]
 os.makedirs(DATA, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s",

@@ -48,8 +48,8 @@ before any leg is sent, and unequal fills are unwound at market.
 ## Evolution universe (port 8086)
 
 The best 20 bots across every other dashboard (mean return over the universes each appears in, bots with at least
-one fill) start with $1,000 each; orders are a random $0.10-$30 like the dollar30 universe, and Bonereaper-lab
-variants keep their own sizing. Every 30 minutes the 5 lowest by P/L are removed and replaced by 5 children of the
+one fill) start with $1,000 each; every order is a random $0.10-$200, and Bonereaper-lab variants keep their own
+sizing. Every 30 minutes the 5 lowest by P/L are removed and replaced by 5 children of the
 current top 5 (picked 5:4:3:2:1 by rank). A child copies its parent's strategy and settings and changes 1-3 tuning
 numbers (price caps, z thresholds, timing windows, edges, sizes); request-rate settings are never changed. Each
 child is scored once, after a full period, by its return minus the median, and that score is credited to the
