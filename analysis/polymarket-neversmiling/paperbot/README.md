@@ -72,13 +72,13 @@ stopped; `PAPERBOT_EVOLVE_PERIOD` (seconds) changes the cull interval.
 
 ## Champion universe (port 8087)
 
-One $1,000 bank that trades only BTC, ETH, SOL and XRP 5-minute and 15-minute Up/Down windows (Polymarket US lists no
+One $1,000 bank that trades only BTC, ETH, SOL and XRP 5-minute Up/Down windows (Polymarket US lists no
 30-minute windows). It trades as the single best bot of every other dashboard: each strategy, and each evolved
-variant alive in the evolution universe, is scored on its settled 5m/15m markets of those coins only, with every market's
-P/L rescaled to a $1,000 account, as the mean per market minus half its standard error (at least 20 markets).
+variant of the evolution universe (alive, or culled with its settings kept), is scored on its settled 5m markets of those coins only, with every market's
+P/L rescaled to a $1,000 account, as the mean per market minus half its standard error (at least 20 markets, and at least 5 on every one of the four coins).
 Every hour, if the champion has not made money since it was hired (losing, or not trading), it is replaced by the best-scoring bot that has
 not been fired in the last 24 hours; a champion that is up keeps its job. The bank, open positions included,
 carries over between hires. Orders are $1-$30 (Bonereaper-lab variants keep their own contract sizing). The panel
 shows the current hire, P/L since hiring, daily P/L, past champions and the candidate board. To hire a bot by hand, write `{"key": "<bot>"}` to
-`paperbot-data/champion/hire.json` (any strategy, Bonereaper-lab variant or living evolve member); the hourly
+`paperbot-data/champion/hire.json` (any strategy, Bonereaper-lab variant or evolve member; add `"base"`, `"src"` and `"genes"` to give settings explicitly); the hourly
 review still applies. Code: `paperbot/champion.py`; state: `paperbot-data/champion/champion.json`. Paper results do not guarantee live results.

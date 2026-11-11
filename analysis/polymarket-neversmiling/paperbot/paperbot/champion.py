@@ -1,10 +1,11 @@
-"""Champion universe: one $1,000 account that trades only the configured coins (BTC, ETH, SOL, XRP) 5- and 15-minute Up/Down windows with the
+"""Champion universe: one $1,000 account that trades only the configured coins (BTC, ETH, SOL, XRP) 5-minute Up/Down windows with the
 single best bot of every other dashboard, and replaces it every hour while it is losing.
 
 Choosing: every bot of every other dashboard (and every evolved variant alive in the evolution universe) is scored
 on its settled markets of those coins and horizons only, with each market's P/L rescaled to a $1,000 account (P/L / that
 universe's starting cash * 1,000). Score = mean per market minus half its standard error; at least MIN_MARKETS
-markets. Only strategies can be hired (whole-book scanners cannot be limited to these markets).
+markets, and at least MIN_PER_COIN on every configured coin, so it is used to all of them. Evolved
+variants the evolution universe has culled keep their settings and can still be hired. Only strategies can be hired (whole-book scanners cannot be limited to these markets).
 
 Review: every hour. If the champion has not made money since it was hired (losing, or not trading at all; after at
 least one full hour), it is fired and the best-scoring bot that has not been fired in the last 24 hours is hired; the $1,000 bank carries over,
@@ -17,7 +18,7 @@ import os, json, math, time, logging, statistics
 
 log = logging.getLogger("champion")
 REVIEW = float(os.environ.get("PAPERBOT_CHAMPION_REVIEW", "3600"))
-MIN_MARKETS = 20; COOLDOWN = 86400.0; WARMUP = 60.0
+MIN_MARKETS = 20; MIN_PER_COIN = 5; COOLDOWN = 86400.0; WARMUP = 60.0
 NAME = "champion"
 
 
@@ -66,7 +67,7 @@ class Champion:
             if cur:
                 hired, eq0, nr = cur["hired"], cur["eq_at_hire"], s.get("next_review")
                 self.hire(cur, hired, cur.get("reason", "restored"))
-                self.current["eq_at_hire"] = eq0; self.next_review = nr or hired + REVIEW
+                self.current["eq_at_hire"] = eq0; self.next_review = nr or hired + REVIEW; self.save()
             log.info("[champion] restored: %s", cur and cur["key"])
         except Exception as e: log.warning("[champion] could not restore: %s", e)
 
@@ -77,16 +78,18 @@ class Champion:
     # ---- choosing --------------------------------------------------------------
     def candidates(self):
         """Every hireable bot, best score first: [{key, base, src, genes, score, mean, n, where}]."""
-        b = self.builders(); per = {}; info = {}
-        q = (f"select bot, pnl_total from settlements where fills > 0 and asset in ({','.join('?' * len(self.assets))}) "
+        b = self.builders(); per = {}; coins = {}; info = {}
+        q = (f"select bot, asset, pnl_total from settlements where fills > 0 and asset in ({','.join('?' * len(self.assets))}) "
              f"and horizon in ({','.join('?' * len(self.horizons))})")
         for u in self.engine.universes:
             if u is self.u: continue
-            ev = u.evolver.members if getattr(u, "evolver", None) is not None else None
-            for bot, pnl in u.store.query(q, self.assets + self.horizons):
+            ev = None
+            if getattr(u, "evolver", None) is not None:      # live members, and culled ones whose settings were kept
+                ev = {g["name"]: g for g in u.evolver.graveyard if "genes" in g}; ev.update(u.evolver.members)
+            for bot, asset, pnl in u.store.query(q, self.assets + self.horizons):
                 if ev is not None:
                     spec = ev.get(bot)
-                    if spec is None or spec["src"] not in b: continue      # dead evolve members keep no settings
+                    if spec is None or spec["src"] not in b: continue
                     genes = spec.get("genes", {}); base = spec["base"]; src = spec["src"]
                     key = bot if genes else base
                 else:
@@ -94,13 +97,13 @@ class Champion:
                     src = "lab" if u.name == "bonelab" and bot in b["lab"] else ("main" if bot in b["main"] else None)
                     if src is None: continue                                # scanners and ladder bots
                     genes = {}; base = key = bot
-                per.setdefault(key, []).append(pnl / u.cash * 1000.0)
+                per.setdefault(key, []).append(pnl / u.cash * 1000.0); coins.setdefault(key, {}).setdefault(asset, 0); coins[key][asset] += 1
                 info.setdefault(key, {"key": key, "base": base, "src": src, "genes": genes, "where": set()})["where"].add(u.name)
         out = []
         for k, xs in per.items():
-            if len(xs) < MIN_MARKETS: continue
+            if len(xs) < MIN_MARKETS or any(coins[k].get(a, 0) < MIN_PER_COIN for a in self.assets): continue
             m = statistics.mean(xs); se = statistics.stdev(xs) / math.sqrt(len(xs))
-            out.append(dict(info[k], where=sorted(info[k]["where"]), score=round(m - 0.5 * se, 3), mean=round(m, 3), n=len(xs), total=round(sum(xs), 1)))
+            out.append(dict(info[k], where=sorted(info[k]["where"]), score=round(m - 0.5 * se, 3), mean=round(m, 3), n=len(xs), total=round(sum(xs), 1), coins=coins[k]))
         out.sort(key=lambda c: -c["score"])
         return out
 
@@ -118,10 +121,13 @@ class Champion:
         a strategy name, or a member of the evolution universe (its evolved settings are copied)."""
         p = os.path.join(self.u.dir, "hire.json")
         if not os.path.exists(p): return
-        try: key = json.load(open(p))["key"]
+        try: req = json.load(open(p)); key = req["key"]
         except Exception as e: log.warning("[champion] bad hire.json: %s", e); os.remove(p); return
         os.remove(p)
-        spec = next((c for c in self.candidates() if c["key"] == key), None)
+        cands = self.candidates(); self.board = cands[:20]
+        spec = next((c for c in cands if c["key"] == key), None)
+        if spec is None and req.get("base") in self.builders().get(req.get("src"), {}):   # explicit settings
+            spec = {"key": key, "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": req.get("where", [])}
         if spec is None:
             for u in self.engine.universes:
                 ev = getattr(u, "evolver", None)
@@ -166,4 +172,4 @@ class Champion:
                 "pnl_since_hire": round(self.pnl_since_hire(), 2) if cur else None,
                 "next_review_in": round(self.next_review - now) if self.next_review else None,
                 "history": self.history[-30:][::-1], "days": dict(sorted(self.days.items())[-14:]),
-                "board": [{k: c[k] for k in ("key", "score", "mean", "n", "total", "where")} for c in self.board[:10]]}
+                "board": [{k: c.get(k) for k in ("key", "score", "mean", "n", "total", "where", "coins")} for c in self.board[:10]]}

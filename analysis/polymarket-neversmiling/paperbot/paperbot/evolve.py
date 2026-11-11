@@ -261,7 +261,7 @@ class Evolver:
         removed = []
         for n in doomed:
             a = self.u.accounts[n]; spec = self.members[n]
-            rec = {"name": n, "base": spec["base"], "gen": spec["gen"], "parent": spec["parent"], "born": spec["born"], "died": now,
+            rec = {"name": n, "base": spec["base"], "src": spec["src"], "genes": spec.get("genes", {}), "gen": spec["gen"], "parent": spec["parent"], "born": spec["born"], "died": now,
                    "pnl": round(self.pnl(n), 2), "steady": self.steady(n), "fills": a.maker_fills + a.taker_fills, "muts": spec.get("muts", [])}
             self.graveyard.append(rec); removed.append(rec); self._detach(n); left[spec["base"]] -= 1
         top = [n for n in ranked if n in self.members][:5]; added = []
