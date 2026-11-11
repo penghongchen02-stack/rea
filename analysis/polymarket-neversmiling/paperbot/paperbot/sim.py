@@ -186,7 +186,7 @@ class Account:
                 continue
             # 2) trades printed at our price or better since we placed: they consume queue ahead, then us
             recent = []
-            for ts, px, q in reversed(market.tape):
+            for ts, px, q in reversed(list(market.tape)):   # copy: the websocket thread appends to the tape
                 if ts <= o.ts: break
                 recent.append((ts, px, q))
             for ts, px, q in reversed(recent):
