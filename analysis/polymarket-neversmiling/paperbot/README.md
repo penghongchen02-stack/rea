@@ -67,7 +67,7 @@ One $1,000 bank that trades only BTC and ETH 5-minute and 15-minute Up/Down wind
 30-minute windows). It trades as the single best bot of every other dashboard: each strategy, and each evolved
 variant alive in the evolution universe, is scored on its settled BTC/ETH 5m/15m markets only, with every market's
 P/L rescaled to a $1,000 account, as the mean per market minus half its standard error (at least 20 markets).
-Every hour, if the champion is losing money since it was hired, it is replaced by the best-scoring bot that has
+Every hour, if the champion has not made money since it was hired (losing, or not trading), it is replaced by the best-scoring bot that has
 not been fired in the last 24 hours; a champion that is up keeps its job. The bank, open positions included,
 carries over between hires. Orders are $1-$30 (Bonereaper-lab variants keep their own contract sizing). The panel
 shows the current hire, P/L since hiring, daily P/L, past champions and the candidate board. Code:

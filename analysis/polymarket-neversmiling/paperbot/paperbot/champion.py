@@ -6,8 +6,8 @@ on its settled BTC/ETH 5m/15m markets only, with each market's P/L rescaled to a
 universe's starting cash * 1,000). Score = mean per market minus half its standard error; at least MIN_MARKETS
 markets. Only strategies can be hired (whole-book scanners cannot be limited to these markets).
 
-Review: every hour. If the champion is losing money since it was hired (after at least one full hour), it is
-fired and the best-scoring bot that has not been fired in the last 24 hours is hired; the $1,000 bank carries over,
+Review: every hour. If the champion has not made money since it was hired (losing, or not trading at all; after at
+least one full hour), it is fired and the best-scoring bot that has not been fired in the last 24 hours is hired; the $1,000 bank carries over,
 so open positions settle into the same balance. A champion that is up keeps its job. The goal is a profit every
 UTC day, which the panel tracks; paper results do not guarantee live results.
 
@@ -121,12 +121,12 @@ class Champion:
             return
         if now < self.next_review: return
         p = self.pnl_since_hire(); cur = self.current
-        if p < 0 and now - cur["hired"] >= REVIEW - 5:
+        if p <= 0 and now - cur["hired"] >= REVIEW - 5:        # not making money (losing or idle): replace
             self.history.append({"key": cur["key"], "hired": cur["hired"], "fired": now, "pnl": round(p, 2)})
             c = self.pick(now, exclude=(cur["key"],))
             if c: self.hire(c, now, f"replaced {cur['key']} ({p:+.2f}); score {c['score']:+.2f}/market over {c['n']} markets"); return
             self.history[-1].pop("fired")                                  # nobody better: keep it
-            log.info("[champion] %s is down %.2f but no other candidate scores above 0", cur["key"], p)
+            log.info("[champion] %s is at %.2f but no other candidate scores above 0", cur["key"], p)
         else:
             self.board = self.candidates()[:20]
         self.next_review = now + REVIEW; self.save()
