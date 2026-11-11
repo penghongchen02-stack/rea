@@ -52,7 +52,7 @@ for the others) deletes every bot whose P/L is below zero at that moment (open p
 bot for every 5 deleted (rounded up). Each new bot is a child of one of that dashboard's 5 most profitable bots with
 1-3 settings changed, like the evolution universe's children, on a fresh account; it is labelled with its parent and
 changes. Bots that never traded are kept. Deletions and new bots persist in `roster.json` (paperbot/roster.py).
-The first prune ran at 17:15Z on 11-11: 381 bots deleted, 60 added.
+The first prune ran at 17:15Z on 11-11: 281 bots deleted, 60 added.
 
 ## Evolution universe (port 8086)
 
