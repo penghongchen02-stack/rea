@@ -183,7 +183,7 @@ class Evolver:
         """(name, src) keys of every other universe, best mean return first (bots with at least one fill)."""
         rets = {}; where = {}
         for u in self.engine.universes:
-            if u is self.u: continue
+            if u is self.u or getattr(u, "tryout", None) is not None: continue    # tryout bots are copies
             for name, a in u.accounts.items():
                 if a.maker_fills + a.taker_fills == 0: continue
                 src = self.source_of(name, u.name)

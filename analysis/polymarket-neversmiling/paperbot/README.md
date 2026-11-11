@@ -70,14 +70,28 @@ better. The dashboard's Evolution panel lists every cull and the learned leaning
 state: `paperbot-data/evolve/evolve.json` (members, lineage, graveyard, lessons). It runs until the engine is
 stopped; `PAPERBOT_EVOLVE_PERIOD` (seconds) changes the cull interval.
 
+## Tryout universe (port 8088)
+
+The champion's candidates trade side by side under the champion's exact rules (BTC, ETH, SOL and XRP 5-minute windows,
+$1,000 each, $1-$30 orders), so every candidate sees the same markets at the same time. The champion hires only bots
+that pass here; if none has passed, it keeps its job. A bot passes with, all at once: at least 50 settled windows here,
+P/L above zero, profit on at least 3 of the 4 coins, profit in more than half of the hours it traded, a positive edge
+(share of windows its side won minus the average price it paid for that side), and profit in both the first and the
+second half of its windows. Seats go to the best 12 bots of the other dashboards by a luck-adjusted score (mean P/L
+per 5-minute window, rescaled to $1,000, minus sqrt(2 ln N) standard errors for N bots compared, roughly where the
+luckiest of N edgeless bots would sit). Every hour, bots with 20+ windows that are losing with a negative edge, and
+bots idle for 3 hours, are dropped and the next best join. Why: on 11-11, the top 5 bots picked by past P/L at a
+cutoff lost money after it in all three cutoffs tested (6, 4 and 2 hours before 18:05Z), so past P/L from other
+dashboards is not enough. Code: `paperbot/tryout.py`; state: `paperbot-data/tryout/tryout.json`.
+
 ## Champion universe (port 8087)
 
 One $1,000 bank that trades only BTC, ETH, SOL and XRP 5-minute Up/Down windows (Polymarket US lists no
 30-minute windows). It trades as the single best bot of every other dashboard: each strategy, and each evolved
 variant of the evolution universe (alive, or culled with its settings kept), is scored on its settled 5m markets of those coins only, with every market's
 P/L rescaled to a $1,000 account, as the mean per market minus half its standard error (at least 20 markets, and at least 5 on every one of the four coins).
-Every hour, if the champion has not made money since it was hired (losing, or not trading), it is replaced by the best-scoring bot that has
-not been fired in the last 24 hours; a champion that is up keeps its job. The bank, open positions included,
+Every hour, if the champion has not made money since it was hired (losing, or not trading), it is replaced by the best bot that has passed the tryout
+(port 8088) and has not been fired in the last 24 hours (none passing: it stays); a champion that is up keeps its job. The bank, open positions included,
 carries over between hires. Orders are $1-$30 (Bonereaper-lab variants keep their own contract sizing). The panel
 shows the current hire, P/L since hiring, daily P/L, past champions and the candidate board. To hire a bot by hand, write `{"key": "<bot>"}` to
 `paperbot-data/champion/hire.json` (any strategy, Bonereaper-lab variant or evolve member; add `"base"`, `"src"` and `"genes"` to give settings explicitly); the hourly

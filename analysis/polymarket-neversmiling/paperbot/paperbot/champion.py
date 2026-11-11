@@ -1,20 +1,23 @@
 """Champion universe: one $1,000 account that trades only the configured coins (BTC, ETH, SOL, XRP) 5-minute Up/Down windows with the
 single best bot of every other dashboard, and replaces it every hour while it is losing.
 
-Choosing: every bot of every other dashboard (and every evolved variant alive in the evolution universe) is scored
-on its settled markets of those coins and horizons only, with each market's P/L rescaled to a $1,000 account (P/L / that
-universe's starting cash * 1,000). Score = mean per market minus half its standard error; at least MIN_MARKETS
-markets, and at least MIN_PER_COIN on every configured coin, so it is used to all of them. Evolved
-variants the evolution universe has culled keep their settings and can still be hired. Only strategies can be hired (whole-book scanners cannot be limited to these markets).
+Choosing: only bots that pass the tryout (paperbot/tryout.py, port 8088), where the candidates trade side by side under
+these exact rules: enough windows, in profit, profitable on 3 of 4 coins and in most hours, a positive edge (win rate
+above the average price paid) and profitable in both halves of their tryout. Among passers, the best luck-adjusted
+score is hired. If no bot passes, the champion keeps its job. The candidate board shows every bot of the other
+dashboards scored on its settled 5-minute markets of these coins (P/L rescaled to a $1,000 account; at least
+MIN_MARKETS markets and MIN_PER_COIN on every coin) by the same luck-adjusted score: mean minus sqrt(2 ln N)
+standard errors. Evolved variants the evolution universe has culled keep their settings and can still be hired.
+Only strategies can be hired (whole-book scanners cannot be limited to these markets).
 
 Review: every hour. If the champion has not made money since it was hired (losing, or not trading at all; after at
-least one full hour), it is fired and the best-scoring bot that has not been fired in the last 24 hours is hired; the $1,000 bank carries over,
-so open positions settle into the same balance. A champion that is up keeps its job. The goal is a profit every
-UTC day, which the panel tracks; paper results do not guarantee live results.
+least one full hour), it is fired and the best passing bot that has not been fired in the last 24 hours is hired; the
+$1,000 bank carries over, so open positions settle into the same balance. A champion that is up keeps its job. The
+goal is a profit every UTC day, which the panel tracks; paper results do not guarantee live results.
 
 State: <dir>/champion.json (current hire, hire history, daily P/L); the account uses the normal accounts.json.
 """
-import os, json, math, time, logging, statistics
+import os, json, time, logging
 
 log = logging.getLogger("champion")
 REVIEW = float(os.environ.get("PAPERBOT_CHAMPION_REVIEW", "3600"))
@@ -77,39 +80,25 @@ class Champion:
 
     # ---- choosing --------------------------------------------------------------
     def candidates(self):
-        """Every hireable bot, best score first: [{key, base, src, genes, score, mean, n, where}]."""
-        b = self.builders(); per = {}; coins = {}; info = {}
-        q = (f"select bot, asset, pnl_total from settlements where fills > 0 and asset in ({','.join('?' * len(self.assets))}) "
-             f"and horizon in ({','.join('?' * len(self.horizons))})")
-        for u in self.engine.universes:
-            if u is self.u: continue
-            ev = None
-            if getattr(u, "evolver", None) is not None:      # live members, and culled ones whose settings were kept
-                ev = {g["name"]: g for g in u.evolver.graveyard if "genes" in g}; ev.update(u.evolver.members)
-            for bot, asset, pnl in u.store.query(q, self.assets + self.horizons):
-                if ev is not None:
-                    spec = ev.get(bot)
-                    if spec is None or spec["src"] not in b: continue
-                    genes = spec.get("genes", {}); base = spec["base"]; src = spec["src"]
-                    key = bot if genes else base
-                else:
-                    if bot not in u.accounts: continue                     # deleted from its dashboard
-                    src = "lab" if u.name == "bonelab" and bot in b["lab"] else ("main" if bot in b["main"] else None)
-                    if src is None: continue                                # scanners and ladder bots
-                    genes = {}; base = key = bot
-                per.setdefault(key, []).append(pnl / u.cash * 1000.0); coins.setdefault(key, {}).setdefault(asset, 0); coins[key][asset] += 1
-                info.setdefault(key, {"key": key, "base": base, "src": src, "genes": genes, "where": set()})["where"].add(u.name)
-        out = []
-        for k, xs in per.items():
-            if len(xs) < MIN_MARKETS or any(coins[k].get(a, 0) < MIN_PER_COIN for a in self.assets): continue
-            m = statistics.mean(xs); se = statistics.stdev(xs) / math.sqrt(len(xs))
-            out.append(dict(info[k], where=sorted(info[k]["where"]), score=round(m - 0.5 * se, 3), mean=round(m, 3), n=len(xs), total=round(sum(xs), 1), coins=coins[k]))
-        out.sort(key=lambda c: -c["score"])
-        return out
+        """Every hireable bot of the other dashboards, best luck-adjusted score first (tryout.pool); at least
+        MIN_MARKETS markets and MIN_PER_COIN on every coin. Shown as the board and used for hand-picked hires."""
+        from .tryout import pool
+        return pool(self.engine, {self.u.name, "tryout"}, self.builders(), self.assets, self.horizons, MIN_MARKETS, MIN_PER_COIN)
+
+    def tryout(self):
+        return next((u.tryout for u in self.engine.universes if getattr(u, "tryout", None) is not None), None)
 
     def pick(self, now, exclude=()):
+        """The best bot that passes the tryout (paperbot/tryout.py) and was not fired in the last 24 hours; None if
+        no bot passes yet. Without a tryout universe, the best positive pool score (the old rule)."""
         cands = self.candidates(); self.board = cands[:20]
         fired = {h["key"] for h in self.history if h.get("fired") and now - h["fired"] < COOLDOWN}
+        t = self.tryout()
+        if t is not None:
+            for c in t.passers(now):
+                if c["key"] not in fired and c["key"] not in exclude:
+                    s = c["tryout"]; return dict(c, score=s["score"], n=s["n"], mean=None, why_hired=f"passed the tryout: {s['n']} windows, P/L {s['pnl']:+.2f}, edge {s['edge'] * 100:+.1f}c")
+            return None
         return next((c for c in cands if c["key"] not in fired and c["key"] not in exclude and c["score"] > 0), None)
 
     # ---- running -----------------------------------------------------------------
@@ -149,7 +138,7 @@ class Champion:
         if self.current is None:
             if now < self.ready: return
             c = self.pick(now)
-            if c: self.hire(c, now, f"best score {c['score']:+.2f}/market over {c['n']} markets")
+            if c: self.hire(c, now, c.get("why_hired") or f"best score {c['score']:+.2f}/market over {c['n']} markets")
             else: self.ready = now + 300
             return
         if now < self.next_review: return
@@ -157,9 +146,9 @@ class Champion:
         if p <= 0 and now - cur["hired"] >= REVIEW - 5:        # not making money (losing or idle): replace
             self.history.append({"key": cur["key"], "hired": cur["hired"], "fired": now, "pnl": round(p, 2)})
             c = self.pick(now, exclude=(cur["key"],))
-            if c: self.hire(c, now, f"replaced {cur['key']} ({p:+.2f}); score {c['score']:+.2f}/market over {c['n']} markets"); return
+            if c: self.hire(c, now, f"replaced {cur['key']} ({p:+.2f}); " + (c.get("why_hired") or f"score {c['score']:+.2f}/market over {c['n']} markets")); return
             self.history[-1].pop("fired")                                  # nobody better: keep it
-            log.info("[champion] %s is at %.2f but no other candidate scores above 0", cur["key"], p)
+            log.info("[champion] %s is at %.2f but no other bot has passed the tryout", cur["key"], p)
         else:
             self.board = self.candidates()[:20]
         self.next_review = now + REVIEW; self.save()

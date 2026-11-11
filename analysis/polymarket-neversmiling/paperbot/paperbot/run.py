@@ -47,6 +47,10 @@ UNIVERSES = [
     # bank at most, the dollar30 proportion).
     {"name": "champion", "port": int(os.environ.get("PAPERBOT_PORT8", "8087")), "size_mode": "dollar", "dir": os.path.join(DATA, "champion"),
      "pos_mult": 15.0, "size_min": 1.0, "size_max": 30.0, "cash": 1000.0, "registry": "champion", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m"]},
+    # Tryout: the champion's candidates side by side under the champion's exact rules, $1,000 each; the champion hires
+    # only bots that pass here (paperbot/tryout.py; user, 11-11 18:10Z).
+    {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "dollar", "dir": os.path.join(DATA, "tryout"),
+     "pos_mult": 15.0, "size_min": 1.0, "size_max": 30.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m"]},
 ]
 os.makedirs(DATA, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -76,8 +80,11 @@ class Universe:
         self.store = Store(os.path.join(self.dir, "paper.db")); self.engine = engine
         self.cash = cfg.get("cash", START_CASH)
         mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0))
-        self.lab = cfg.get("registry") == "bonelab"; self.evolver = None; self.champion = None; self.roster = None
-        if cfg.get("registry") == "champion":   # one account; its strategy is hired and replaced by the Champion
+        self.lab = cfg.get("registry") == "bonelab"; self.evolver = None; self.champion = None; self.roster = None; self.tryout = None
+        if cfg.get("registry") == "tryout":     # candidates added and dropped at run time (paperbot/tryout.py)
+            from .tryout import Tryout
+            self.tryout = Tryout(self, engine); self.tryout.restore()
+        elif cfg.get("registry") == "champion":   # one account; its strategy is hired and replaced by the Champion
             from .champion import Champion
             self.champion = Champion(self, engine)
         elif cfg.get("registry") == "evolve":     # members are created and replaced at run time by the Evolver
@@ -92,11 +99,12 @@ class Universe:
             reg = build_registry(cfg.get("pos_mult", 1.0))
             self.accounts = {k: mk(k) for k in list(reg) + list(LADDER_BOTS) + list(ARB_BOTS)}
         for a in self.accounts.values(): a.universe = self.name
-        if self.evolver is None and self.champion is None:
+        managed = self.evolver is not None or self.champion is not None or self.tryout is not None   # build their own bots
+        if not managed:
             active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
             self.active = list(self.accounts) if active == ["all"] else active
             self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
-        if self.evolver is not None or self.champion is not None: pass        # built their own members
+        if managed: pass
         elif self.lab:
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None; self.arbs = {}
         else:
@@ -121,7 +129,8 @@ class Universe:
             from .bonelab import LAB_LABELS; self.labels = dict(LAB_LABELS)
         if self.evolver is not None: self.labels = self.evolver.labels
         if self.champion is not None: self.labels = self.champion.labels; self.champion.restore()
-        if self.evolver is None and self.champion is None:     # deleted and added bots (paperbot/roster.py)
+        if self.tryout is not None: self.labels = self.tryout.labels
+        if not managed:     # deleted and added bots (paperbot/roster.py)
             from .roster import Roster
             self.roster = Roster(self, engine); self.roster.apply()
         self._load()
@@ -185,6 +194,7 @@ class Universe:
         if self.evolver is not None: self.last_state["evolution"] = self.evolver.snapshot(now)
         if self.champion is not None: self.last_state["champion"] = self.champion.snapshot(now)
         if self.roster is not None: self.last_state["roster"] = self.roster.snapshot()
+        if self.tryout is not None: self.last_state["tryout"] = self.tryout.snapshot(now)
 
 
 class Engine:
@@ -313,6 +323,9 @@ class Engine:
                     if u.evolver is not None:
                         try: u.evolver.tick(now)
                         except Exception as e: self.errors += 1; log.exception("[%s] evolve: %s", u.name, e)
+                    if u.tryout is not None:
+                        try: u.tryout.tick(now)
+                        except Exception as e: self.errors += 1; log.exception("[%s] tryout: %s", u.name, e)
                     if u.roster is not None:
                         try: u.roster.tick(now)
                         except Exception as e: self.errors += 1; log.exception("[%s] roster: %s", u.name, e)
