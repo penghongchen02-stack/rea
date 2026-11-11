@@ -26,6 +26,7 @@ canvas{width:100%;height:260px;display:block}.tip{position:absolute;pointer-even
 <div class="sub">$100 each, live Polymarket US crypto Up/Down markets (BTC, ETH, SOL, XRP · 5m and 15m). Add <span class="mono">?bots=whiskas</span> (or any comma list of old, improved, final, whiskas, lastcall, lastcall_tilt, lastcall_hold, lastcall_rest) to the URL to focus on some bots. Settlement index: CF Benchmarks BRTI and the other reference indices as served by Polymarket US, checked against cfbenchmarks.com. Fast signal: Coinbase spot. Fees: Tier 1 taker coefficient 0.095, no rebates.</div>
 <div class="chips" id="chips"></div>
 <div class="card" style="margin-bottom:14px"><h2>Leaderboard (all bots, by P/L)</h2><div class="wrap"><table id="lb"><thead><tr><th>Bot</th><th>key</th><th>Equity</th><th>P/L</th><th>Fees</th><th>Fills</th><th>Windows</th><th>Profitable</th></tr></thead><tbody></tbody></table></div></div>
+<div class="card" id="evocard" style="margin-bottom:14px;display:none"><h2>Evolution (bottom 5 replaced by children of the top 5)</h2><div id="evo" class="mono" style="font-size:12px;line-height:1.6"></div></div>
 <div class="card" style="margin-bottom:14px"><h2>Ladder arbitrage scanner</h2><div id="ladder" class="mono" style="font-size:12px"></div></div>
 <div class="grid" id="bots"></div>
 <div class="card" style="margin-bottom:14px"><h2>Equity, $ (5-second samples)</h2><div class="legend" id="legend"></div><div class="rel"><canvas id="eq"></canvas><div class="tip" id="tip"></div></div></div>
@@ -76,4 +77,19 @@ $('#fl tbody').innerHTML=S.fills.filter(f=>SHOW(f.bot)).slice(0,30).map(f=>`<tr>
 const L=S.ladder||{};$('#ladder').innerHTML='arbitrage scanner: '+JSON.stringify(L.stats||{})+' · ladder model: '+JSON.stringify((S.ladder_model||{}).stats||{})+' · touch model: '+JSON.stringify((S.touch_model||{}).stats||{})+'<br>cross-window arbitrage: '+JSON.stringify((S.xarb||{}).stats||{})+' '+(((S.xarb||{}).recent||[]).slice(0,5).map(o=>tm(o.ts)+' buy K'+o.K_a+'@'+o.ask_a+' sell K'+o.K_b+'@'+o.bid_b+' prem '+o.prem+' depth '+o.depth).join(' | '))+'<br>'+Object.entries(S.arbs||{}).map(([k,v])=>k+': '+JSON.stringify(v.stats||{})+((v.recent||[]).slice(0,2).map(o=>' ['+tm(o.ts)+' '+o.kind+' edge '+o.edge+' x'+o.n+' '+o.legs.map(short).join(' / ')+']').join(''))).join('<br>')+'<br>'+((L.recent||[]).map(o=>tm(o.ts)+' '+o.kind+' '+o.asset+' est '+o.est+' live '+o.live+' depth '+o.depth+' '+o.legs.join(', ')).join('<br>')||'no candidates yet');draw()}
 async function tick(){try{const r=await fetch('/state.json',{cache:'no-store'});S=await r.json();if(S&&S.accounts)render()}catch(e){}}
 tick();setInterval(tick,2000);addEventListener('resize',draw);
+</script>
+<script>
+// Evolution panel: shown only when the universe reports an "evolution" block (port 8086).
+(function(){const base=render;const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]);
+const mmss=s=>s==null?'-':(s<0?'due':Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s');
+const pl=v=>'<span style="color:'+(v>=0?'#1baf7a':'#e34948')+'">'+(v>=0?'+':'')+v.toFixed(2)+'</span>';
+const mut=m=>(m||[]).map(x=>esc(x[0])+' '+x[1]+'&rarr;'+x[2]).join(', ');
+const hm=t=>new Date(t*1000).toISOString().slice(11,16)+'Z';
+render=function(){base();const E=S.evolution,card=document.getElementById('evocard');if(!E){card.style.display='none';return}card.style.display='';
+let h='<b>Generation '+E.generation+'</b> &middot; culls done '+E.culls_done+' &middot; '+(E.ready_in!=null?'seeding in '+mmss(E.ready_in):'next cull in '+mmss(E.next_cull_in))+' &middot; '+E.size+' bots, bottom '+E.cull+' replaced every '+Math.round(E.period/60)+' min<br>';
+if(!E.culls.length)h+='<span style="color:var(--muted)">No cull yet. Children appear here after the first one.</span><br>';
+for(const c of E.culls){h+='<div style="margin-top:6px"><b>'+hm(c.ts)+'</b> removed: '+c.removed.map(r=>esc(r[0])+' '+pl(r[1])).join(', ')+'<br>&nbsp;&nbsp;added: '+c.added.map(a=>esc(a[0])+' &larr; '+esc(a[1])+' ('+mut(a[2])+')').join('; ')+'</div>'}
+const L=Object.entries(E.lessons||{}).filter(([k,v])=>v.up[1]+v.down[1]>0).sort((a,b)=>Math.abs(b[1].lean_up-0.5)-Math.abs(a[1].lean_up-0.5)).slice(0,10);
+if(L.length){h+='<div style="margin-top:8px"><b>Learned leanings</b> (excess return vs the median of children that moved a setting up or down)<br>'+L.map(([k,v])=>esc(k.replace('|',' &middot; '))+': up '+(v.up[1]?(v.up[0]/v.up[1]*100).toFixed(2)+'% (n='+v.up[1]+')':'-')+', down '+(v.down[1]?(v.down[0]/v.down[1]*100).toFixed(2)+'% (n='+v.down[1]+')':'-')+' &rarr; next step up with p='+v.lean_up).join('<br>')+'</div>'}
+document.getElementById('evo').innerHTML=h};})();
 </script></body></html>

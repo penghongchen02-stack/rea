@@ -533,21 +533,33 @@ ARB_BOTS = ("xarb_tight", "xarb_windows", "xarb_maker_bid", "xarb_maker_ask", "t
             "lock_fast", "lock_sweep", "lock_early", "lock_rest", "lock_strikes")
 
 
-def make_arbs(accounts, engine):
-    """One scanner per arbitrage bot, bound to that bot's account in this universe."""
+def scanner_builders(engine):
+    """name -> factory(account) for every bot that runs as a scanner (scan(now)) rather than a per-market strategy:
+    the arbitrage and settlement-lock family plus the four ladder bots. make_arbs and the evolution universe use it."""
     from .locks import LOCK_BOTS
-    out = {k: cls(accounts[k], engine) for k, cls in LOCK_BOTS.items()}
+    from .ladder import LadderModel, LadderTouch
+    out = {k: (lambda acct, cls=cls: cls(acct, engine)) for k, cls in LOCK_BOTS.items()}
     out.update({
-        "xarb_tight": XArbTight(accounts["xarb_tight"], engine.mf, engine.lf),
-        "xarb_windows": XArbWindows(accounts["xarb_windows"], engine.mf, engine.lf),
-        "xarb_maker_bid": XArbMakerBid(accounts["xarb_maker_bid"], engine),
-        "xarb_maker_ask": XArbMakerAsk(accounts["xarb_maker_ask"], engine),
-        "touch_arb": TouchArb(accounts["touch_arb"], engine),
-        "touch_ladder": TouchLadder(accounts["touch_ladder"], engine),
-        "range_arb": RangeArb(accounts["range_arb"], engine),
-        "settle_lock": SettleLock(accounts["settle_lock"], engine),
-        "ladder_tight": LadderTight(accounts["ladder_tight"], engine.lf),
-        "window_tile": WindowTile(accounts["window_tile"], engine),
-        "xarb_fast": XArbFast(accounts["xarb_fast"], engine),
+        "xarb_tight": lambda acct: XArbTight(acct, engine.mf, engine.lf),
+        "xarb_windows": lambda acct: XArbWindows(acct, engine.mf, engine.lf),
+        "xarb_maker_bid": lambda acct: XArbMakerBid(acct, engine),
+        "xarb_maker_ask": lambda acct: XArbMakerAsk(acct, engine),
+        "touch_arb": lambda acct: TouchArb(acct, engine),
+        "touch_ladder": lambda acct: TouchLadder(acct, engine),
+        "range_arb": lambda acct: RangeArb(acct, engine),
+        "settle_lock": lambda acct: SettleLock(acct, engine),
+        "ladder_tight": lambda acct: LadderTight(acct, engine.lf),
+        "window_tile": lambda acct: WindowTile(acct, engine),
+        "xarb_fast": lambda acct: XArbFast(acct, engine),
+        "ladder": lambda acct: LadderArb(acct, engine.lf),
+        "ladder_model": lambda acct: LadderModel(acct, engine.lf, engine.idx, engine.spot),
+        "touch_model": lambda acct: LadderTouch(acct, engine.lf, engine.idx, engine.spot),
+        "xarb": lambda acct: XArb(acct, engine.mf, engine.lf),
     })
     return out
+
+
+def make_arbs(accounts, engine):
+    """One scanner per arbitrage bot, bound to that bot's account in this universe."""
+    b = scanner_builders(engine)
+    return {k: b[k](accounts[k]) for k in ARB_BOTS}

@@ -37,6 +37,11 @@ UNIVERSES = [
     # $5,000 each; every order a random $1-$150 (3% of the account at most, the dollar30/dollar1000 proportion)
     {"name": "top20", "port": int(os.environ.get("PAPERBOT_PORT6", "8085")), "size_mode": "dollar", "dir": os.path.join(DATA, "top20"),
      "pos_mult": 75.0, "size_min": 1.0, "size_max": 150.0, "cash": 5000.0, "only": TOP20},
+    # Evolution: the best 20 bots across every other dashboard, $1,000 each, orders $0.10-$30 (the dollar30 sizing;
+    # Bonereaper-lab variants keep their own sizing). Every 30 minutes the bottom 5 are replaced by mutated children
+    # of the top 5 (paperbot/evolve.py).
+    {"name": "evolve", "port": int(os.environ.get("PAPERBOT_PORT7", "8086")), "size_mode": "dollar", "dir": os.path.join(DATA, "evolve"),
+     "pos_mult": 15.0, "size_min": 0.1, "size_max": 30.0, "cash": 1000.0, "registry": "evolve"},
 ]
 os.makedirs(DATA, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -66,18 +71,25 @@ class Universe:
         self.store = Store(os.path.join(self.dir, "paper.db")); self.engine = engine
         self.cash = cfg.get("cash", START_CASH)
         mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0))
-        self.lab = cfg.get("registry") == "bonelab"
-        if self.lab:
+        self.lab = cfg.get("registry") == "bonelab"; self.evolver = None
+        if cfg.get("registry") == "evolve":     # members are created and replaced at run time by the Evolver
+            from .evolve import Evolver
+            self.accounts = {}; self.strats = []; self.arbs = {}; self.active = []
+            self.ladder = self.ladder_model = self.touch_model = self.xarb = None
+            self.evolver = Evolver(self, engine); self.evolver.restore()
+        elif self.lab:
             from .bonelab import build_lab_registry
             reg = build_lab_registry(); self.accounts = {k: mk(k) for k in reg}
         else:
             reg = build_registry(cfg.get("pos_mult", 1.0))
             self.accounts = {k: mk(k) for k in list(reg) + list(LADDER_BOTS) + list(ARB_BOTS)}
         for a in self.accounts.values(): a.universe = self.name
-        active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
-        self.active = list(self.accounts) if active == ["all"] else active
-        self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
-        if self.lab:
+        if self.evolver is None:
+            active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
+            self.active = list(self.accounts) if active == ["all"] else active
+            self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
+        if self.evolver is not None: pass        # the Evolver built its own scanners
+        elif self.lab:
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None; self.arbs = {}
         else:
             self.ladder = LadderArb(self.accounts["ladder"], engine.lf); self.ladder_model = LadderModel(self.accounts["ladder_model"], engine.lf, engine.idx, engine.spot)
@@ -99,6 +111,7 @@ class Universe:
         except Exception: pass
         if self.lab:
             from .bonelab import LAB_LABELS; self.labels = dict(LAB_LABELS)
+        if self.evolver is not None: self.labels = self.evolver.labels
         self._load()
 
     def _load(self):
@@ -143,7 +156,8 @@ class Universe:
         idx = {a: dict(zip(("ts", "value"), engine.idx.last(a))) for a in feeds.ASSETS}
         spot = {a: dict(zip(("value", "ts"), engine.spot.last(a))) for a in feeds.ASSETS}
         hist = {}
-        for ts, name, eq in self.equity_hist: hist.setdefault(name, []).append([round(ts), round(eq, 3)])
+        for ts, name, eq in self.equity_hist:
+            if self.evolver is None or name in self.accounts: hist.setdefault(name, []).append([round(ts), round(eq, 3)])
         for name in hist:
             if len(hist[name]) > 1500: step = len(hist[name]) // 1500 + 1; hist[name] = hist[name][::step] + hist[name][-1:]
         settles = []; fills = []
@@ -156,6 +170,7 @@ class Universe:
             "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot() if self.ladder else {}, "ladder_model": self.ladder_model.snapshot() if self.ladder_model else {}, "touch_model": self.touch_model.snapshot() if self.touch_model else {}, "xarb": self.xarb.snapshot() if self.xarb else {}, "arbs": {k: v.snapshot() for k, v in self.arbs.items()},
             "config": {"universe": self.name, "size_mode": self.cfg["size_mode"], "size_range": [self.cfg.get("size_min"), self.cfg.get("size_max")], "active": self.active, "labels": self.labels,
                        "start_cash": self.cash, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
+        if self.evolver is not None: self.last_state["evolution"] = self.evolver.snapshot(now)
 
 
 class Engine:
@@ -279,6 +294,10 @@ class Engine:
                     for a in u.accounts.values():
                         while a.fills:
                             f = a.fills.pop(0); u.store.insert("fills", f); a.events.appendleft(f)
+                for u in self.universes:
+                    if u.evolver is not None:
+                        try: u.evolver.tick(now)
+                        except Exception as e: self.errors += 1; log.exception("[%s] evolve: %s", u.name, e)
                 if now - last_eq >= 5:
                     for u in self.universes:
                         for a in u.accounts.values():
