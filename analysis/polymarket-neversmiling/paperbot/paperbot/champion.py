@@ -1,8 +1,8 @@
-"""Champion universe: one $1,000 account that trades only BTC and ETH 5- and 15-minute Up/Down windows with the
+"""Champion universe: one $1,000 account that trades only the configured coins' (BTC, ETH, SOL, XRP) 5- and 15-minute Up/Down windows with the
 single best bot of every other dashboard, and replaces it every hour while it is losing.
 
 Choosing: every bot of every other dashboard (and every evolved variant alive in the evolution universe) is scored
-on its settled BTC/ETH 5m/15m markets only, with each market's P/L rescaled to a $1,000 account (P/L / that
+on its settled markets of those coins and horizons only, with each market's P/L rescaled to a $1,000 account (P/L / that
 universe's starting cash * 1,000). Score = mean per market minus half its standard error; at least MIN_MARKETS
 markets. Only strategies can be hired (whole-book scanners cannot be limited to these markets).
 
@@ -17,7 +17,7 @@ import os, json, math, time, logging, statistics
 
 log = logging.getLogger("champion")
 REVIEW = float(os.environ.get("PAPERBOT_CHAMPION_REVIEW", "3600"))
-ASSETS = ("btc", "eth"); HORIZONS = ("5m", "15m"); MIN_MARKETS = 20; COOLDOWN = 86400.0; WARMUP = 60.0
+MIN_MARKETS = 20; COOLDOWN = 86400.0; WARMUP = 60.0
 NAME = "champion"
 
 
@@ -25,6 +25,7 @@ class Champion:
     def __init__(self, universe, engine):
         from .sim import Account
         self.u = universe; self.engine = engine; self.cfg = universe.cfg; self.cash = universe.cash
+        self.assets = tuple(self.cfg.get("assets", ("btc", "eth"))); self.horizons = tuple(self.cfg.get("horizons", ("5m", "15m")))
         self.path = os.path.join(universe.dir, "champion.json")
         self.acct = Account(NAME, self.cash, size_mode="dollar", size_min=self.cfg.get("size_min", 1.0), size_max=self.cfg.get("size_max", 30.0))
         self.acct.universe = universe.name
@@ -46,6 +47,7 @@ class Champion:
         a.size_mode = "contracts" if spec["src"] == "lab" else "dollar"
         obj = self.builders()[spec["src"]][spec["base"]](a)
         for k, v in spec.get("genes", {}).items(): setattr(obj, k, v)
+        if isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)   # trade every coin of this universe
         obj.name = spec["key"]
         self.u.strats = [obj]
         eq = a.equity(self.engine.mf.markets)
@@ -76,12 +78,12 @@ class Champion:
     def candidates(self):
         """Every hireable bot, best score first: [{key, base, src, genes, score, mean, n, where}]."""
         b = self.builders(); per = {}; info = {}
-        q = (f"select bot, pnl_total from settlements where fills > 0 and asset in ({','.join('?' * len(ASSETS))}) "
-             f"and horizon in ({','.join('?' * len(HORIZONS))})")
+        q = (f"select bot, pnl_total from settlements where fills > 0 and asset in ({','.join('?' * len(self.assets))}) "
+             f"and horizon in ({','.join('?' * len(self.horizons))})")
         for u in self.engine.universes:
             if u is self.u: continue
             ev = u.evolver.members if getattr(u, "evolver", None) is not None else None
-            for bot, pnl in u.store.query(q, ASSETS + HORIZONS):
+            for bot, pnl in u.store.query(q, self.assets + self.horizons):
                 if ev is not None:
                     spec = ev.get(bot)
                     if spec is None or spec["src"] not in b: continue      # dead evolve members keep no settings
@@ -157,7 +159,7 @@ class Champion:
 
     def snapshot(self, now):
         cur = self.current
-        return {"assets": list(ASSETS), "horizons": list(HORIZONS), "review": REVIEW, "min_markets": MIN_MARKETS,
+        return {"assets": list(self.assets), "horizons": list(self.horizons), "review": REVIEW, "min_markets": MIN_MARKETS,
                 "ready_in": round(self.ready - now) if cur is None else None,
                 "current": cur and {k: cur.get(k) for k in ("key", "base", "src", "genes", "score", "mean", "n", "where", "hired", "reason")},
                 "pnl_since_hire": round(self.pnl_since_hire(), 2) if cur else None,
