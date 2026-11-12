@@ -131,6 +131,14 @@ $0.30-0.60, high conviction only (its BTC 5m lost 26% live; its $0.10-0.20 and $
 SirMartingale and BTC5MScour already carried their reports' filters. The filters come from the same data that showed
 the losses, so they are in-sample and still have to prove themselves.
 
+## Combo (11-12 01:18Z)
+
+`combo` (paperbot/combo.py) runs three approaches on one account, in the standard universe ($100) and the tryout
+($1,000): XArbFast's cross-window arbitrage, LockEarly's settlement lock, and the FlippingSharks swing pairs (BTC 5m and
+15m, cheap side at <= 40c, the other side once the pair costs <= 90c) the rest of the time. Each piece is sized to at
+most 5% of the bank, and nothing new opens for the rest of the UTC day after settled losses of 10%. The champion can
+hire it only if it passes the tryout.
+
 ## Late favourite (late_fav)
 
 From the PR&R trader reports (BTC5MScour, SLIP-ME) and their TWAP settlement study: 5-minute windows settle on an

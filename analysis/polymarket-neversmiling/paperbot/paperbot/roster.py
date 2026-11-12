@@ -41,7 +41,7 @@ class Roster:
             from .arbs import scanner_builders
             from .reports import build_report_registry
             self._builders = {"main": build_registry(self.cfg.get("pos_mult", 1.0)), "lab": build_lab_registry(),
-                              "scan": scanner_builders(self.engine), "rep": build_report_registry()}
+                              "scan": scanner_builders(self.engine), "rep": build_report_registry(self.engine)}
         return self._builders
 
     def spec_of(self, name):

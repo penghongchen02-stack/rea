@@ -33,11 +33,11 @@ COINS_NEEDED = 3
 def luck_k(n): return math.sqrt(2 * math.log(max(n, 2)))
 
 
-def builders(cfg):
+def builders(cfg, engine=None):
     from .strategies import build_registry
     from .bonelab import build_lab_registry
     from .reports import build_report_registry
-    return {"main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry()}
+    return {"main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(engine)}
 
 
 def pool(engine, skip, b, assets, horizons, min_markets=MIN_POOL, min_per_coin=0):
@@ -85,7 +85,7 @@ class Tryout:
         self.next_review = None; self.ready = time.time() + WARMUP; self._b = None; self._stats = {}; self._stats_at = 0
 
     def builders(self):
-        if self._b is None: self._b = builders(self.cfg)
+        if self._b is None: self._b = builders(self.cfg, self.engine)
         return self._b
 
     # ---- members ---------------------------------------------------------------

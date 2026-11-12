@@ -335,5 +335,10 @@ class BTC5MScour(Replica):
 REPLICAS = {c.name: c for c in (Whiskas, Doggystyie, NeverSmiling, FlippingSharks, Bonereaper, PBot6, SlipMe, SirMartingale, BTC5MScour)}
 
 
-def build_report_registry():
-    return {k: (lambda acct, cls=cls: cls(acct)) for k, cls in REPLICAS.items()}
+def build_report_registry(engine=None):
+    """name -> factory(account). With the engine, also the combo (paperbot/combo.py), whose scanners need its feeds."""
+    reg = {k: (lambda acct, cls=cls: cls(acct)) for k, cls in REPLICAS.items()}
+    if engine is not None:
+        from .combo import Combo
+        reg["combo"] = lambda acct: Combo(acct, engine)
+    return reg
