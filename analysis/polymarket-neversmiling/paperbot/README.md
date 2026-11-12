@@ -264,7 +264,8 @@ after about 24).
 The Bonereaper-lab bots (`bonelab.BoneVar`) that were losing, on whichever dashboard they run, and the champion's
 br177 run with three guards: the 3-minute trend rule, no 4th window in a row on one side, and no early exit (the
 protective exit and the variants' take-profit / stop-loss are off). A lab bot that was in profit is left as it was.
-The choice is made once per bot from its settled P/L after fees and kept in `<dashboard dir>/guards.json` (edit that
+Since 21:15Z the champion's br177 runs as the lab's br177 (no trend or balance guard) with only the no-early-exit
+rule (`["hold"]` in its guards.json). The choice is made once per bot from its settled P/L after fees and kept in `<dashboard dir>/guards.json` (edit that
 file and restart to change one). The tryout's br177 copies keep one guard each and `br177_unchanged_for_comparison`
 runs with none, so the effect can be measured. The guards had no settled record when they were switched on.
 

@@ -36,11 +36,13 @@ CASH = 1000.0
 #   hold     no early exit: neither the protective exit nor a variant's take-profit / stop-loss; held to settlement
 # br177lab's copies switch them per variant, and its unchanged copy runs without them as the comparison.
 TREND_S = 180.0; RUN_MAX = 3
-GUARD_DIRS = {}; ALWAYS_GUARDED = {("champion", "champion")}; _GUARDS = {}      # dashboard name -> its directory (set by run.Universe)
+# The champion's bot (user, 11-12 21:15Z): as the lab's br177, no trend or balance guard, but held to settlement.
+GUARD_DIRS = {}; ALWAYS_GUARDED = {("champion", "champion"): ["hold"]}; _GUARDS = {}      # dashboard name -> its directory (set by run.Universe)
 
 
 def guarded(acct):
-    """Whether this account's lab bot runs with the guards (decided once, then read from guards.json)."""
+    """The guards this account's lab bot runs with (decided once, then read from guards.json): True = all three, False =
+    none, or a list of "trend", "balance", "hold"."""
     u = getattr(acct, "universe", None); d = GUARD_DIRS.get(u)
     if d is None: return False
     path = os.path.join(d, "guards.json")
@@ -49,7 +51,7 @@ def guarded(acct):
         except Exception: _GUARDS[u] = {}
     g = _GUARDS[u]
     if acct.name not in g:
-        g[acct.name] = (u, acct.name) in ALWAYS_GUARDED or acct.bank() - acct.start_cash < 0
+        g[acct.name] = ALWAYS_GUARDED[(u, acct.name)] if (u, acct.name) in ALWAYS_GUARDED else acct.bank() - acct.start_cash < 0
         tmp = path + ".tmp"; json.dump(g, open(tmp, "w")); os.replace(tmp, path)
     return g[acct.name]
 
@@ -112,7 +114,9 @@ class BoneVar(LastCallHold):
     def on_tick(self, market, ctx, now):
         if market.asset not in self.assets or market.dur not in self.durs: return
         self._ctx = ctx
-        if not self._decided: self._decided = True; self.trend = self.balance = self.hold = guarded(self.acct)
+        if not self._decided:
+            self._decided = True; g = guarded(self.acct); g = ["trend", "balance", "hold"] if g is True else (g or [])
+            self.trend = "trend" in g; self.balance = "balance" in g; self.hold = "hold" in g
         if self.balance and market.slug not in self._seen:      # the side of each window it has entered
             pos = self.acct.positions.get(market.slug)
             if pos and abs(pos.qty) > 1e-9: self._seen.add(market.slug); self._sides.append("buy" if pos.qty > 0 else "sell")
