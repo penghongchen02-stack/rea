@@ -27,6 +27,7 @@ canvas{width:100%;height:260px;display:block}.tip{position:absolute;pointer-even
 <div class="chips" id="chips"></div>
 <div class="card" style="margin-bottom:14px"><h2>Leaderboard (all bots, by P/L)</h2><div class="wrap"><table id="lb"><thead><tr><th>Bot</th><th>key</th><th>Equity</th><th>P/L</th><th>Fees</th><th>Fills</th><th>Windows</th><th>Profitable</th></tr></thead><tbody></tbody></table></div></div>
 <div class="card" id="repcard" style="margin-bottom:14px;display:none"><h2>Report traders (PR&amp;R report replicas, filtered)</h2><div id="rep" class="mono" style="font-size:12px;line-height:1.6;overflow-x:auto"></div></div>
+<div class="card" id="fastcard" style="margin-bottom:14px;display:none"><h2>Fast 20 (the 20 most profitable strategy bots, $1,000 each, on their own fast loop)</h2><div id="fast" class="mono" style="font-size:12px;line-height:1.6;overflow-x:auto"></div></div>
 <div class="card" id="trycard" style="margin-bottom:14px;display:none"><h2>Tryout (champion candidates side by side, $1,000 each, BTC/ETH/SOL/XRP 5-minute)</h2><div id="try" class="mono" style="font-size:12px;line-height:1.6;overflow-x:auto"></div></div>
 <div class="card" id="champcard" style="margin-bottom:14px;display:none"><h2>Champion ($1,000 bank, BTC/ETH/SOL/XRP 5-minute only)</h2><div id="champ" class="mono" style="font-size:12px;line-height:1.6"></div></div>
 <div class="card" id="evocard" style="margin-bottom:14px;display:none"><h2>Evolution (bottom 5 replaced by 3 children of the top 5 and 2 immigrants)</h2><div id="evo" class="mono" style="font-size:12px;line-height:1.6"></div></div>
@@ -144,5 +145,17 @@ for(const a of R){const n=a.markets_settled||0,f=(a.maker_fills||0)+(a.taker_fil
 h+='<tr><td>'+esc(a.name)+'</td><td style="color:var(--muted)">'+esc(STYLE[a.name]||'')+'</td><td>'+pl(a.pnl)+'</td><td>'+n+'</td><td>'+(n?Math.round((a.markets_won||0)/n*100)+'%':'-')+'</td><td>'+f+' ('+(a.maker_fills||0)+')</td><td>'+(a.fees||0).toFixed(2)+'</td><td>'+(r?'+'+r.toFixed(2):'-')+'</td><td>'+pl(a.pnl+r)+'</td></tr>'}
 h+='<tr style="font-weight:600"><td>all '+R.length+'</td><td></td><td>'+pl(net)+'</td><td></td><td></td><td></td><td></td><td>'+(rw?'+'+rw.toFixed(2):'-')+'</td><td>'+pl(net+rw)+'</td></tr></table>';
 document.getElementById('rep').innerHTML=h};})();
+</script><script>
+// Fast20 panel (paperbot/fast20.py): loop speed and where each bot was picked from.
+(function(){const base=render;const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]);
+const pl=v=>v==null?'-':'<span style="color:'+(v>0?'#1baf7a':v<0?'#e34948':'inherit')+'">'+(v>0?'+':'')+v.toFixed(2)+'</span>';
+render=function(){base();const F=S.fast20,card=document.getElementById('fastcard');if(!F){card.style.display='none';return}card.style.display='';
+const L=F.loop||{};let h='<b>Loop</b>: target '+F.hz+' passes a second, measured '+(L.passes_per_s==null?'-':L.passes_per_s)+' a second; one pass over every open window takes '+(L.pass_ms==null?'-':L.pass_ms)+' ms (worst recent '+(L.pass_ms_max==null?'-':L.pass_ms_max)+' ms). The other dashboards share a loop of about 1 pass a second.<br><span style="color:var(--muted)">Paper fills at the quote seen are the best case; a real order also has to travel to the exchange. Most bots wait 2-3 s between their own orders, so the gain is reacting sooner.</span>';
+const M=Object.entries(F.members||{}).sort((a,b)=>a[1].rank-b[1].rank);
+if(!M.length){h+='<br>Picking the 20 bots'+(F.ready_in>0?' in '+F.ready_in+' s':' now')+'.'}
+else{h+='<table style="margin-top:6px;border-collapse:collapse;font-size:12px"><tr style="text-align:left"><th>#</th><th>bot</th><th>return when picked</th><th>picked from</th><th>windows here</th><th>P/L here</th></tr>';
+for(const[n,m]of M){const a=(S.accounts||{})[n]||{};h+='<tr><td>'+m.rank+'</td><td>'+esc(n)+'</td><td>'+pl(m.ret*100)+'%</td><td>'+esc((m.where||[]).join(', '))+'</td><td>'+(a.n_settled==null?'-':a.n_settled)+'</td><td>'+pl(a.pnl)+'</td></tr>'}
+h+='</table>'}
+document.getElementById('fast').innerHTML=h};})();
 </script>
 </body></html>

@@ -19,16 +19,19 @@ to come are random (a random walk with per-second volatility measured from spot)
 More than a minute out, V is the average of a window entirely in the future: mean = current raw level, variance of a
 random walk to the window plus the averaging term.
 """
-import math, time
+import math, time, threading
 
 def phi(z): return 0.5 * (1 + math.erf(z / math.sqrt(2)))
 
 _CACHE = {}
+_TL = threading.local()      # .res = model refreshes per second for this thread (1 unless a fast loop raises it)
+
+def set_resolution(per_second): _TL.res = max(1, int(per_second))
 
 def p_up(market, index_feed, spot_feed, now=None):
     """Return (prob_up, details), cached per (market, second): 60+ bots in 3 universes call this for the same
     market in the same loop pass."""
-    now = now or time.time(); key = (market.slug, int(now))
+    now = now or time.time(); res = getattr(_TL, "res", 1); key = (market.slug, int(now * res), res)
     hit = _CACHE.get(key)
     if hit is not None: return hit
     if len(_CACHE) > 4000: _CACHE.clear()

@@ -233,3 +233,16 @@ carries over between hires. The hired bot sizes its own orders (since 11-11 22:4
 shows the current hire, P/L since hiring, daily P/L, past champions and the candidate board. To hire a bot by hand, write `{"key": "<bot>"}` to
 `paperbot-data/champion/hire.json` (any strategy, Bonereaper-lab variant or evolve member; add `"base"`, `"src"` and `"genes"` to give settings explicitly); the hourly
 review still applies. Code: `paperbot/champion.py`; state: `paperbot-data/champion/champion.json`. Paper results do not guarantee live results.
+
+## Fast 20 dashboard (port 8091)
+
+`paperbot/fast20.py`. The 20 most profitable strategy bots of the dollar, dollar30, dollar1000, top20, bonelab and
+evolve dashboards (return on starting cash after fees, at least 10 settled windows, picked once and kept in
+`paperbot-data/fast20/fast20.json`; delete that file and restart to pick again), each on a fresh $1,000 account with
+the share-of-bank sizing (0.1%-2% of the bank an order, 5% a window). Scanners are not eligible.
+
+These bots run on their own thread (`Engine.t_fast`), 20 passes a second (`fast_hz`), instead of the shared loop's
+roughly one pass a second; the model is recomputed at that rate. The dashboard shows the measured passes a second and
+the time one pass takes. Paper fills at the quote seen are the best case: a real order also has to reach the exchange,
+and most bots wait 2-3 s between their own orders, so the gain is reacting sooner, not ordering more often. Past profit
+of the picked bots is not evidence they will profit here (see the walk-forward result above).

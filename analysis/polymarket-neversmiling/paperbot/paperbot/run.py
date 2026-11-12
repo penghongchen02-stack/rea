@@ -60,6 +60,9 @@ UNIVERSES = [
     {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05, "dir": os.path.join(DATA, "tryout"),
      "pos_mult": 15.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m", "15m"], "pool_horizons": ["5m"]},
     # Rep1000: the nine report replicas alone with $1,000 each (user, 11-12 01:55Z), beside the $100 ones in std.
+    # Fast20: the 20 most profitable strategy bots, $1,000 each, on their own 20-passes-a-second loop (paperbot/fast20.py).
+    {"name": "fast20", "port": int(os.environ.get("PAPERBOT_PORT11", "8091")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05,
+     "dir": os.path.join(DATA, "fast20"), "pos_mult": 15.0, "cash": 1000.0, "registry": "fast20", "fast_hz": 20},
     {"name": "rep1000", "port": int(os.environ.get("PAPERBOT_PORT10", "8089")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05, "dir": os.path.join(DATA, "rep1000"),
      "cash": 1000.0, "registry": "reports"},
 ]
@@ -92,7 +95,11 @@ class Universe:
         self.cash = cfg.get("cash", START_CASH)
         mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0)).configure(cfg)
         self.lab = cfg.get("registry") == "bonelab"; self.evolver = None; self.champion = None; self.roster = None; self.tryout = None
-        if cfg.get("registry") == "tryout":     # candidates added and dropped at run time (paperbot/tryout.py)
+        self.fast20 = None; self.fast = bool(cfg.get("fast_hz")); self.lock = threading.RLock(); self.fast_stats = {}
+        if cfg.get("registry") == "fast20":     # the picked bots, run by Engine.t_fast (paperbot/fast20.py)
+            from .fast20 import Fast20
+            self.fast20 = Fast20(self, engine); self.fast20.restore()
+        elif cfg.get("registry") == "tryout":     # candidates added and dropped at run time (paperbot/tryout.py)
             from .tryout import Tryout
             self.tryout = Tryout(self, engine); self.tryout.restore()
         elif cfg.get("registry") == "champion":   # one account; its strategy is hired and replaced by the Champion
@@ -113,7 +120,7 @@ class Universe:
             reg = build_registry(cfg.get("pos_mult", 1.0))
             self.accounts = {k: mk(k) for k in list(reg) + list(LADDER_BOTS) + list(ARB_BOTS)}
         for a in self.accounts.values(): a.universe = self.name
-        managed = self.evolver is not None or self.champion is not None or self.tryout is not None   # build their own bots
+        managed = self.evolver is not None or self.champion is not None or self.tryout is not None or self.fast20 is not None   # build their own bots
         if not managed:
             active = os.environ.get("PAPERBOT_ACTIVE", "all").split(",")
             self.active = list(self.accounts) if active == ["all"] else active
@@ -146,6 +153,7 @@ class Universe:
         if self.evolver is not None: self.labels = self.evolver.labels
         if self.champion is not None: self.labels = self.champion.labels; self.champion.restore()
         if self.tryout is not None: self.labels = self.tryout.labels
+        if self.fast20 is not None: self.labels = self.fast20.labels
         if not managed:     # deleted and added bots (paperbot/roster.py)
             from .roster import Roster
             self.roster = Roster(self, engine); self.roster.apply()
@@ -218,6 +226,7 @@ class Universe:
         if self.champion is not None: self.last_state["champion"] = self.champion.snapshot(now)
         if self.roster is not None: self.last_state["roster"] = self.roster.snapshot()
         if self.tryout is not None: self.last_state["tryout"] = self.tryout.snapshot(now)
+        if self.fast20 is not None: self.last_state["fast20"] = self.fast20.snapshot(now)
 
 
 class Engine:
@@ -276,10 +285,11 @@ class Engine:
             if time.time() - m.end < 240: return False
             log.warning("could not settle %s; using last price", m.slug); up = (m.last_px or 0.5) >= 0.5
         for u in self.universes:
-            for s in u.strats: s.on_close(m)
-            for a in u.accounts.values():
-                rec = a.settle(m, up, sp)
-                if rec: u.store.insert("settlements", {k: v for k, v in rec.items() if k != "ts"} | {"ts": rec["ts"], "up": int(up)})
+            with u.lock:
+                for s in u.strats: s.on_close(m)
+                for a in u.accounts.values():
+                    rec = a.settle(m, up, sp)
+                    if rec: u.store.insert("settlements", {k: v for k, v in rec.items() if k != "ts"} | {"ts": rec["ts"], "up": int(up)})
         log.info("settled %s up=%s p2b=%s settle=%s (%s)", m.slug, up, m.p2b, sp, src); return True
 
     def settle_orphans(self):
@@ -305,6 +315,7 @@ class Engine:
             try:
                 self.mf.poll_books(); now = time.time()
                 for u in self.universes:
+                    if u.fast: continue          # no scanners there; its positions are all Up/Down windows
                     try:
                         if "ladder" in u.active: u.ladder.scan(now)
                         if "ladder_model" in u.active: u.ladder_model.scan(now)
@@ -330,22 +341,30 @@ class Engine:
                         if self.settle_market(m): self.mf.retire(m.slug)
                         continue
                     if m.book_ts < now - 10: continue
-                    for u, a in self.all_accounts(): a.on_book(m)
+                    for u, a in self.all_accounts(): 
+                        if not u.fast: a.on_book(m)
                     if m.kind != "updown": continue
                     for u in self.universes:
+                        if u.fast: continue        # run by t_fast
                         if "assets" in u.cfg and (m.asset not in u.cfg["assets"] or m.horizon not in u.cfg["horizons"]): continue
                         for s in u.strats:
                             try: s.on_tick(m, ctx, now)
                             except Exception as e: self.errors += 1; log.exception("[%s] strategy %s on %s: %s", u.name, s.name, m.slug, e)
-                    for u, a in self.all_accounts(): a.on_book(m)
+                    for u, a in self.all_accounts():
+                        if not u.fast: a.on_book(m)
                 for u in self.universes:
-                    for a in u.accounts.values():
-                        while a.fills:
-                            f = a.fills.pop(0); u.store.insert("fills", f); a.events.appendleft(f)
+                    with u.lock:
+                        for a in u.accounts.values():
+                            while a.fills:
+                                f = a.fills.pop(0); u.store.insert("fills", f); a.events.appendleft(f)
                 for u in self.universes:
                     if u.evolver is not None:
                         try: u.evolver.tick(now)
                         except Exception as e: self.errors += 1; log.exception("[%s] evolve: %s", u.name, e)
+                    if u.fast20 is not None:
+                        try:
+                            with u.lock: u.fast20.tick(now)
+                        except Exception as e: self.errors += 1; log.exception("[%s] fast20: %s", u.name, e)
                     if u.tryout is not None:
                         try: u.tryout.tick(now)
                         except Exception as e: self.errors += 1; log.exception("[%s] tryout: %s", u.name, e)
@@ -357,17 +376,51 @@ class Engine:
                         except Exception as e: self.errors += 1; log.exception("[%s] champion: %s", u.name, e)
                 if now - last_eq >= 5:
                     for u in self.universes:
-                        for a in u.accounts.values():
-                            eq = a.equity(self.mf.markets); u.equity_hist.append((now, a.name, eq))
-                            u.store.insert("equity", {"ts": now, "bot": a.name, "equity": eq, "cash": a.cash, "bp": a.buying_power(), "fees": a.fees})
+                        with u.lock:
+                            for a in u.accounts.values():
+                                eq = a.equity(self.mf.markets); u.equity_hist.append((now, a.name, eq))
+                                u.store.insert("equity", {"ts": now, "bot": a.name, "equity": eq, "cash": a.cash, "bp": a.buying_power(), "fees": a.fees})
                     last_eq = now
-                for u in self.universes: u.build_state(self, now)
+                for u in self.universes:
+                    with u.lock: u.build_state(self, now)
                 if now - last_save > 10:
-                    for u in self.universes: u.save()
+                    for u in self.universes:
+                        with u.lock: u.save()
                     last_save = now
             except Exception as e:
                 self.errors += 1; log.exception("loop: %s", e)
             time.sleep(max(0.0, 1.0 - (time.time() - t0)))
+
+    def t_fast(self, u):
+        """The fast loop of one universe (cfg fast_hz passes a second): match resting orders and run its bots on every
+        open Up/Down window. Holds the universe's lock for the pass; the engine loop takes the same lock to settle,
+        record and display. Books come from the websocket; nothing is polled here."""
+        from . import fair
+        hz = float(u.cfg["fast_hz"]); period = 1.0 / hz; fair.set_resolution(hz)
+        ctx = {"index": self.idx, "spot": self.spot}; st = u.fast_stats; st.update(passes=0, pass_ms=0.0, pass_ms_max=0.0, passes_per_s=0.0)
+        win_t = time.time(); win_n = 0; last_err = 0.0
+        while True:
+            t0 = time.perf_counter(); now = time.time()
+            try:
+                with u.lock:
+                    for m in list(self.mf.markets.values()):
+                        if now >= m.end or m.book_ts < now - 10: continue
+                        for a in u.accounts.values(): a.on_book(m)
+                        if m.kind != "updown": continue
+                        for s in u.strats:
+                            try: s.on_tick(m, ctx, now)
+                            except Exception as e:
+                                self.errors += 1
+                                if now - last_err > 5: last_err = now; log.exception("[%s] strategy %s on %s: %s", u.name, s.name, m.slug, e)
+                        for a in u.accounts.values(): a.on_book(m)
+            except Exception as e:
+                self.errors += 1
+                if now - last_err > 5: last_err = now; log.exception("[%s] fast loop: %s", u.name, e)
+            ms = (time.perf_counter() - t0) * 1000.0
+            st["passes"] += 1; win_n += 1; st["pass_ms"] = round(0.95 * st["pass_ms"] + 0.05 * ms, 2) if st["passes"] > 1 else round(ms, 2)
+            st["pass_ms_max"] = round(max(st["pass_ms_max"] * 0.999, ms), 2)
+            if now - win_t >= 5: st["passes_per_s"] = round(win_n / (now - win_t), 1); win_t = now; win_n = 0
+            time.sleep(max(0.001, period - (time.perf_counter() - t0)))
 
     def summary(self):
         """One compact JSON for the phone dashboard (web/mobile.html on PAPERBOT_PORT_MOBILE), for one universe
@@ -417,6 +470,8 @@ class Engine:
         for fn in (self.t_index, self.t_discover, self.t_crosscheck, self.spot.run, self.ws.run, self.t_mobile):
             threading.Thread(target=fn, daemon=True).start()
         for u in self.universes: threading.Thread(target=self.t_http, args=(u,), daemon=True).start()
+        for u in self.universes:
+            if u.fast: threading.Thread(target=self.t_fast, args=(u,), daemon=True).start()
         time.sleep(3)
         try: self.settle_orphans()
         except Exception as e: log.warning("orphan settlement: %s", e)
