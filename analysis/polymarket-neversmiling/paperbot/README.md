@@ -159,6 +159,15 @@ their standard accounts are saved in `paperbot-data/accounts.before-rep-only.jso
 The nine report replicas alone with $1,000 each (user, 11-12 01:55Z; `registry: "reports"`), beside the $100 ones in the
 standard universe and the $1,000 ones competing in the tryout. Same rules; order sizes scale with the bank.
 
+## br177 variants in the tryout (11-12 08:33Z)
+
+`paperbot/br177lab.py`: br177 with exactly one change each, named after the change, plus `br177_plain` to compare
+against; all use the lab br177's random seed, so order sizes match and only the change differs. In the tryout with
+$1,000 each (`src: "var"`): quarter-size bets during a cold streak (2 or fewer wins in the last 8 windows), cap of 5% of
+the bank per window, bet size following the edge, BTC only, stop for the UTC day after losing 10%, quarter size after
+giving back half the day's peak profit, skip quiet markets (volatility under 70% of its recent median), no early exit,
+resting entries at the touch (no fee), odds blended 80/20 with the market price. The champion's br177 is unchanged.
+
 ## Late favourite (late_fav)
 
 From the PR&R trader reports (BTC5MScour, SLIP-ME) and their TWAP settlement study: 5-minute windows settle on an

@@ -44,7 +44,8 @@ class Champion:
             from .strategies import build_registry
             from .bonelab import build_lab_registry
             from .reports import build_report_registry
-            self._builders = {"main": build_registry(self.cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(self.engine)}
+            self._builders = {"main": build_registry(self.cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(self.engine),
+                              "var": __import__("paperbot.br177lab", fromlist=["x"]).build_br177_registry()}
         return self._builders
 
     def hire(self, spec, now, reason):
@@ -52,7 +53,7 @@ class Champion:
         a.size_mode = "contracts"           # the hired bot sizes its own orders, as in the tryout (user, 11-11 22:40Z)
         obj = self.builders()[spec["src"]][spec["base"]](a)
         for k, v in spec.get("genes", {}).items(): setattr(obj, k, v)
-        if spec["src"] != "rep" and not spec.get("own") and isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)   # every coin here; replicas keep theirs
+        if spec["src"] not in ("rep", "var") and not spec.get("own") and isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)   # every coin here; replicas keep theirs
         obj.name = spec["key"]
         self.u.strats = [obj]
         eq = a.equity(self.engine.mf.markets)

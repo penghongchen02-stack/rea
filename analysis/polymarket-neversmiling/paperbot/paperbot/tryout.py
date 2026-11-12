@@ -37,7 +37,9 @@ def builders(cfg, engine=None):
     from .strategies import build_registry
     from .bonelab import build_lab_registry
     from .reports import build_report_registry
-    return {"main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(engine)}
+    from .br177lab import build_br177_registry
+    return {"main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(engine),
+            "var": build_br177_registry()}
 
 
 def pool(engine, skip, b, assets, horizons, min_markets=MIN_POOL, min_per_coin=0):
@@ -96,12 +98,12 @@ class Tryout:
         a.universe = self.u.name
         obj = self.builders()[spec["src"]][spec["base"]](a)
         for k, v in spec.get("genes", {}).items(): setattr(obj, k, v)
-        if spec["src"] != "rep":       # pool bots: the champion's coins and 5-minute windows; report replicas keep their own
+        if spec["src"] not in ("rep", "var"):       # pool bots: the champion's coins and 5-minute windows; report replicas keep their own
             if isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)
             if isinstance(getattr(obj, "durs", None), (set, tuple, list)): obj.durs = {300}
         obj.name = n
         self.u.accounts[n] = a; self.u.active.append(n); self.u.strats.append(obj); self.members[n] = spec
-        self.labels[n] = f"tryout since {time.strftime('%H:%MZ', time.gmtime(spec['joined']))}" + (f" ({', '.join(spec['where'])})" if spec.get("where") else "")
+        self.labels[n] = (spec["note"] + "; " if spec.get("note") else "") + f"tryout since {time.strftime('%H:%MZ', time.gmtime(spec['joined']))}" + (f" ({', '.join(spec['where'])})" if spec.get("where") else "")
 
     def _detach(self, n):
         a = self.u.accounts.pop(n, None)
@@ -220,7 +222,7 @@ class Tryout:
             return
         if not req or req.get("key") in self.members or req.get("base") not in self.builders().get(req.get("src"), {}):
             log.warning("[tryout] cannot add %s", req); return
-        spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"],
+        spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"], "note": req.get("note"),
                 "joined": now, "entry_score": None, "entry_n": 0}
         self._attach(spec); self._stats_at = 0; self.save(); log.info("[tryout] added %s by request", spec["key"])
 
