@@ -55,6 +55,9 @@ UNIVERSES = [
     # universe passes 5- and 15-minute markets; pool bots are held to 5-minute windows (user, 11-11 22:40Z).
     {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "contracts", "dir": os.path.join(DATA, "tryout"),
      "pos_mult": 15.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m", "15m"], "pool_horizons": ["5m"]},
+    # Rep1000: the nine report replicas alone with $1,000 each (user, 11-12 01:55Z), beside the $100 ones in std.
+    {"name": "rep1000", "port": int(os.environ.get("PAPERBOT_PORT10", "8089")), "size_mode": "contracts", "dir": os.path.join(DATA, "rep1000"),
+     "cash": 1000.0, "registry": "reports"},
 ]
 os.makedirs(DATA, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -99,6 +102,9 @@ class Universe:
         elif self.lab:
             from .bonelab import build_lab_registry
             reg = build_lab_registry(); self.accounts = {k: mk(k) for k in reg}
+        elif cfg.get("registry") == "reports":      # only the report replicas (paperbot/reports.py)
+            from .reports import build_report_registry
+            reg = build_report_registry(); self.accounts = {k: mk(k) for k in reg}
         else:
             reg = build_registry(cfg.get("pos_mult", 1.0))
             self.accounts = {k: mk(k) for k in list(reg) + list(LADDER_BOTS) + list(ARB_BOTS)}
@@ -109,7 +115,7 @@ class Universe:
             self.active = list(self.accounts) if active == ["all"] else active
             self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
         if managed: pass
-        elif self.lab:
+        elif self.lab or cfg.get("registry") == "reports":
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None; self.arbs = {}
         else:
             self.ladder = LadderArb(self.accounts["ladder"], engine.lf); self.ladder_model = LadderModel(self.accounts["ladder_model"], engine.lf, engine.idx, engine.spot)
@@ -131,6 +137,8 @@ class Universe:
         except Exception: pass
         if self.lab:
             from .bonelab import LAB_LABELS; self.labels = dict(LAB_LABELS)
+        if cfg.get("registry") == "reports":
+            self.labels = {k: "PR&R report replica, filtered: leading side only, 5% of bank per window, stops for the day at -10%" for k in self.accounts}
         if self.evolver is not None: self.labels = self.evolver.labels
         if self.champion is not None: self.labels = self.champion.labels; self.champion.restore()
         if self.tryout is not None: self.labels = self.tryout.labels

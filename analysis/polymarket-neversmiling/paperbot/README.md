@@ -154,6 +154,11 @@ their standard accounts are saved in `paperbot-data/accounts.before-rep-only.jso
 (3) The champion was un-paused by hiring br177 by hand (`{"key": "br177", "base": "br177", "src": "lab", "own": true}`;
 `own` keeps its own coins, BTC and ETH, besides its own order sizes of $0.10-$100 with $100 per window).
 
+## Rep1000 universe (port 8089)
+
+The nine report replicas alone with $1,000 each (user, 11-12 01:55Z; `registry: "reports"`), beside the $100 ones in the
+standard universe and the $1,000 ones competing in the tryout. Same rules; order sizes scale with the bank.
+
 ## Late favourite (late_fav)
 
 From the PR&R trader reports (BTC5MScour, SLIP-ME) and their TWAP settlement study: 5-minute windows settle on an

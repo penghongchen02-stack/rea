@@ -1,7 +1,7 @@
 """One-line scoreboard for the hourly check-in: reads /state.json from every universe's dashboard.
 
     python3 checkin.py "run 6"            # prints the line; append it to checkins.md
-    python3 checkin.py "run 6" 8080 8081  # a subset of ports (default 8080-8088)
+    python3 checkin.py "run 6" 8080 8081  # a subset of ports (default 8080-8089)
 
 Per universe: net P/L across all bots, the top bot with its P/L, the engine error count. The order-book stream
 status comes from the first port, and Traceback lines in the engine log are counted. Never prints key values.
@@ -18,7 +18,7 @@ def state(port):
 
 def main():
     label = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].isdigit() else ""
-    ports = [int(p) for p in sys.argv[1:] if p.isdigit()] or list(range(8080, 8089))
+    ports = [int(p) for p in sys.argv[1:] if p.isdigit()] or list(range(8080, 8090))
     parts = []; stream = None
     for port in ports:
         try: s = state(port)
