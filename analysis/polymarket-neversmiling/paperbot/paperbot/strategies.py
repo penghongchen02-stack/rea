@@ -718,10 +718,10 @@ class LateFavourite(LastCallHold):
         pos = acct.positions.get(slug); spent = abs(q) * (pos.avg if q > 0 else 1 - pos.avg) if pos and abs(q) > 1e-9 else 0.0
         if spent >= self.WINDOW_CAP: return
         if lead >= self.LEAD_BP and q >= 0 and ba <= self.MAX_PRICE and p - ba - theta * ba * (1 - ba) >= self.EDGE:
-            own = acct.size_mode != "dollar"     # own sizing outside the dollar dashboards: about ORDER_USD per order
+            own = acct.size_mode not in ("dollar", "pct")     # own sizing only where the dashboard sets none: about ORDER_USD per order
             acct.take(market, "buy", round(self.ORDER_USD / ba, 2) if own else self.clip, limit=ba, tag=f"late-up {lead:.1f}bp p{p:.3f}", fixed=own)
         elif lead <= -self.LEAD_BP and q <= 0 and 1 - bb <= self.MAX_PRICE and (1 - p) - (1 - bb) - theta * bb * (1 - bb) >= self.EDGE:
-            own = acct.size_mode != "dollar"
+            own = acct.size_mode not in ("dollar", "pct")
             acct.take(market, "sell", round(self.ORDER_USD / (1 - bb), 2) if own else self.clip, limit=bb, tag=f"late-down {-lead:.1f}bp p{1 - p:.3f}", fixed=own)
 
 

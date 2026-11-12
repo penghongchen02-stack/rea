@@ -20,10 +20,14 @@ START_CASH = float(os.environ.get("PAPERBOT_CASH", "100"))
 TOP20 = ["almach", "xarb_windows", "xarb_fast", "v_mid_rest", "xarb_tight", "v_mid_take", "lock_sweep", "lock_strikes",
          "pickoff", "lock_fast", "quarter", "v_15m_early", "lock_early", "v_strict", "xarb", "lastcall_rest", "v_early_z2",
          "v_mid_z2", "consensus_z2", "final"]
+# Share-of-bank sizing for the dashboards that were losing on 11-12 09:35Z (standard, rep1000, tryout; user's choice): every
+# order a random 0.1%-2% of the bot's settled bank, at most 5% of it in one market. The profitable dashboards keep theirs.
+PCT = (0.001, 0.02)
 UNIVERSES = [
     # Standard universe: since 11-12 01:45Z only the report replicas (rep_*), at the user's request; the standard bots
     # still run in dollar, dollar30 and dollar1000, and the old accounts are backed up beside accounts.json.
-    {"name": "std", "port": int(os.environ.get("PAPERBOT_PORT", "8080")), "size_mode": "contracts", "dir": DATA, "pos_mult": 1.0, "only_prefix": "rep_"},
+    {"name": "std", "port": int(os.environ.get("PAPERBOT_PORT", "8080")), "dir": DATA, "pos_mult": 1.0, "only_prefix": "rep_",
+     "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05},
     {"name": "dollar", "port": int(os.environ.get("PAPERBOT_PORT2", "8081")), "size_mode": "dollar", "dir": os.path.join(DATA, "dollar"), "pos_mult": 5.0,
      "size_min": float(os.environ.get("PAPERBOT_SIZE_MIN", "0.1")), "size_max": float(os.environ.get("PAPERBOT_SIZE_MAX", "10"))},
     {"name": "dollar30", "port": int(os.environ.get("PAPERBOT_PORT3", "8082")), "size_mode": "dollar", "dir": os.path.join(DATA, "dollar30"), "pos_mult": 15.0,
@@ -53,10 +57,10 @@ UNIVERSES = [
     # only bots that pass here (paperbot/tryout.py; user, 11-11 18:10Z).
     # Every bot sizes its own orders (no $1-$30 range) and the report replicas trade their own coins and windows, so the
     # universe passes 5- and 15-minute markets; pool bots are held to 5-minute windows (user, 11-11 22:40Z).
-    {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "contracts", "dir": os.path.join(DATA, "tryout"),
+    {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05, "dir": os.path.join(DATA, "tryout"),
      "pos_mult": 15.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m", "15m"], "pool_horizons": ["5m"]},
     # Rep1000: the nine report replicas alone with $1,000 each (user, 11-12 01:55Z), beside the $100 ones in std.
-    {"name": "rep1000", "port": int(os.environ.get("PAPERBOT_PORT10", "8089")), "size_mode": "contracts", "dir": os.path.join(DATA, "rep1000"),
+    {"name": "rep1000", "port": int(os.environ.get("PAPERBOT_PORT10", "8089")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05, "dir": os.path.join(DATA, "rep1000"),
      "cash": 1000.0, "registry": "reports"},
 ]
 os.makedirs(DATA, exist_ok=True)
@@ -86,7 +90,7 @@ class Universe:
         self.cfg = cfg; self.name = cfg["name"]; self.port = cfg["port"]; self.dir = cfg["dir"]; os.makedirs(self.dir, exist_ok=True)
         self.store = Store(os.path.join(self.dir, "paper.db")); self.engine = engine
         self.cash = cfg.get("cash", START_CASH)
-        mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0))
+        mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0)).configure(cfg)
         self.lab = cfg.get("registry") == "bonelab"; self.evolver = None; self.champion = None; self.roster = None; self.tryout = None
         if cfg.get("registry") == "tryout":     # candidates added and dropped at run time (paperbot/tryout.py)
             from .tryout import Tryout
@@ -208,7 +212,7 @@ class Universe:
             "feeds": {"index_age": round(now - engine.idx.last_ok, 1) if engine.idx.last_ok else None, "coinbase_connected": engine.spot.connected, "coinbase_msgs": engine.spot.msgs,
                       "books_polled": len(engine.mf.markets), "brti_crosscheck": engine.crosscheck, "stream": engine.ws.status()},
             "equity_history": hist, "settlements": settles[:80], "fills": fills[:80], "ladder": self.ladder.snapshot() if self.ladder else {}, "ladder_model": self.ladder_model.snapshot() if self.ladder_model else {}, "touch_model": self.touch_model.snapshot() if self.touch_model else {}, "xarb": self.xarb.snapshot() if self.xarb else {}, "arbs": {k: v.snapshot() for k, v in self.arbs.items()},
-            "config": {"universe": self.name, "size_mode": self.cfg["size_mode"], "size_range": [self.cfg.get("size_min"), self.cfg.get("size_max")], "active": self.active, "labels": self.labels,
+            "config": {"universe": self.name, "size_mode": self.cfg["size_mode"], "size_range": [self.cfg.get("size_min"), self.cfg.get("size_max")], "size_pct": self.cfg.get("size_pct"), "window_pct": self.cfg.get("window_pct"), "active": self.active, "labels": self.labels,
                        "start_cash": self.cash, "theta": 0.095, "assets": feeds.ASSETS, "horizons": list(feeds.HORIZONS)}}
         if self.evolver is not None: self.last_state["evolution"] = self.evolver.snapshot(now)
         if self.champion is not None: self.last_state["champion"] = self.champion.snapshot(now)

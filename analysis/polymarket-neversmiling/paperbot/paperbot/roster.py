@@ -75,7 +75,7 @@ class Roster:
     def _attach(self, spec, record=True):
         from .sim import Account
         u = self.u; c = self.cfg
-        a = Account(spec["name"], u.cash, size_mode=c["size_mode"], size_min=c.get("size_min", 0.1), size_max=c.get("size_max", 10.0))
+        a = Account(spec["name"], u.cash, size_mode=c["size_mode"], size_min=c.get("size_min", 0.1), size_max=c.get("size_max", 10.0)).configure(c)
         a.universe = u.name; obj = self._build(spec, a)
         if spec["src"] == "scan": u.arbs[spec["name"]] = obj
         else: u.strats.append(obj)

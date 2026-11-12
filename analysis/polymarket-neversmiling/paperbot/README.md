@@ -168,6 +168,17 @@ the bank per window, bet size following the edge, BTC only, stop for the UTC day
 giving back half the day's peak profit, skip quiet markets (volatility under 70% of its recent median), no early exit,
 resting entries at the touch (no fee), odds blended 80/20 with the market price. The champion's br177 is unchanged.
 
+## Share-of-bank order sizes on the losing dashboards (11-12 09:40Z)
+
+The user asked for sizes that follow the bank instead of fixed dollar ranges, and to leave what works alone. The
+dashboards in profit keep their settings (dollar, dollar30, dollar1000, top20, evolve, bonelab, and the champion's
+br177). On the three that were losing (standard, rep1000, tryout: `size_mode: "pct"`, `size_pct: (0.001, 0.02)`,
+`window_pct: 0.05`) every order is a random 0.1%-2% of the bot's settled bank (starting cash plus settled results
+after fees) and one market holds at most 5% of it, so the same setting works for $100, $1,000 or $30,000 and shrinks
+as a bot loses. It applies to strategies, lab bots, replicas, late_fav and the combo (arbitrage legs included). The
+eleven br177 copies in the tryout keep br177's own sizes, because they test one change each against the champion's
+br177.
+
 ## Late favourite (late_fav)
 
 From the PR&R trader reports (BTC5MScour, SLIP-ME) and their TWAP settlement study: 5-minute windows settle on an

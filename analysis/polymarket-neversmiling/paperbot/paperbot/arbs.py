@@ -51,6 +51,7 @@ class ArbBase:
         """legs: [(market, side, limit, tag)]. One contract count for every leg: dollar universes draw the dollar
         size once at the first leg's price, then every leg uses that count (capped by the thinnest book)."""
         n = min(n, round(self.acct.size_for(legs[0][2], self.MAX_SETS), 2), self.acct.affordable_sets([(s, l) for _, s, l, _ in legs]))
+        n = min([n] + [self.acct.window_room(m.slug, s, l) for m, s, l, _ in legs])      # share-of-bank dashboards: per-market limit
         n = math.floor(n * 100) / 100
         if n < 0.01: self.stats["unaffordable"] += 1; return False
         self.opps.appendleft({"ts": time.time(), "kind": label, "legs": [m.slug for m, _, _, _ in legs], "edge": round(edge, 4), "n": round(n, 2)})

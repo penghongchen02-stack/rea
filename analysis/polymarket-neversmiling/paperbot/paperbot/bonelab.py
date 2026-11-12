@@ -60,6 +60,7 @@ class BoneVar(LastCallHold):
         return True
 
     def contracts(self, price):
+        if self.acct.size_mode == "pct": return self.acct.size_for(price, 0)      # the dashboard's share of the bank
         kind = self.sizing[0]
         if kind == "clip": return float(self.sizing[1]) if len(self.sizing) > 1 else (10.0 if self.rng.random() < 0.1 else 2.0)
         if kind == "usd":
@@ -100,7 +101,7 @@ class BoneVar(LastCallHold):
         if self.cap is None:
             if abs(q) + n > self.max_pos: return
         else:
-            room = self.cap - abs(q) * px
+            room = (self.acct.window_pct * self.acct.bank() if self.acct.size_mode == "pct" else self.cap) - abs(q) * px
             if room <= 0: return
             n = min(n, room / px)
         n = round(n, 2)

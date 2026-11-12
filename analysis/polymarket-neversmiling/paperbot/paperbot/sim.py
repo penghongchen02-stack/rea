@@ -36,6 +36,31 @@ class Account:
         # Estimated liquidity rewards / rebates (report replicas only): dollars filled x the rate the trader's report
         # shows on polymarket.com. Tracked beside the account, never added to cash or P/L: Polymarket US Tier 1 pays none.
         self.reward_rate = 0.0; self.est_rewards = 0.0
+        # Share-of-bank sizing (size_mode "pct"; user, 11-12 09:35Z): each order a random share of the bank between
+        # size_pct[0] and size_pct[1], and at most window_pct of the bank in one market, so sizes follow the bank.
+        self.size_pct = None; self.window_pct = None
+
+    def configure(self, cfg):
+        """Take the dashboard's share-of-bank settings, if it has them. Returns self."""
+        if cfg.get("size_pct"): self.size_pct = tuple(cfg["size_pct"]); self.window_pct = cfg.get("window_pct", 0.05)
+        return self
+
+    def bank(self):
+        """Settled bank: starting cash plus settled results after fees (open positions are not counted)."""
+        return max(0.0, self.start_cash + self.realized_closed - self.fees)
+
+    def pct_dollars(self):
+        import math
+        lo, hi = self.size_pct
+        return self.bank() * math.exp(self.rng.uniform(math.log(lo), math.log(hi)))
+
+    def window_room(self, slug, side, price):
+        """Contracts that can still be opened in this market under the per-window share of the bank (pct mode only)."""
+        if self.size_mode != "pct" or not self.window_pct: return float("inf")
+        p = self.positions.get(slug); held = 0.0
+        if p and not p.closed and abs(p.qty) > 1e-9: held = abs(p.qty) * (p.avg if p.qty > 0 else 1 - p.avg)
+        unit = price if side == "buy" else 1 - price
+        return max(0.0, self.window_pct * self.bank() - held) / max(unit, 0.01)
     @property
     def liq_key(self):
         """Liquidity consumption is tracked per account: each bot is evaluated as if it alone traded against the
@@ -97,6 +122,7 @@ class Account:
     def size_for(self, price, qty):
         """Dollar mode: ignore the strategy's contract count and size each order to a random dollar amount
         (log-uniform between size_min and size_max) at the order price."""
+        if self.size_mode == "pct": return round(self.pct_dollars() / max(price, 0.01), 2)
         if self.size_mode != "dollar": return qty
         import math
         d = math.exp(self.rng.uniform(math.log(self.size_min), math.log(self.size_max)))
@@ -107,10 +133,11 @@ class Account:
         count (an exit must not be resized into a flip); the opening part is a random dollar amount divided by what
         one contract of that side costs: the price for a buy, 1 - price for a sell (a short YES is a long NO). Sizing
         a sell at its YES price made a $30 order on the 94c Down side 500 contracts (11-11 21:20Z)."""
-        if self.size_mode != "dollar": return qty
+        if self.size_mode not in ("dollar", "pct"): return qty
         p = self.positions.get(slug); held = p.qty if p and not p.closed else 0.0
         if (side == "sell" and held > 1e-9) or (side == "buy" and held < -1e-9): return min(qty, abs(held))
-        return self.size_for(price if side == "buy" else 1 - price, qty)
+        n = self.size_for(price if side == "buy" else 1 - price, qty)
+        return min(n, self.window_room(slug, side, price)) if self.size_mode == "pct" else n
 
     def place(self, market, side, price, qty, post_only=False, tag="", fixed=False):
         """fixed=True keeps the caller's contract count (arbitrage legs must match); otherwise dollar universes resize."""

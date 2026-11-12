@@ -98,7 +98,11 @@ class Tryout:
     def _attach(self, spec):
         from .sim import Account
         n = spec["key"]
-        a = Account(n, self.cash, size_mode="contracts")          # every bot sizes its own orders (user, 11-11 22:40Z)
+        # Share-of-bank sizing since 11-12 09:35Z. The br177 copies (src "var") keep br177's own sizes: they exist to test
+        # one change each against the champion's br177, and a different size would change the test.
+        own = spec["src"] == "var" or not self.cfg.get("size_pct")
+        a = Account(n, self.cash, size_mode="contracts" if own else "pct")
+        if not own: a.configure(self.cfg)
         a.universe = self.u.name
         obj = self.builders()[spec["src"]][spec["base"]](a)
         for k, v in spec.get("genes", {}).items(): setattr(obj, k, v)

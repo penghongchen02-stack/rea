@@ -44,7 +44,16 @@ class Replica(LastCallHold):
         account.reward_rate = self.REWARD_RATE
 
     @property
-    def cap(self): return min(self.MARKET_CAP * self.scale, self.RISK_FRAC * self.acct.start_cash)
+    def cap(self):
+        if self.pct: return min(self.MARKET_CAP * self.scale, self.acct.window_pct * self.acct.bank())
+        return min(self.MARKET_CAP * self.scale, self.RISK_FRAC * self.acct.start_cash)
+
+    @property
+    def pct(self): return self.acct.size_mode == "pct"
+
+    def median_usd(self):
+        if self.pct: lo, hi = self.acct.size_pct; return self.acct.bank() * math.sqrt(lo * hi)
+        return self.SIZE[0] * self.scale
 
     def stopped_today(self, now):
         """True once this UTC day's settled windows have, at any point, been down DAY_STOP of the bank; it then stays
@@ -60,6 +69,7 @@ class Replica(LastCallHold):
 
     # ---- helpers ---------------------------------------------------------------
     def dollars(self, mult=1.0):
+        if self.pct: return self.acct.pct_dollars()        # the dashboard's share of the bank (buy() holds it to the top share)
         med, p95, mx = self.SIZE; s = math.log(max(p95 / med, 1.0001)) / 1.645
         return min(mx, max(0.5, med * math.exp(s * self.rng.gauss(0, 1)))) * mult * self.scale
 
@@ -67,6 +77,7 @@ class Replica(LastCallHold):
         """side 'up' buys YES at the ask; 'down' buys NO by selling YES at the bid. usd = dollars to spend."""
         room = self.cap - st.get("spent", 0.0)
         usd = min(usd, room)
+        if self.pct: usd = min(usd, self.acct.size_pct[1] * self.acct.bank())
         if usd < 0.5 * self.scale: return None
         if side == "up":
             px = market.best_ask
@@ -129,7 +140,7 @@ class Pair(Replica):
         elif strong and self.TILT > 1:
             w_up, w_dn = (self.TILT, 1.0) if z > 0 else (1.0, self.TILT)
         usd = min(self.dollars() * 2, room); tot = w_up + w_dn; orders = st.setdefault("orders", [])
-        su, sd = self.shares(st, "buy"), self.shares(st, "sell"); clip = self.SIZE[0] * self.scale / max(min(up_c, dn_c), 0.05)   # one median clip
+        su, sd = self.shares(st, "buy"), self.shares(st, "sell"); clip = self.median_usd() / max(min(up_c, dn_c), 0.05)   # one median clip
         room_up = self.BALANCE * (w_up / w_dn) * sd + clip - su; room_dn = self.BALANCE * (w_dn / w_up) * su + clip - sd   # shares
         ok_up = room_up >= market.min_qty; ok_dn = room_dn >= market.min_qty
         if ok_up and self.BAND[0] <= up_c <= self.BAND[1] and up_c > 0:
