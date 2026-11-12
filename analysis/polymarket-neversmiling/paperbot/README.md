@@ -73,11 +73,12 @@ stopped; `PAPERBOT_EVOLVE_PERIOD` (seconds) changes the cull interval.
 ## Phone dashboard (port 8090)
 
 `web/mobile.html`, served by the engine on `PAPERBOT_PORT_MOBILE` (default 8090) with one compact `/summary.json`
-(refreshed every 5 s): key and feed health (the key shows as working when the signed market stream is connected and
-receiving; key values are never shown), the champion's bank and status, the live 5-minute window of each coin (lead
-over the price to beat in bp, Up price, model probability, time left), every dashboard's net P/L and top bots, the
-tryout with each bot's progress to 50 windows and what it still needs, and the latest settled windows. iPhone layout:
-system font, light and dark mode, safe areas, bottom tab bar, add-to-home-screen ready.
+(refreshed every 5 s), for the standard universe only (`PAPERBOT_MOBILE_UNIVERSE`, default `std`; user, 11-12 00:05Z):
+key and feed health (the key shows as working when the signed market stream is connected and receiving; key values are
+never shown), net P/L with bots up/down, windows won, fees and open positions, the live 5-minute window of each coin
+(lead over the price to beat in bp, Up price, model probability, time left), every bot ranked by P/L, the latest
+settled windows and fills. iPhone layout: system font, light and dark mode, safe areas, bottom tab bar, add-to-home-screen
+ready.
 
 ## Report replicas in the tryout (paperbot/reports.py)
 

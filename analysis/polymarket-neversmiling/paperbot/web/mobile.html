@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Paper Bots">
+<meta name="apple-mobile-web-app-title" content="Standard">
 <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<title>Paper Bots</title>
+<title>Standard Paper Bots</title>
 <style>
 :root{--bg:#f2f2f7;--card:#ffffff;--text:#000000;--text2:#3c3c43cc;--sep:#3c3c4329;--fill:#7878801f;--green:#248a3d;--red:#d70015;--blue:#007aff;--orange:#c93400;--tint:#007aff}
 @media (prefers-color-scheme: dark){:root{--bg:#000000;--card:#1c1c1e;--text:#ffffff;--text2:#ebebf599;--sep:#54545899;--fill:#7878805c;--green:#30d158;--red:#ff453a;--blue:#0a84ff;--orange:#ff9f0a;--tint:#0a84ff}}
@@ -58,38 +58,35 @@ section{display:none}section.on{display:block}
 </header>
 
 <section id="t-home" class="on">
-  <h2>Champion · $1,000 bank</h2>
-  <div class="card" id="champ"></div>
+  <h2 id="unihead">Standard universe</h2>
+  <div class="card" id="hero"></div>
   <h2>Live 5-minute windows</h2>
   <div class="grid" id="live"></div>
-  <h2>Dashboards</h2>
-  <div class="card" id="totals"></div>
-  <h2>Past champions</h2>
-  <div class="card" id="past"></div>
+  <h2>Top 5 bots</h2>
+  <div class="card" id="top5"></div>
 </section>
 
-<section id="t-try">
-  <h2 id="tryhead">Tryout</h2>
-  <div class="card" id="tryout"></div>
-  <h2>Dropped</h2>
-  <div class="card" id="dropped"></div>
+<section id="t-bots">
+  <h2 id="botshead">All bots</h2>
+  <div class="card" id="bots"></div>
 </section>
 
-<section id="t-dash">
-  <div id="dash"></div>
+<section id="t-trades">
+  <h2>Latest settled windows</h2>
+  <div class="card" id="settled"></div>
+  <h2>Latest fills</h2>
+  <div class="card" id="fills"></div>
 </section>
 
 <section id="t-feed">
   <h2>Polymarket key &amp; feeds</h2>
   <div class="card" id="health"></div>
-  <h2>Latest settled windows (champion &amp; tryout)</h2>
-  <div class="card" id="recent"></div>
 </section>
 
 <nav class="tabs">
   <button data-t="home" class="on"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 2 11h3v9h5v-6h4v6h5v-9h3z"/></svg>Overview</button>
-  <button data-t="try"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 20h4V10H4zm6 0h4V4h-4zm6 0h4v-7h-4z"/></svg>Tryout</button>
-  <button data-t="dash"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg>Dashboards</button>
+  <button data-t="bots"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 20h4V10H4zm6 0h4V4h-4zm6 0h4v-7h-4z"/></svg>Bots</button>
+  <button data-t="trades"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>Trades</button>
   <button data-t="feed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>Status</button>
 </nav>
 
@@ -101,7 +98,6 @@ const pl=(v,d=2)=>v==null?'<span class="muted">–</span>':`<span class="${v>0?"
 const hm=t=>t?new Date(t*1000).toISOString().slice(11,16)+"Z":"–";
 const mmss=s=>s==null?"–":s<=0?"due":(s>=3600?Math.floor(s/3600)+"h ":"")+Math.floor(s%3600/60)+"m "+String(Math.floor(s%60)).padStart(2,"0")+"s";
 const coinName={btc:"BTC",eth:"ETH",sol:"SOL",xrp:"XRP"};
-const NAMES={std:"Standard ($100)",dollar:"Dollar ($0.10–$10)",dollar30:"Dollar30 ($1,000)",dollar1000:"Dollar1000 ($30,000)",bonelab:"Bonereaper lab",top20:"Top 20 ($5,000)",evolve:"Evolve",champion:"Champion",tryout:"Tryout"};
 let D=null,fetchedAt=0,tab="home";
 
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll("section").forEach(s=>s.classList.toggle("on",s.id==="t-"+tab));$("title").textContent=b.textContent.trim();scrollTo(0,0)});
@@ -116,48 +112,36 @@ function render(){
     [D.errors?"warn":"ok",`${D.errors} errors`],
   ].map(([c,t])=>`<span class="pill"><span class="dot ${c}"></span>${esc(t)}</span>`).join("");
 
-  // champion
-  const C=D.champion;
-  if(C){
-    const day=Object.entries(C.days||{}).slice(-1)[0], dayPl=day?day[1].pnl:null, eq=C.equity;
-    let h=`<div class="hero"><div class="k">Bank</div><div class="big">${money(eq)}</div>
-      <div class="kv"><span>Today (UTC)</span><b>${pl(dayPl)}</b></div>`;
-    if(C.paused||!C.current) h+=`<div style="margin-top:10px"><span class="badge paused">PAUSED</span> <span class="small">Waiting for a bot to pass the tryout. Open positions: ${C.open}</span></div>`;
-    else h+=`<div style="margin-top:10px"><b>${esc(C.current.key)}</b> <span class="small">since ${hm(C.current.hired)}</span></div>
-      <div class="kv"><span>Since hired</span><b>${pl(C.pnl_since_hire)}</b></div><div class="kv"><span>Next review</span><b>${mmss(C.next_review_in)}</b></div>`;
-    h+=`</div>`;
-    $("champ").innerHTML=h;
-    $("past").innerHTML=(C.history||[]).map(x=>`<div class="row"><div class="grow"><div class="name">${esc(x.key)}</div><div class="small">${x.fired?`${hm(x.hired)}–${hm(x.fired)} · ${esc(x.why||"replaced at review")}`:`hired ${hm(x.hired)} · kept at a review (nobody had passed)`}</div></div><div class="num">${pl(x.pnl)}</div></div>`).join("")||`<div class="row small">None yet</div>`;
-  }
+  const U=D.universe||{}, B=D.bots||[];
+  $("unihead").textContent=`Standard universe · port ${U.port} · ${money(U.start_cash,0)} per bot`;
+  const up=B.filter(b=>b.pnl>0).length, dn=B.filter(b=>b.pnl<0).length, settled=B.reduce((a,b)=>a+(b.settled||0),0), won=B.reduce((a,b)=>a+(b.won||0),0);
+  const fees=B.reduce((a,b)=>a+(b.fees||0),0), open=B.reduce((a,b)=>a+(b.open||0),0);
+  $("hero").innerHTML=`<div class="hero"><div class="k">Net P/L, all ${B.length} bots</div><div class="big">${pl(D.net)}</div>
+    <div class="kv"><span>Bots up / down</span><b>${up} / ${dn}</b></div>
+    <div class="kv"><span>Windows settled · won</span><b>${settled.toLocaleString()} · ${settled?Math.round(won/settled*100):0}%</b></div>
+    <div class="kv"><span>Fees paid</span><b>${money(fees)}</b></div>
+    <div class="kv"><span>Open positions</span><b>${open}</b></div>
+    <div class="kv"><span>Deleted losers · new bots</span><b>${(D.roster||{}).removed||0} · ${Object.keys((D.roster||{}).added||{}).length}</b></div></div>`;
+  const botRow=(b,i)=>`<div class="row"><div class="grow"><div class="name">${i+1}. ${esc(b.name)}${(D.roster.added||{})[b.name]?' <span class="badge">new</span>':""}</div>
+    <div class="small">${b.settled||0} windows · ${b.settled?Math.round((b.won||0)/b.settled*100):0}% won · ${b.fills} fills${b.open?` · ${b.open} open`:""}</div>
+    ${b.label?`<div class="why">${esc(b.label)}</div>`:""}</div><div class="num">${pl(b.pnl)}</div></div>`;
+  $("top5").innerHTML=B.slice(0,5).map(botRow).join("")||`<div class="row small">No bots</div>`;
+  $("botshead").textContent=`All ${B.length} bots · ${up} up · ${dn} down`;
+  $("bots").innerHTML=B.map(botRow).join("");
   // live windows
   $("live").innerHTML=["btc","eth","sol","xrp"].map(a=>{const m=(D.live||{})[a];if(!m)return `<div class="coin"><div class="t">${coinName[a]}</div><div class="small">No open window</div></div>`;
     const px=m.index??m.spot, bp=(px&&m.p2b)?(px-m.p2b)/m.p2b*1e4:null, left=Math.max(0,m.end-(D.ts+(Date.now()/1000-fetchedAt)));
-    const up=m.p_up, side=up==null?"–":up>=.5?"Up":"Down";
+    const pu=m.p_up, side=pu==null?"–":pu>=.5?"Up":"Down";
     return `<div class="coin"><div class="t"><span>${coinName[a]}</span><span class="small">${mmss(left)}</span></div>
       <div class="lead ${bp==null?"":bp>=0?"pos":"neg"}">${bp==null?"–":(bp>=0?"+":"")+bp.toFixed(1)+" bp"}</div>
       <div class="kv"><span>To beat</span><b>${m.p2b==null?"–":m.p2b.toLocaleString()}</b></div>
       <div class="kv"><span>Now</span><b>${px==null?"–":px.toLocaleString()}</b></div>
       <div class="kv"><span>Up price</span><b>${m.bid==null?"–":Math.round(m.bid*100)}/${m.ask==null?"–":Math.round(m.ask*100)}¢</b></div>
-      <div class="kv"><span>Model</span><b>${up==null?"–":side+" "+Math.round(Math.max(up,1-up)*100)+"%"}</b></div></div>`}).join("");
-  // totals
-  $("totals").innerHTML=(D.universes||[]).map(u=>`<div class="row"><div class="grow"><div class="name">${esc(NAMES[u.name]||u.name)}</div><div class="small">${u.bots} bots · ${u.up} up · ${u.down} down${u.top[0]?` · best ${esc(u.top[0].name)}`:""}</div></div><div class="num">${pl(u.net,0)}</div></div>`).join("");
-
-  // tryout
-  const T=D.tryout;
-  if(T){
-    $("tryhead").textContent=`Tryout · ${T.members.length} bots · review in ${mmss(T.next_review_in)}`;
-    $("tryout").innerHTML=T.members.map(m=>{const pct=Math.min(100,(m.n||0)/T.min_windows*100);
-      return `<div class="row"><div class="grow"><div class="name">${esc(m.name)} ${m.passed?'<span class="badge pass">PASS</span>':""}</div>
-        <div class="small">${m.n}/${T.min_windows} windows · edge ${m.edge==null?"–":(m.edge>=0?"+":"")+(m.edge*100).toFixed(1)+"¢"} · ${m.coins_up||0}/4 coins up</div>
-        <div class="bar"><i style="width:${pct}%"></i></div>${(r=>!m.passed&&r.length?`<div class="why">Needs: ${esc(r.join(" · "))}</div>`:"")((m.why||[]).filter(w=>!/windows|coins/.test(w)))}</div>
-        <div class="num">${pl(m.pnl)}</div></div>`}).join("");
-    $("dropped").innerHTML=(T.dropped||[]).length?T.dropped.map(d=>`<div class="row"><div class="grow"><div class="name">${esc(d.key)}</div><div class="small">${hm(d.ts)} · ${esc(d.why)} · ${d.n} windows</div></div><div class="num">${pl(d.pnl)}</div></div>`).join(""):`<div class="row small">None yet</div>`;
-  }
-  // dashboards detail
-  $("dash").innerHTML=(D.universes||[]).map(u=>`<h2>${esc(NAMES[u.name]||u.name)} · port ${u.port}</h2><div class="card">
-    <div class="row"><div class="grow">Net P/L <span class="small">(${u.bots} bots, ${money(u.start_cash,0)} each)</span></div><div class="num">${pl(u.net,0)}</div></div>
-    ${u.top.map((b,i)=>`<div class="row"><div class="grow"><div class="name">${i+1}. ${esc(b.name)}</div><div class="small">${b.settled??0} windows · ${b.won??0} won</div></div><div class="num">${pl(b.pnl)}</div></div>`).join("")}
-    ${u.worst.map(b=>`<div class="row"><div class="grow"><div class="name muted">Worst: ${esc(b.name)}</div></div><div class="num">${pl(b.pnl)}</div></div>`).join("")}</div>`).join("");
+      <div class="kv"><span>Model</span><b>${pu==null?"–":side+" "+Math.round(Math.max(pu,1-pu)*100)+"%"}</b></div></div>`}).join("");
+  // trades
+  $("settled").innerHTML=(D.settlements||[]).map(r=>`<div class="row"><div class="grow"><div class="name">${esc(r.bot)}</div><div class="small">${hm(r.ts)} · ${coinName[r.asset]||r.asset} ${esc(r.horizon)} · ${r.up?"Up":"Down"} won · ${r.fills} fill${r.fills===1?"":"s"}</div></div><div class="num">${pl(r.pnl_total)}</div></div>`).join("")||`<div class="row small">None yet</div>`;
+  $("fills").innerHTML=(D.fills||[]).map(f=>{const c=(f.slug||"").split("-")[0].replace("cpc","")||"btc";
+    return `<div class="row"><div class="grow"><div class="name">${esc(f.bot)}</div><div class="small">${hm(f.ts)} · ${(coinName[c]||"BTC")} · ${f.side==="buy"?"buy Up":"buy Down"} at ${Math.round((f.side==="buy"?f.price:1-f.price)*100)}¢ · ${f.liq}</div></div><div class="num small">${(+f.qty).toFixed(2)} sh</div></div>`}).join("")||`<div class="row small">None yet</div>`;
 
   // status
   const F=D.feeds||{}, X=D.crosscheck||{};
@@ -170,7 +154,6 @@ function render(){
     ["BRTI cross-check",X.ok?`${X.compared} s compared · median diff ${X.median_abs_diff}`:"–",X.ok?"ok":"warn"],
     ["Engine",`up ${mmss(D.uptime)} · ${D.errors} errors · loop ${D.loop}`,D.errors?"warn":"ok"],
   ].map(([a,b,c])=>`<div class="row"><span class="dot ${c}"></span><div class="grow"><div class="name">${esc(a)}</div><div class="small">${esc(b)}</div></div></div>`).join("");
-  $("recent").innerHTML=(D.recent||[]).map(r=>`<div class="row"><div class="grow"><div class="name">${esc(r.bot)}</div><div class="small">${hm(r.ts)} · ${(coinName[r.asset]||r.asset)} ${esc(r.horizon)} · ${r.up?"Up":"Down"} won</div></div><div class="num">${pl(r.pnl_total)}</div></div>`).join("")||`<div class="row small">None yet</div>`;
 }
 
 async function load(){
