@@ -258,3 +258,11 @@ ago, Down only while below), `br177_no_more_than_3_windows_in_a_row_on_one_side`
 exit) and `br177_trend_and_hold_to_the_close`. They were added with `"keep": 300` in `add.json`, which exempts a bot
 from the tryout's hourly review until it has that many settled windows (the first set of br177 copies was dropped
 after about 24).
+
+## Direction guards on every lab bot (11-12 19:00Z)
+
+At the user's request every Bonereaper-lab bot (`bonelab.BoneVar`: the lab, its evolved variants, the Fast 20 picks, the
+tryout's lab bots and the champion's br177) now runs with all three guards: the 3-minute trend rule, no 4th window in a
+row on one side, and no early exit (the protective exit and the variants' take-profit / stop-loss are off). The
+tryout's br177 copies keep one guard each and `br177_unchanged_for_comparison` runs with none, so the effect can be
+measured. The guards had no settled record when they were switched on.

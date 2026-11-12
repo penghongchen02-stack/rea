@@ -22,11 +22,17 @@ Each variant changes one or a few knobs:
             (tp_c, sl_c) or as a multiple of the entry price (tp_x: sell at entry x (1 + tp_x); sl_x: sell at
             entry x (1 - sl_x)); after an exit the variant does not re-enter that window
 """
-import math
+import math, collections
 from .strategies import LastCallHold
 from .fair import p_up
 
 CASH = 1000.0
+# Direction guards on every lab bot, on every dashboard (user, 11-12 19:00Z; BoneVar.allow / manage / exits):
+#   trend    Up is bought only while the coin's Coinbase price is above its price TREND_S seconds ago, Down only below
+#   balance  after RUN_MAX windows in a row entered on one side, the next window on that side is skipped
+#   hold     no early exit: neither the protective exit nor a variant's take-profit / stop-loss; held to settlement
+# br177lab's copies switch them per variant, and its unchanged copy runs without them as the comparison.
+TREND_S = 180.0; RUN_MAX = 3
 
 
 class BoneVar(LastCallHold):
@@ -40,10 +46,17 @@ class BoneVar(LastCallHold):
         self.cap = cap if cap is not None else (None if sizing[0] == "clip" else 0.15 * CASH)
         self.max_edge = max_edge; self.late = late
         self.max_pos = max_pos; self.shrink = shrink; self.tp_c = tp_c; self.sl_c = sl_c; self.tp_x = tp_x; self.sl_x = sl_x
+        self.trend = self.balance = self.hold = True
+        self._ctx = None; self._sides = collections.deque(maxlen=RUN_MAX); self._seen = set()
+        for r in account.settlements[-50:]:                      # the sides of its last windows survive a restart
+            if abs(r.get("final_qty", 0.0)) > 1e-9: self._sides.append("buy" if r["final_qty"] > 0 else "sell")
+
+    def manage(self, market, ctx, now):
+        if not self.hold: super().manage(market, ctx, now)
 
     def exits(self, market, st):
         """Take-profit / stop-loss on the open position (long YES = bought Up, short YES = bought Down)."""
-        if not any(v is not None for v in (self.tp_c, self.sl_c, self.tp_x, self.sl_x)): return False
+        if self.hold or not any(v is not None for v in (self.tp_c, self.sl_c, self.tp_x, self.sl_x)): return False
         pos = self.acct.positions.get(market.slug)
         if not pos or pos.closed or abs(pos.qty) < 1e-9: return False
         if pos.qty > 0: entry, now_px, side, lim = pos.avg, market.best_bid, "sell", market.best_bid
@@ -60,7 +73,12 @@ class BoneVar(LastCallHold):
         return True
 
     def allow(self, side, market, now):
-        """Hook for variants that veto an entry ("buy" = Up, "sell" = Down). The lab's bots allow everything."""
+        """The trend and balance guards on an entry ("buy" = Up, "sell" = Down). No entry when the trend is unknown."""
+        if self.trend:
+            spot = self._ctx["spot"]; px, ts = spot.last(market.asset); old = spot.at(market.asset, now - TREND_S)
+            if not px or not old or now - (ts or 0) > 10: return False
+            if not (px > old if side == "buy" else px < old): return False
+        if self.balance and market.slug not in self._seen and len(self._sides) == RUN_MAX and all(s == side for s in self._sides): return False
         return True
 
     def contracts(self, price):
@@ -74,6 +92,10 @@ class BoneVar(LastCallHold):
 
     def on_tick(self, market, ctx, now):
         if market.asset not in self.assets or market.dur not in self.durs: return
+        self._ctx = ctx
+        if self.balance and market.slug not in self._seen:      # the side of each window it has entered
+            pos = self.acct.positions.get(market.slug)
+            if pos and abs(pos.qty) > 1e-9: self._seen.add(market.slug); self._sides.append("buy" if pos.qty > 0 else "sell")
         slug = market.slug; st = self.m(slug); left = market.remaining(now); acct = self.acct
         if left < 3 or market.state not in (None, "MARKET_STATE_OPEN"): return
         self.manage(market, ctx, now)

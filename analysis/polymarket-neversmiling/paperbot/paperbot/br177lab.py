@@ -10,7 +10,6 @@ from .fair import p_up
 
 _KW = VARIANTS["br177"][1]; _SEED = 100 + list(VARIANTS).index("br177")
 COLD_N = 8; COLD_WINS = 2; COLD_SIZE = 0.25; BANK_FRAC = 0.05; DAY_STOP = 0.10; GIVEBACK = 0.5; QUIET = 0.7
-TREND_S = 180.0; RUN_MAX = 3      # direction fixes (user, 11-12 18:45Z): see allow()
 
 
 class _Maker:
@@ -29,7 +28,7 @@ class _Maker:
 
 class Br177Var(BoneVar):
     """mode: None (plain) or one of cold, cap, signal, btc, daystop, giveback, quiet, noexit, maker, blend, trend,
-    balance, trend_noexit."""
+    balance, trend_noexit (the lab's direction guards, bonelab.BoneVar, one at a time)."""
     def __init__(self, account, name, mode=None):
         kw = dict(_KW)
         if mode == "btc": kw["assets"] = ("btc",)
@@ -37,10 +36,8 @@ class Br177Var(BoneVar):
         super().__init__(account, name, seed=_SEED, **kw)
         self.mode = mode; self.base_cap = self.cap; self._mult = 1.0; self._edge = None
         self._sig = collections.defaultdict(lambda: collections.deque(maxlen=900))
-        if mode in ("noexit", "trend_noexit"): self.EXIT_Z = -99.0                   # hold every bet to settlement
-        self._ctx = None; self._sides = collections.deque(maxlen=RUN_MAX); self._seen = set()
-        for r in account.settlements[-50:]:                      # the sides of its last windows survive a restart
-            if abs(r.get("final_qty", 0.0)) > 1e-9: self._sides.append("buy" if r["final_qty"] > 0 else "sell")
+        self.trend = mode in ("trend", "trend_noexit", "guards"); self.balance = mode in ("balance", "guards")
+        self.hold = mode in ("noexit", "trend_noexit", "guards")       # the lab's guards, one at a time here
         if mode == "maker": self.acct = _Maker(account)
 
     # ---- what the account's own settled windows say (known at entry) ------------
@@ -66,18 +63,6 @@ class Br177Var(BoneVar):
             return 0.0 if len(q) >= 120 and s < QUIET * statistics.median(q) else 1.0
         return 1.0
 
-    def allow(self, side, market, now):
-        """trend: Up only while the coin's Coinbase price is above where it was TREND_S seconds ago, Down only while it
-        is below (no entry when that price is unknown). balance: after RUN_MAX windows in a row on one side, the next
-        window on that side is skipped."""
-        if self.mode in ("trend", "trend_noexit"):
-            spot = self._ctx["spot"]; px, ts = spot.last(market.asset); old = spot.at(market.asset, now - TREND_S)
-            if not px or not old or now - (ts or 0) > 10: return False
-            return px > old if side == "buy" else px < old
-        if self.mode == "balance" and market.slug not in self._seen:
-            return not (len(self._sides) == RUN_MAX and all(s == side for s in self._sides))
-        return True
-
     def contracts(self, price):
         n = super().contracts(price)                       # draws the same random size as plain br177
         if self.mode == "signal" and self._edge is not None:
@@ -85,10 +70,6 @@ class Br177Var(BoneVar):
         return n * self._mult
 
     def on_tick(self, market, ctx, now):
-        self._ctx = ctx
-        if self.mode == "balance" and market.slug not in self._seen:      # the side of each window it has entered
-            pos = self.acct.positions.get(market.slug)
-            if pos and abs(pos.qty) > 1e-9: self._seen.add(market.slug); self._sides.append("buy" if pos.qty > 0 else "sell")
         if market.asset in self.assets and market.dur in self.durs:
             p, det = p_up(market, ctx["index"], ctx["spot"], now)
             if p is not None and market.best_bid is not None and market.best_ask is not None:
