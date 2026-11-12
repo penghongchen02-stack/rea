@@ -47,12 +47,15 @@ class Replica(LastCallHold):
     def cap(self): return min(self.MARKET_CAP * self.scale, self.RISK_FRAC * self.acct.start_cash)
 
     def stopped_today(self, now):
-        """True once this UTC day's settled windows have lost DAY_STOP of the bank. Summed from the account's own
-        settlement records, which survive a restart (a counter kept here was reset by every engine restart)."""
+        """True once this UTC day's settled windows have, at any point, been down DAY_STOP of the bank; it then stays
+        stopped until the next UTC day. Read from the account's own settlement records (they survive a restart) as the
+        lowest running total of the day: the plain total let a bot resume when trades still open at the stop settled
+        as wins and lifted it back over the line (rep_neversmiling, 11-12 04:00Z)."""
         if now - getattr(self, "_stop_at", 0) > 5:
-            day0 = now - now % 86400; a = self.acct
-            self._stop = sum(r.get("pnl_total", 0.0) for r in a.settlements if r.get("ts", 0) >= day0) <= -self.DAY_STOP * a.start_cash
-            self._stop_at = now
+            day0 = now - now % 86400; a = self.acct; run = low = 0.0
+            for r in a.settlements:
+                if r.get("ts", 0) >= day0: run += r.get("pnl_total", 0.0); low = min(low, run)
+            self._stop = low <= -self.DAY_STOP * a.start_cash; self._stop_at = now
         return self._stop
 
     # ---- helpers ---------------------------------------------------------------
