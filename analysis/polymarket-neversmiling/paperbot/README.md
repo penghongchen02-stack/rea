@@ -139,6 +139,21 @@ the losses, so they are in-sample and still have to prove themselves.
 most 5% of the bank, and nothing new opens for the rest of the UTC day after settled losses of 10%. The champion can
 hire it only if it passes the tryout.
 
+## Replicas without the hedge leg; standard universe = replicas only; br177 as champion (11-12 01:47Z)
+
+User's requests. (1) The reports themselves name what loses: the second, losing leg ("hedge tax": SLIP-ME's underdog
+buys cost about $1.2M, Doggystyie's two-sided trading lost 1%, FlippingSharks' and Bonereaper's best filter was the
+dominant side only), and here both sides of one book always cost $1 plus the spread. In the first 40 minutes the
+two-sided and cheap-side replicas won 3 of 9-12 windows each while the leading-side ones won 7 of 7 and 9 of 10. So
+rep_whiskas, rep_doggystyie, rep_slipme and rep_flippingsharks now buy only the leading side the model agrees with
+(Whiskas $0.60-0.90 in the last 3 minutes; Doggystyie one resting bid at |z| >= 2, $0.50-0.90; SLIP-ME adds at |z| >= 1
+up to $0.90 and late below $0.97; FlippingSharks $0.55-0.85 at |z| >= 1.5 and still completes a pair at <= $0.90); the
+combo's swing piece follows FlippingSharks. They restarted on fresh accounts. (2) The standard universe keeps only the
+`rep_*` bots (`only_prefix` in its config); the other standard bots still run in dollar, dollar30 and dollar1000, and
+their standard accounts are saved in `paperbot-data/accounts.before-rep-only.json` (with `roster.before-rep-only.json`).
+(3) The champion was un-paused by hiring br177 by hand (`{"key": "br177", "base": "br177", "src": "lab", "own": true}`;
+`own` keeps its own coins, BTC and ETH, besides its own order sizes of $0.10-$100 with $100 per window).
+
 ## Late favourite (late_fav)
 
 From the PR&R trader reports (BTC5MScour, SLIP-ME) and their TWAP settlement study: 5-minute windows settle on an

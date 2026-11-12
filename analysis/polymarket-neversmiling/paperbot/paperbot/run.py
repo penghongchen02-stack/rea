@@ -21,7 +21,9 @@ TOP20 = ["almach", "xarb_windows", "xarb_fast", "v_mid_rest", "xarb_tight", "v_m
          "pickoff", "lock_fast", "quarter", "v_15m_early", "lock_early", "v_strict", "xarb", "lastcall_rest", "v_early_z2",
          "v_mid_z2", "consensus_z2", "final"]
 UNIVERSES = [
-    {"name": "std", "port": int(os.environ.get("PAPERBOT_PORT", "8080")), "size_mode": "contracts", "dir": DATA, "pos_mult": 1.0},
+    # Standard universe: since 11-12 01:45Z only the report replicas (rep_*), at the user's request; the standard bots
+    # still run in dollar, dollar30 and dollar1000, and the old accounts are backed up beside accounts.json.
+    {"name": "std", "port": int(os.environ.get("PAPERBOT_PORT", "8080")), "size_mode": "contracts", "dir": DATA, "pos_mult": 1.0, "only_prefix": "rep_"},
     {"name": "dollar", "port": int(os.environ.get("PAPERBOT_PORT2", "8081")), "size_mode": "dollar", "dir": os.path.join(DATA, "dollar"), "pos_mult": 5.0,
      "size_min": float(os.environ.get("PAPERBOT_SIZE_MIN", "0.1")), "size_max": float(os.environ.get("PAPERBOT_SIZE_MAX", "10"))},
     {"name": "dollar30", "port": int(os.environ.get("PAPERBOT_PORT3", "8082")), "size_mode": "dollar", "dir": os.path.join(DATA, "dollar30"), "pos_mult": 15.0,
@@ -135,6 +137,13 @@ class Universe:
         if not managed:     # deleted and added bots (paperbot/roster.py)
             from .roster import Roster
             self.roster = Roster(self, engine); self.roster.apply()
+        pre = cfg.get("only_prefix")
+        if pre:      # keep only bots whose name starts with this (scanners are built above, then dropped)
+            self.accounts = {k: a for k, a in self.accounts.items() if k.startswith(pre)}
+            self.arbs = {k: v for k, v in self.arbs.items() if k in self.accounts}
+            for attr in ("ladder", "ladder_model", "touch_model", "xarb"): setattr(self, attr, None)
+            self.active = [k for k in self.active if k in self.accounts]
+            self.strats = [st for st in self.strats if st.acct.name in self.accounts]
         self._load()
 
     def _load(self):

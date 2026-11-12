@@ -151,26 +151,37 @@ class Whiskas(Replica):
     REWARD_RATE = 0.0105       # report: $37,619 taker + $5,255 maker rebates + $594 LP on $4,128,425 bought
     def decide(self, market, st, p, det, now, left, bb, ba):
         up_c, dn_c = ba, 1 - bb; u, d = st.get("up", 0.0), st.get("down", 0.0)
-        if left > 180:
-            if up_c + dn_c <= self.PAIR_MAX:
-                usd = self.dollars()
-                if u <= d: self.buy(market, st, "up", usd, f"{self.name} pair up {up_c:.2f}")
-                if d <= u + usd: self.buy(market, st, "down", usd, f"{self.name} pair down {dn_c:.2f}")
-            return
+        if left > 180: return      # no pair leg (11-12 01:45Z): taking both sides costs $1 plus the spread and fees here, a sure loss
         lead, c, other = ("up", up_c, d) if up_c >= dn_c else ("down", dn_c, u)
         agrees = (p > 0.5) == (lead == "up")
         mine = u if lead == "up" else d
-        if agrees and 0.60 <= c < 0.90 and mine < self.LEAN_MAX * max(other, 1.0):
+        if agrees and 0.60 <= c < 0.90 and other == 0:      # leading side only, up to the window cap
             self.buy(market, st, lead, self.dollars(), f"{self.name} lean {lead} {c:.2f}")
 
 
 class Doggystyie(Pair):
-    """Doggystyie: BTC 5m, both sides every window, fills $15-50 (median $17.81, cap $84), $200 per market, spread
-    over the first 60-180 s, never sells, optional tilt to the favoured side (report rules 1-8). Its profit was
-    liquidity rewards (trading ROI -1.00%), which this sim does not pay."""
+    """Doggystyie, cut to what its report shows paying: its both-sides trading lost 1.00% (the profit was rewards), while
+    the side it held 3x+ of won 96.8%. So no second leg (the reports call the losing leg the hedge tax): BTC 5m, 120-300 s
+    before close, rest one bid on the side the model favours with |z| >= 2 while that side costs $0.50-0.90; maker
+    fills pay no fee; fills $15-50 (median $17.81, cap $84); hold. Rewards (2.69% of volume in its report) are
+    estimated separately."""
     name = "rep_doggystyie"; ASSETS = ("btc",); OPEN_MIN = 0; LEFT_MIN = 120; LEFT_MAX = 300; PERIOD = 8.0
-    SIZE = (17.81, 48.72, 83.52); MARKET_CAP = 200.0; PAIR_CAP = 0.99; TILT = 3.0; TILT_Z = 2.0   # filtered: pair must lock a profit; tilt only on a strong signal (its 3x+ side won 96.8%)
+    SIZE = (17.81, 48.72, 83.52); MARKET_CAP = 200.0; TILT_Z = 2.0; BAND = (0.50, 0.90)
     REWARD_RATE = 0.0269       # report: $93,668 rewards on $3,480,124 bought (its trading alone lost 1.00%)
+    def decide(self, market, st, p, det, now, left, bb, ba):
+        acct = self.acct; acct.cancel_all(market.slug); z = det.get("z", 0.0)
+        if abs(z) < self.TILT_Z: return
+        room = self.cap - self.filled(st)
+        if room < 1.0 * self.scale: return
+        usd = min(self.dollars(), room); orders = st.setdefault("orders", [])
+        held_up, held_dn = self.shares(st, "buy"), self.shares(st, "sell")
+        if z > 0 and held_dn == 0 and self.BAND[0] <= bb <= self.BAND[1]:
+            o = acct.place(market, "buy", bb, round(usd / bb, 2), post_only=True, tag=f"{self.name} bid up {bb:.2f} z{z:.1f}", fixed=True)
+            if o: orders.append(o)
+        elif z < 0 and held_up == 0 and self.BAND[0] <= 1 - ba <= self.BAND[1]:
+            o = acct.place(market, "sell", ba, round(usd / (1 - ba), 2), post_only=True, tag=f"{self.name} bid down {1 - ba:.2f} z{z:.1f}", fixed=True)
+            if o: orders.append(o)
+        st["spent"] = self.filled(st)
 
 
 class NeverSmiling(Pair):
@@ -193,9 +204,12 @@ class FlippingSharks(Replica):
     30-300 s left (5m; the last 10 minutes of a 15m), buy the cheaper side at <= $0.40; holding one side, buy the other
     as soon as both average costs add to <= PAIR_TARGET, sized to match the shares held; add to the held side only
     below $0.30 and 5c under its average. Sizes from the report ($4.21 median, P95 $74.81); $60 per market (live
-    average about $46). Hours 4, 16, 19, 20 UTC skipped (report)."""
+    average about $46). Hours 4, 16, 19, 20 UTC skipped (report). Changed 11-12 01:45Z: cheap-side entries lost here
+    (3 of 12 windows won) and its report's best filter was the dominant side at 2x+ (91.6% won), so the first buy is now
+    the leading side at $0.55-0.85 when the model agrees (|z| >= 1.5); the other side is still bought if the pair then
+    costs <= $0.90; no averaging down."""
     name = "rep_flippingsharks"; ASSETS = ("btc",); DURS = (FIVE, FIFTEEN); LEFT_MIN = 30; PERIOD = 7.0; DAYS_OFF = (5, 6)   # filtered: no ETH (live -10%), no weekends (report: Sat -$469, Sun -$1,143)
-    SIZE = (4.21, 74.81, 222.75); MARKET_CAP = 60.0; CHEAP = 0.40; PAIR_TARGET = 0.90; HOURS_OFF = (4, 16, 19, 20)
+    SIZE = (4.21, 74.81, 222.75); MARKET_CAP = 60.0; LEAD = (0.55, 0.85); LEAD_Z = 1.5; PAIR_TARGET = 0.90; HOURS_OFF = (4, 16, 19, 20)
     def on_tick(self, market, ctx, now):
         if market.asset == "eth" and market.dur == FIFTEEN: return          # live: BTC 5m, ETH 5m, BTC 15m only
         if market.remaining(now) > (300 if market.dur == FIVE else 600): return
@@ -206,16 +220,14 @@ class FlippingSharks(Replica):
         def take(side, usd, tag):
             o = self.buy(market, st, side, usd, tag)
             if o and o.filled > 0: sh[side] += o.filled
-        if not held:
-            side = min(cost, key=cost.get)
-            if cost[side] <= self.CHEAP: take(side, self.dollars(), f"{self.name} cheap {side} {cost[side]:.2f}")
+        if not held:      # leading side the model agrees with (11-12 01:45Z; cheap-side entries won 3 of 12 windows here)
+            side = "up" if p >= 0.5 else "down"; z = abs(det.get("z", 0.0))
+            if z >= self.LEAD_Z and self.LEAD[0] <= cost[side] <= self.LEAD[1]: take(side, self.dollars(), f"{self.name} lead {side} {cost[side]:.2f} z{z:.1f}")
             return
         if len(held) == 1:
             h = held[0]; o_ = "down" if h == "up" else "up"; avg = st[h] / sh[h]
             if avg + cost[o_] <= self.PAIR_TARGET:
                 take(o_, sh[h] * cost[o_], f"{self.name} flip {o_} {cost[o_]:.2f} pair {avg + cost[o_]:.2f}")
-            elif cost[h] <= 0.30 and cost[h] <= avg - 0.05:
-                take(h, self.dollars(), f"{self.name} add {h} {cost[h]:.2f}")
             return
         for k in ("up", "down"):            # both held: top up the lighter side while the pair stays cheap
             o_ = "down" if k == "up" else "up"
@@ -270,27 +282,21 @@ class PBot6(Replica):
 
 
 class SlipMe(Replica):
-    """SLIP-ME: BTC 5m. Both legs in the first ~30 s (60 shares each); minutes 1-4 add 60 to the side the model favours;
-    cheap underdog hedges under $0.20 (120 shares) until one side holds 2x the other; final 90 s add 60 to the dominant
-    side below $0.97; never sells (report rules 1-8). Fixed share clips; fills median $19.20, max $117.60, up to ~$887 per
-    market (capped at $300 here)."""
+    """SLIP-ME, cut to what its report shows paying: its paired shares lost $97,523 and its underdog buys cost about
+    $1.2M (the "hedge tax"), while the extra shares on the dominant side made $204,450; blocking underdog buys was its
+    report's best filter. So no opening pair and no cheap hedges: BTC 5m, from 60 s after the open add 60 shares to
+    the side the model favours (|z| >= 1) while it costs at most $0.90, never the other side; in the final 90 s add 60
+    to that side below $0.97 if the model still agrees; hold. Fills median $19.20; $300 per market in the report."""
     name = "rep_slipme"; ASSETS = ("btc",); PERIOD = 10.0; MARKET_CAP = 300.0
     def shares(self, market, st, side, n, tag):
         px = market.best_ask if side == "up" else (1 - market.best_bid)
         return self.buy(market, st, side, n * px * self.scale, tag)
     def decide(self, market, st, p, det, now, left, bb, ba):
         el = now - market.start; z = det.get("z", 0.0); fav = "up" if z > 0 else "down"
-        up, dn = st.get("up", 0.0), st.get("down", 0.0); skew = max(up, dn) / max(min(up, dn), 1e-9)
-        if el <= 30 and not st.get("opened"):
-            self.shares(market, st, "up", 60, f"{self.name} open up"); self.shares(market, st, "down", 60, f"{self.name} open down"); st["opened"] = True
-        elif 60 <= el <= 240 and abs(z) >= 0.5:
-            self.shares(market, st, fav, 60, f"{self.name} add {fav} z{z:.1f}")
-        if skew < 2.0:
-            for side, c in (("up", ba), ("down", 1 - bb)):
-                if c < 0.20: self.shares(market, st, side, 120, f"{self.name} hedge {side} {c:.2f}")
-        if left <= 90:
-            dom = "up" if up >= dn else "down"; c = ba if dom == "up" else 1 - bb
-            if c < 0.97: self.shares(market, st, dom, 60, f"{self.name} late {dom} {c:.2f}")
+        other = "down" if fav == "up" else "up"; c = ba if fav == "up" else 1 - bb
+        if st.get(other, 0.0) > 0 or abs(z) < 1.0: return          # one side per window
+        if 60 <= el and left > 90 and c <= 0.90: self.shares(market, st, fav, 60, f"{self.name} add {fav} z{z:.1f}")
+        elif left <= 90 and st.get(fav, 0.0) > 0 and c < 0.97: self.shares(market, st, fav, 60, f"{self.name} late {fav} {c:.2f}")
 
 
 class SirMartingale(Replica):

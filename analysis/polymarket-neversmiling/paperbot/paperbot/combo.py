@@ -4,7 +4,7 @@ than in guessing direction, with the replicas' risk guards.
 1. Arbitrage: XArbFast's cross-window dominance (a window and a strike or longer window that settle on the same number,
    priced apart by more than both fees plus 0.3c); both legs are taken together, so the profit is locked.
 2. Settlement lock: LockEarly (from 25 published settlement seconds, the result bounded 4 sd each way, 1c edge).
-3. Swing pairs the rest of the time: the FlippingSharks rebuild (buy the cheap side at <= 40c, buy the other side once
+3. Swing pairs the rest of the time: the FlippingSharks rebuild (buy the leading side at 55-85c when the model agrees, buy the other side once
    the pair costs <= 90c), BTC 5m and 15m, without its hour and weekend filters (those were its report's, in-sample).
 
 Guards: every piece is sized to at most RISK_FRAC of the bank (arbitrage sets, lock contracts and the swing cap), and

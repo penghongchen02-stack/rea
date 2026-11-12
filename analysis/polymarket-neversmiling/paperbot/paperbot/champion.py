@@ -52,7 +52,7 @@ class Champion:
         a.size_mode = "contracts"           # the hired bot sizes its own orders, as in the tryout (user, 11-11 22:40Z)
         obj = self.builders()[spec["src"]][spec["base"]](a)
         for k, v in spec.get("genes", {}).items(): setattr(obj, k, v)
-        if spec["src"] != "rep" and isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)   # every coin here; replicas keep theirs
+        if spec["src"] != "rep" and not spec.get("own") and isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)   # every coin here; replicas keep theirs
         obj.name = spec["key"]
         self.u.strats = [obj]
         eq = a.equity(self.engine.mf.markets)
@@ -136,6 +136,7 @@ class Champion:
             if spec is None and key in b["main"]: spec = {"key": key, "base": key, "src": "main", "genes": {}, "where": []}
             if spec is None and key in b["lab"]: spec = {"key": key, "base": key, "src": "lab", "genes": {}, "where": ["bonelab"]}
         if spec is None: log.warning("[champion] requested hire %s: no such bot", key); return
+        if req.get("own"): spec = dict(spec, own=True)       # keep the bot's own coins as well as its own order sizes
         cur = self.current
         if cur and cur["key"] != key:
             self.history.append({"key": cur["key"], "hired": cur["hired"], "fired": now, "pnl": round(self.pnl_since_hire(), 2), "why": "replaced by request"})
