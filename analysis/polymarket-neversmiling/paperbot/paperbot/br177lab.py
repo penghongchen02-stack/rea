@@ -43,14 +43,14 @@ class Br177Var(BoneVar):
         """(running total today, lowest point, highest point) of settled P/L, from the account's records."""
         day0 = now - now % 86400; run = low = high = 0.0
         for r in self.acct.settlements:
-            if r.get("ts", 0) >= day0: run += r.get("pnl_total", 0.0); low = min(low, run); high = max(high, run)
+            if r.get("ts", 0) >= day0: run += r.get("pnl_total", 0.0) - r.get("fees", 0.0); low = min(low, run); high = max(high, run)   # after fees
         return run, low, high
 
     def multiplier(self, market, det, now):
         a = self.acct; m = self.mode
         if m == "cold":
             last = [r for r in a.settlements if r.get("fills")][-COLD_N:]
-            return COLD_SIZE if len(last) >= COLD_N and sum(1 for r in last if r["pnl_total"] > 0) <= COLD_WINS else 1.0
+            return COLD_SIZE if len(last) >= COLD_N and sum(1 for r in last if r["pnl_total"] - r.get("fees", 0.0) > 0) <= COLD_WINS else 1.0
         if m == "daystop": return 0.0 if self.day(now)[1] <= -DAY_STOP * a.start_cash else 1.0
         if m == "giveback":
             run, _, high = self.day(now)

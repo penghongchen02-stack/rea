@@ -7,6 +7,10 @@ Entry: the best SIZE bots of the pool, every strategy of the other dashboards pl
 with settings kept), ranked by the luck-adjusted score below on their 5-minute results of these coins (at least
 MIN_POOL markets).
 
+Every P/L here is after fees (a settlement's pnl_total is before fees; until 11-12 09:10Z the scores, the per-coin,
+per-hour and both-halves tests and the daily stops used it as it was, which flattered bots that take a lot:
+rep_sirmartingale showed -$134 on $257 of fees, a real -$390).
+
 Luck-adjusted score: mean P/L per market minus sqrt(2 ln N) standard errors, N = number of bots compared. That is
 roughly how far the luckiest of N bots with no real edge would sit above zero, so a bot must beat pure chance.
 
@@ -46,7 +50,7 @@ def pool(engine, skip, b, assets, horizons, min_markets=MIN_POOL, min_per_coin=0
     """Every hireable bot of the other dashboards scored on its settled markets of these coins and horizons, each
     market's P/L rescaled to a $1,000 account; best luck-adjusted score first. Evolve variants carry their settings."""
     per = {}; coins = {}; info = {}
-    q = (f"select bot, asset, pnl_total from settlements where fills > 0 and asset in ({','.join('?' * len(assets))}) "
+    q = (f"select bot, asset, pnl_total - fees from settlements where fills > 0 and asset in ({','.join('?' * len(assets))}) "
          f"and horizon in ({','.join('?' * len(horizons))})")
     for u in engine.universes:
         if u.name in skip: continue
@@ -132,7 +136,7 @@ class Tryout:
     def stats(self, n):
         """This member's live tryout record (since it joined)."""
         spec = self.members[n]; a = self.u.accounts[n]; t0 = spec["joined"]
-        rows = self.u.store.query("select slug, asset, ts, up, pnl_total from settlements where bot = ? and fills > 0 and ts >= ? order by ts", (n, t0))
+        rows = self.u.store.query("select slug, asset, ts, up, pnl_total - fees from settlements where bot = ? and fills > 0 and ts >= ? order by ts", (n, t0))
         fills = {}
         for slug, side, px, qty in self.u.store.query("select slug, side, price, qty from fills where bot = ? and ts >= ? order by ts", (n, t0)):
             fills.setdefault(slug, []).append((side, px, qty))

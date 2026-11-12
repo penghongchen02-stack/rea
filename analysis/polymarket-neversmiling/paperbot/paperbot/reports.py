@@ -54,7 +54,7 @@ class Replica(LastCallHold):
         if now - getattr(self, "_stop_at", 0) > 5:
             day0 = now - now % 86400; a = self.acct; run = low = 0.0
             for r in a.settlements:
-                if r.get("ts", 0) >= day0: run += r.get("pnl_total", 0.0); low = min(low, run)
+                if r.get("ts", 0) >= day0: run += r.get("pnl_total", 0.0) - r.get("fees", 0.0); low = min(low, run)      # after fees
             self._stop = low <= -self.DAY_STOP * a.start_cash; self._stop_at = now
         return self._stop
 

@@ -167,7 +167,7 @@ class Evolver:
 
     def steady(self, name):
         """Mean realized P/L per settled market minus half its standard error; None until it has settled any."""
-        xs = [r["pnl_total"] for r in self.u.accounts[name].settlements if r.get("fills")]
+        xs = [r["pnl_total"] - r.get("fees", 0.0) for r in self.u.accounts[name].settlements if r.get("fills")]      # after fees
         if not xs: return None
         sd = statistics.stdev(xs) if len(xs) > 1 else abs(xs[0])
         return statistics.mean(xs) - SWING * sd / math.sqrt(len(xs))
