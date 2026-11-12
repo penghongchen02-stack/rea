@@ -60,16 +60,16 @@ UNIVERSES = [
     {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05, "dir": os.path.join(DATA, "tryout"),
      "pos_mult": 15.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m", "15m"], "pool_horizons": ["5m"]},
     # Rep1000: the nine report replicas alone with $1,000 each (user, 11-12 01:55Z), beside the $100 ones in std.
-    # br133 on its own (user, 11-12 19:10Z): the first bot to pass the tryout, run as it ran there (4 coins, 5-minute
+    # br133 on its own (user, 11-12 18:50Z): the first bot to pass the tryout, run as it ran there (4 coins, 5-minute
     # windows, share-of-bank sizing) on a fresh $1,000 account. It was in profit, so it runs without the direction guards.
     {"name": "br133", "port": int(os.environ.get("PAPERBOT_PORT12", "8092")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05,
      "dir": os.path.join(DATA, "br133"), "cash": 1000.0, "registry": "single", "bot": "br133", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m"],
-     "note": "passed the tryout 11-12 (53 windows, +$59); here since 11-12 19:15Z on a fresh $1,000"},
-    # br133, fast and doubled (user, 11-12 19:25Z): the same bot on Bitcoin 5-minute windows only, on the 50-passes-a-second
+     "note": "passed the tryout 11-12 (53 windows, +$59); here since 11-12 18:50Z on a fresh $1,000"},
+    # br133, fast and doubled (user, 11-12 18:52Z): the same bot on Bitcoin 5-minute windows only, on the 50-passes-a-second
     # loop (Engine.t_fast), with twice the tryout's stakes: 0.2%-4% of the bank an order, 10% a window.
     {"name": "br133fast", "port": int(os.environ.get("PAPERBOT_PORT13", "8093")), "size_mode": "pct", "size_pct": (PCT[0] * 2, PCT[1] * 2), "window_pct": 0.10,
      "dir": os.path.join(DATA, "br133fast"), "cash": 1000.0, "registry": "single", "bot": "br133", "assets": ["btc"], "horizons": ["5m"], "fast_hz": 50,
-     "note": "Bitcoin only, fast loop, double the tryout's stakes; here since 11-12 19:25Z on a fresh $1,000"},
+     "note": "Bitcoin only, fast loop, double the tryout's stakes; here since 11-12 18:53Z on a fresh $1,000"},
     # Fast20: the 20 most profitable strategy bots, $1,000 each, on their own 20-passes-a-second loop (paperbot/fast20.py).
     {"name": "fast20", "port": int(os.environ.get("PAPERBOT_PORT11", "8091")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05,
      "dir": os.path.join(DATA, "fast20"), "pos_mult": 15.0, "cash": 1000.0, "registry": "fast20", "fast_hz": 50},

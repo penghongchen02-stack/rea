@@ -259,7 +259,7 @@ exit) and `br177_trend_and_hold_to_the_close`. They were added with `"keep": 300
 from the tryout's hourly review until it has that many settled windows (the first set of br177 copies was dropped
 after about 24).
 
-## Direction guards on the losing lab bots and the champion (11-12 19:15Z)
+## Direction guards on the losing lab bots and the champion (11-12 18:50Z)
 
 The Bonereaper-lab bots (`bonelab.BoneVar`) that were losing, on whichever dashboard they run, and the champion's
 br177 run with three guards: the 3-minute trend rule, no 4th window in a row on one side, and no early exit (the

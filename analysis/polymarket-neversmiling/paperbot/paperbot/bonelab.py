@@ -27,8 +27,8 @@ from .strategies import LastCallHold
 from .fair import p_up
 
 CASH = 1000.0
-# Direction guards (user, 11-12 19:00Z; BoneVar.allow / manage / exits) on the lab bots that were losing, on every
-# dashboard, and on the champion's bot; a bot that was in profit is left as it was (user, 19:10Z). Decided once per bot,
+# Direction guards (user, 11-12 18:46Z; BoneVar.allow / manage / exits) on the lab bots that were losing, on every
+# dashboard, and on the champion's bot; a bot that was in profit is left as it was (user, 18:50Z). Decided once per bot,
 # the first time it runs after this change, from its settled P/L after fees, and kept in <dashboard dir>/guards.json so
 # it does not flip as the P/L moves. A bot that is new (no settled result) starts without them.
 #   trend    Up is bought only while the coin's Coinbase price is above its price TREND_S seconds ago, Down only below
