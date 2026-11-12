@@ -59,6 +59,10 @@ class BoneVar(LastCallHold):
         if o and o.filled > 0: st["exited"] = True
         return True
 
+    def allow(self, side, market, now):
+        """Hook for variants that veto an entry ("buy" = Up, "sell" = Down). The lab's bots allow everything."""
+        return True
+
     def contracts(self, price):
         if self.acct.size_mode == "pct": return self.acct.size_for(price, 0)      # the dashboard's share of the bank
         kind = self.sizing[0]
@@ -98,6 +102,7 @@ class BoneVar(LastCallHold):
             side, px = "sell", 1 - bb
         else: return
         n = self.contracts(px)
+        if not self.allow(side, market, now): return      # after the size draw, so a variant that skips keeps its sizes in step
         if self.cap is None:
             if abs(q) + n > self.max_pos: return
         else:

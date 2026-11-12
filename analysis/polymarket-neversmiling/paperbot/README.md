@@ -248,3 +248,13 @@ second (was every 2 s; this applies to every dashboard). The panel shows how old
 the time one pass takes. Paper fills at the quote seen are the best case: a real order also has to reach the exchange,
 and most bots wait 2-3 s between their own orders, so the gain is reacting sooner, not ordering more often. Past profit
 of the picked bots is not evidence they will profit here (see the walk-forward result above).
+
+## br177 direction fixes in the tryout (11-12 18:42Z)
+
+On BTC 5-minute windows the lab's bots lost on Up bets while BTC kept closing Down, and lost most on early exits. Four
+copies of br177 test the fixes next to `br177_unchanged_for_comparison` (`paperbot/br177lab.py`; the champion is not
+touched): `br177_only_bet_with_the_3_minute_trend` (Up only while the coin's Coinbase price is above its price 180 s
+ago, Down only while below), `br177_no_more_than_3_windows_in_a_row_on_one_side`, `br177_hold_to_the_close` (no early
+exit) and `br177_trend_and_hold_to_the_close`. They were added with `"keep": 300` in `add.json`, which exempts a bot
+from the tryout's hourly review until it has that many settled windows (the first set of br177 copies was dropped
+after about 24).

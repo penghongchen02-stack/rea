@@ -207,6 +207,7 @@ class Tryout:
             s = st[n]; spec = self.members[n]
             losing = s["n"] >= DROP_N and s["pnl"] < 0 and (s["edge"] is None or s["edge"] < 0)
             idle = now - (s["last"] or spec["joined"]) >= IDLE
+            if s["n"] < spec.get("keep", 0): continue        # an experiment added with "keep": N stays until N windows
             if losing or idle:
                 self._detach(n); out.append(n)
                 self.dropped.append({"key": n, "ts": now, "joined": spec["joined"], "why": "losing with a negative edge" if losing else "idle 3 h",
@@ -217,7 +218,8 @@ class Tryout:
         log.info("[tryout] review: dropped %s; added %s", out, added)
 
     def requested(self, now):
-        """A hand-added candidate: <dir>/add.json {"key", "base", "src", "genes"?} (consumed once; may exceed SIZE), or
+        """A hand-added candidate: <dir>/add.json {"key", "base", "src", "genes"?, "keep"?} (consumed once; may exceed SIZE; "keep": N exempts it
+        from the hourly review until it has N settled windows), or
         {"remove": key} to take one out."""
         p = os.path.join(self.u.dir, "add.json")
         if not os.path.exists(p): return
@@ -230,7 +232,7 @@ class Tryout:
             return
         if not req or req.get("key") in self.members or req.get("base") not in self.builders().get(req.get("src"), {}):
             log.warning("[tryout] cannot add %s", req); return
-        spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"], "note": req.get("note"),
+        spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"], "note": req.get("note"), "keep": int(req.get("keep", 0)),
                 "joined": now, "entry_score": None, "entry_n": 0}
         self._attach(spec); self._stats_at = 0; self.save(); log.info("[tryout] added %s by request", spec["key"])
 
