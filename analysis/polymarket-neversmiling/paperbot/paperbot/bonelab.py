@@ -22,17 +22,36 @@ Each variant changes one or a few knobs:
             (tp_c, sl_c) or as a multiple of the entry price (tp_x: sell at entry x (1 + tp_x); sl_x: sell at
             entry x (1 - sl_x)); after an exit the variant does not re-enter that window
 """
-import math, collections
+import os, json, math, collections
 from .strategies import LastCallHold
 from .fair import p_up
 
 CASH = 1000.0
-# Direction guards on every lab bot, on every dashboard (user, 11-12 19:00Z; BoneVar.allow / manage / exits):
+# Direction guards (user, 11-12 19:00Z; BoneVar.allow / manage / exits) on the lab bots that were losing, on every
+# dashboard, and on the champion's bot; a bot that was in profit is left as it was (user, 19:10Z). Decided once per bot,
+# the first time it runs after this change, from its settled P/L after fees, and kept in <dashboard dir>/guards.json so
+# it does not flip as the P/L moves. A bot that is new (no settled result) starts without them.
 #   trend    Up is bought only while the coin's Coinbase price is above its price TREND_S seconds ago, Down only below
 #   balance  after RUN_MAX windows in a row entered on one side, the next window on that side is skipped
 #   hold     no early exit: neither the protective exit nor a variant's take-profit / stop-loss; held to settlement
 # br177lab's copies switch them per variant, and its unchanged copy runs without them as the comparison.
 TREND_S = 180.0; RUN_MAX = 3
+GUARD_DIRS = {}; ALWAYS_GUARDED = {("champion", "champion")}; _GUARDS = {}      # dashboard name -> its directory (set by run.Universe)
+
+
+def guarded(acct):
+    """Whether this account's lab bot runs with the guards (decided once, then read from guards.json)."""
+    u = getattr(acct, "universe", None); d = GUARD_DIRS.get(u)
+    if d is None: return False
+    path = os.path.join(d, "guards.json")
+    if u not in _GUARDS:
+        try: _GUARDS[u] = json.load(open(path))
+        except Exception: _GUARDS[u] = {}
+    g = _GUARDS[u]
+    if acct.name not in g:
+        g[acct.name] = (u, acct.name) in ALWAYS_GUARDED or acct.bank() - acct.start_cash < 0
+        tmp = path + ".tmp"; json.dump(g, open(tmp, "w")); os.replace(tmp, path)
+    return g[acct.name]
 
 
 class BoneVar(LastCallHold):
@@ -46,7 +65,7 @@ class BoneVar(LastCallHold):
         self.cap = cap if cap is not None else (None if sizing[0] == "clip" else 0.15 * CASH)
         self.max_edge = max_edge; self.late = late
         self.max_pos = max_pos; self.shrink = shrink; self.tp_c = tp_c; self.sl_c = sl_c; self.tp_x = tp_x; self.sl_x = sl_x
-        self.trend = self.balance = self.hold = True
+        self.trend = self.balance = self.hold = False; self._decided = False      # set on the first tick, once the account is restored
         self._ctx = None; self._sides = collections.deque(maxlen=RUN_MAX); self._seen = set()
         for r in account.settlements[-50:]:                      # the sides of its last windows survive a restart
             if abs(r.get("final_qty", 0.0)) > 1e-9: self._sides.append("buy" if r["final_qty"] > 0 else "sell")
@@ -93,6 +112,7 @@ class BoneVar(LastCallHold):
     def on_tick(self, market, ctx, now):
         if market.asset not in self.assets or market.dur not in self.durs: return
         self._ctx = ctx
+        if not self._decided: self._decided = True; self.trend = self.balance = self.hold = guarded(self.acct)
         if self.balance and market.slug not in self._seen:      # the side of each window it has entered
             pos = self.acct.positions.get(market.slug)
             if pos and abs(pos.qty) > 1e-9: self._seen.add(market.slug); self._sides.append("buy" if pos.qty > 0 else "sell")

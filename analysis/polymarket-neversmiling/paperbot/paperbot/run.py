@@ -60,6 +60,11 @@ UNIVERSES = [
     {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05, "dir": os.path.join(DATA, "tryout"),
      "pos_mult": 15.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m", "15m"], "pool_horizons": ["5m"]},
     # Rep1000: the nine report replicas alone with $1,000 each (user, 11-12 01:55Z), beside the $100 ones in std.
+    # br133 on its own (user, 11-12 19:10Z): the first bot to pass the tryout, run as it ran there (4 coins, 5-minute
+    # windows, share-of-bank sizing) on a fresh $1,000 account. It was in profit, so it runs without the direction guards.
+    {"name": "br133", "port": int(os.environ.get("PAPERBOT_PORT12", "8092")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05,
+     "dir": os.path.join(DATA, "br133"), "cash": 1000.0, "registry": "single", "bot": "br133", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m"],
+     "note": "passed the tryout 11-12 (53 windows, +$59); here since 11-12 19:15Z on a fresh $1,000"},
     # Fast20: the 20 most profitable strategy bots, $1,000 each, on their own 20-passes-a-second loop (paperbot/fast20.py).
     {"name": "fast20", "port": int(os.environ.get("PAPERBOT_PORT11", "8091")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05,
      "dir": os.path.join(DATA, "fast20"), "pos_mult": 15.0, "cash": 1000.0, "registry": "fast20", "fast_hz": 50},
@@ -92,6 +97,7 @@ class Universe:
     def __init__(self, cfg, engine):
         self.cfg = cfg; self.name = cfg["name"]; self.port = cfg["port"]; self.dir = cfg["dir"]; os.makedirs(self.dir, exist_ok=True)
         self.store = Store(os.path.join(self.dir, "paper.db")); self.engine = engine
+        from . import bonelab as _bl; _bl.GUARD_DIRS[self.name] = self.dir
         self.cash = cfg.get("cash", START_CASH)
         mk = lambda k: Account(k, self.cash, size_mode=cfg["size_mode"], size_min=cfg.get("size_min", 0.1), size_max=cfg.get("size_max", 10.0)).configure(cfg)
         self.lab = cfg.get("registry") == "bonelab"; self.evolver = None; self.champion = None; self.roster = None; self.tryout = None
@@ -110,6 +116,9 @@ class Universe:
             self.accounts = {}; self.strats = []; self.arbs = {}; self.active = []
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None
             self.evolver = Evolver(self, engine); self.evolver.restore()
+        elif cfg.get("registry") == "single":       # one lab bot on its own dashboard (cfg "bot")
+            from .bonelab import build_lab_registry
+            reg = {cfg["bot"]: build_lab_registry()[cfg["bot"]]}; self.accounts = {k: mk(k) for k in reg}
         elif self.lab:
             from .bonelab import build_lab_registry
             reg = build_lab_registry(); self.accounts = {k: mk(k) for k in reg}
@@ -126,7 +135,9 @@ class Universe:
             self.active = list(self.accounts) if active == ["all"] else active
             self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
         if managed: pass
-        elif self.lab or cfg.get("registry") == "reports":
+        elif self.lab or cfg.get("registry") in ("reports", "single"):
+            if cfg.get("registry") == "single":       # the coins and windows it passed the tryout on
+                for s in self.strats: s.assets = set(cfg["assets"]); s.durs = {300}
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None; self.arbs = {}
         else:
             self.ladder = LadderArb(self.accounts["ladder"], engine.lf); self.ladder_model = LadderModel(self.accounts["ladder_model"], engine.lf, engine.idx, engine.spot)
@@ -150,6 +161,8 @@ class Universe:
             from .bonelab import LAB_LABELS; self.labels = dict(LAB_LABELS)
         if cfg.get("registry") == "reports":
             self.labels = {k: "PR&R report replica, filtered: leading side only, 5% of bank per window, stops for the day at -10%" for k in self.accounts}
+        if cfg.get("registry") == "single":
+            from .bonelab import LAB_LABELS; self.labels = {k: LAB_LABELS.get(k, k) + "; " + cfg.get("note", "") for k in self.accounts}
         if self.evolver is not None: self.labels = self.evolver.labels
         if self.champion is not None: self.labels = self.champion.labels; self.champion.restore()
         if self.tryout is not None: self.labels = self.tryout.labels

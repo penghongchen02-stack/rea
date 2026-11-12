@@ -36,6 +36,7 @@ class Br177Var(BoneVar):
         super().__init__(account, name, seed=_SEED, **kw)
         self.mode = mode; self.base_cap = self.cap; self._mult = 1.0; self._edge = None
         self._sig = collections.defaultdict(lambda: collections.deque(maxlen=900))
+        self._decided = True
         self.trend = mode in ("trend", "trend_noexit", "guards"); self.balance = mode in ("balance", "guards")
         self.hold = mode in ("noexit", "trend_noexit", "guards")       # the lab's guards, one at a time here
         if mode == "maker": self.acct = _Maker(account)

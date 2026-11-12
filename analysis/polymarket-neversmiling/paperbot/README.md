@@ -259,10 +259,16 @@ exit) and `br177_trend_and_hold_to_the_close`. They were added with `"keep": 300
 from the tryout's hourly review until it has that many settled windows (the first set of br177 copies was dropped
 after about 24).
 
-## Direction guards on every lab bot (11-12 19:00Z)
+## Direction guards on the losing lab bots and the champion (11-12 19:15Z)
 
-At the user's request every Bonereaper-lab bot (`bonelab.BoneVar`: the lab, its evolved variants, the Fast 20 picks, the
-tryout's lab bots and the champion's br177) now runs with all three guards: the 3-minute trend rule, no 4th window in a
-row on one side, and no early exit (the protective exit and the variants' take-profit / stop-loss are off). The
-tryout's br177 copies keep one guard each and `br177_unchanged_for_comparison` runs with none, so the effect can be
-measured. The guards had no settled record when they were switched on.
+The Bonereaper-lab bots (`bonelab.BoneVar`) that were losing, on whichever dashboard they run, and the champion's
+br177 run with three guards: the 3-minute trend rule, no 4th window in a row on one side, and no early exit (the
+protective exit and the variants' take-profit / stop-loss are off). A lab bot that was in profit is left as it was.
+The choice is made once per bot from its settled P/L after fees and kept in `<dashboard dir>/guards.json` (edit that
+file and restart to change one). The tryout's br177 copies keep one guard each and `br177_unchanged_for_comparison`
+runs with none, so the effect can be measured. The guards had no settled record when they were switched on.
+
+## br133 dashboard (port 8092)
+
+br133, the first bot to pass the tryout, on its own fresh $1,000 account as it ran there: BTC, ETH, SOL and XRP
+5-minute windows with the share-of-bank sizing, no guards.
