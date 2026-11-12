@@ -29,20 +29,28 @@ class Replica(LastCallHold):
     ASSETS = ("btc",); DURS = (FIVE,); OPEN_MIN = 0; LEFT_MIN = 3; LEFT_MAX = 10 ** 6; HOURS_OFF = ()
     PERIOD = 6.0; SIZE = (5.0, 30.0, 100.0); MARKET_CAP = 200.0; MIN_ASSET_SECONDS = 0
     EXIT_Z = -99.0          # no protective exit: every report trader holds to settlement unless decide() sells
+    # Rewards and rebates the trader's report shows, as a fraction of dollars filled (0 = none reported). The account
+    # accumulates them as est_rewards beside its P/L; they are polymarket.com rates and are not paid in this sim.
+    REWARD_RATE = 0.0
 
     def __init__(self, account, seed=31):
         super().__init__(account, seed=seed); self.assets = set(self.ASSETS); self.durs = set(self.DURS)
+        self.scale = account.start_cash / 1000.0        # sizes and caps are written for a $1,000 bank
+        account.reward_rate = self.REWARD_RATE
+
+    @property
+    def cap(self): return self.MARKET_CAP * self.scale
 
     # ---- helpers ---------------------------------------------------------------
     def dollars(self, mult=1.0):
         med, p95, mx = self.SIZE; s = math.log(max(p95 / med, 1.0001)) / 1.645
-        return min(mx, max(0.5, med * math.exp(s * self.rng.gauss(0, 1)))) * mult
+        return min(mx, max(0.5, med * math.exp(s * self.rng.gauss(0, 1)))) * mult * self.scale
 
     def buy(self, market, st, side, usd, tag):
         """side 'up' buys YES at the ask; 'down' buys NO by selling YES at the bid. usd = dollars to spend."""
-        room = self.MARKET_CAP - st.get("spent", 0.0)
+        room = self.cap - st.get("spent", 0.0)
         usd = min(usd, room)
-        if usd < 0.5: return None
+        if usd < 0.5 * self.scale: return None
         if side == "up":
             px = market.best_ask
             if px is None: return None
@@ -78,18 +86,23 @@ class Pair(Replica):
     bid and an offer of YES at the best ask (= a bid for Down at 1 - ask), so a filled pair costs 1 - spread. Rested
     only when that pair cost is at most PAIR_CAP and each leg's price is in BAND; the model-favoured side gets TILT x
     the dollars once |z| >= TILT_Z, or CHEAP_WEIGHT weights the cheaper side (FlippingSharks). Orders are refreshed
-    every PERIOD; MARKET_CAP counts filled dollars plus what is resting."""
-    PAIR_CAP = 0.98; BAND = (0.01, 0.99); TILT = 1.0; TILT_Z = 1.0; CHEAP_WEIGHT = None; SKIP_WEAK_ABOVE_1 = False
+    every PERIOD; MARKET_CAP counts filled dollars. Balance (11-12 00:45Z; the first version kept re-quoting the side
+    that was falling and ended heavier on the loser in 13 of 18 windows): a side is quoted only while its filled shares
+    are at most BALANCE x the other side's plus one clip, so a one-way run stops adding after the first clip; with a
+    model tilt the favoured side may run to TILT x BALANCE."""
+    PAIR_CAP = 0.98; BAND = (0.01, 0.99); TILT = 1.0; TILT_Z = 1.0; CHEAP_WEIGHT = None; SKIP_WEAK_ABOVE_1 = False; BALANCE = 1.5
     def filled(self, st):
         return sum(o.filled * (o.price if o.side == "buy" else 1 - o.price) for o in st.get("orders", []))
+    def shares(self, st, side):
+        return sum(o.filled for o in st.get("orders", []) if o.side == side)
     def decide(self, market, st, p, det, now, left, bb, ba):
         acct = self.acct; acct.cancel_all(market.slug)                 # refresh the quotes
         up_c, dn_c = bb, 1 - ba; pair = up_c + dn_c; z = det.get("z", 0.0)
         strong = abs(z) >= self.TILT_Z
         if pair > self.PAIR_CAP and not (self.SKIP_WEAK_ABOVE_1 and strong): return
         if self.SKIP_WEAK_ABOVE_1 and pair > 1.0 and not strong: return
-        room = self.MARKET_CAP - self.filled(st)
-        if room < 1.0: return
+        room = self.cap - self.filled(st)
+        if room < 1.0 * self.scale: return
         w_up = w_dn = 1.0
         if self.CHEAP_WEIGHT is not None:
             sub = self.CHEAP_WEIGHT[0] + self.rng.random() * (self.CHEAP_WEIGHT[1] - self.CHEAP_WEIGHT[0])
@@ -97,11 +110,14 @@ class Pair(Replica):
         elif strong and self.TILT > 1:
             w_up, w_dn = (self.TILT, 1.0) if z > 0 else (1.0, self.TILT)
         usd = min(self.dollars() * 2, room); tot = w_up + w_dn; orders = st.setdefault("orders", [])
-        if self.BAND[0] <= up_c <= self.BAND[1] and up_c > 0:
-            o = acct.place(market, "buy", bb, round(usd * w_up / tot / up_c, 2), post_only=True, tag=f"{self.name} bid up {up_c:.2f}", fixed=True)
+        su, sd = self.shares(st, "buy"), self.shares(st, "sell"); clip = self.SIZE[0] * self.scale / max(min(up_c, dn_c), 0.05)   # one median clip
+        room_up = self.BALANCE * (w_up / w_dn) * sd + clip - su; room_dn = self.BALANCE * (w_dn / w_up) * su + clip - sd   # shares
+        ok_up = room_up >= market.min_qty; ok_dn = room_dn >= market.min_qty
+        if ok_up and self.BAND[0] <= up_c <= self.BAND[1] and up_c > 0:
+            o = acct.place(market, "buy", bb, round(min(usd * w_up / tot / up_c, room_up), 2), post_only=True, tag=f"{self.name} bid up {up_c:.2f}", fixed=True)
             if o: orders.append(o)
-        if self.BAND[0] <= dn_c <= self.BAND[1] and dn_c > 0:
-            o = acct.place(market, "sell", ba, round(usd * w_dn / tot / dn_c, 2), post_only=True, tag=f"{self.name} bid down {dn_c:.2f}", fixed=True)
+        if ok_dn and self.BAND[0] <= dn_c <= self.BAND[1] and dn_c > 0:
+            o = acct.place(market, "sell", ba, round(min(usd * w_dn / tot / dn_c, room_dn), 2), post_only=True, tag=f"{self.name} bid down {dn_c:.2f}", fixed=True)
             if o: orders.append(o)
         st["spent"] = self.filled(st)
 
@@ -116,6 +132,7 @@ class Whiskas(Replica):
     average)."""
     name = "rep_whiskas"; ASSETS = ("btc",); LEFT_MIN = 30; LEFT_MAX = 300; PERIOD = 6.0
     SIZE = (8.20, 41.59, 134.53); MARKET_CAP = 180.0; PAIR_MAX = 1.02; LEAN_MAX = 3.0
+    REWARD_RATE = 0.0105       # report: $37,619 taker + $5,255 maker rebates + $594 LP on $4,128,425 bought
     def decide(self, market, st, p, det, now, left, bb, ba):
         up_c, dn_c = ba, 1 - bb; u, d = st.get("up", 0.0), st.get("down", 0.0)
         if left > 180:
@@ -137,6 +154,7 @@ class Doggystyie(Pair):
     liquidity rewards (trading ROI -1.00%), which this sim does not pay."""
     name = "rep_doggystyie"; ASSETS = ("btc",); OPEN_MIN = 0; LEFT_MIN = 120; LEFT_MAX = 300; PERIOD = 8.0
     SIZE = (17.81, 48.72, 83.52); MARKET_CAP = 200.0; PAIR_CAP = 1.02; TILT = 2.0; TILT_Z = 1.5
+    REWARD_RATE = 0.0269       # report: $93,668 rewards on $3,480,124 bought (its trading alone lost 1.00%)
 
 
 class NeverSmiling(Pair):
@@ -196,6 +214,7 @@ class Bonereaper(Pair):
     (trading ROI +0.20%), which this sim does not pay."""
     name = "rep_bonereaper"; ASSETS = ("btc", "eth", "sol"); DURS = (FIVE, FIFTEEN); OPEN_MIN = 30; LEFT_MIN = 15; PERIOD = 5.0
     SIZE = (3.94, 37.93, 196.02); MARKET_CAP = 10.0; PAIR_CAP = 1.10; TILT = 3.0; TILT_Z = 2.0
+    REWARD_RATE = 0.0082       # report: $369,887 rewards on $45,064,788 bought (trading alone +0.20%)
 
 
 class PBot6(Replica):
@@ -228,7 +247,7 @@ class SlipMe(Replica):
     name = "rep_slipme"; ASSETS = ("btc",); PERIOD = 10.0; MARKET_CAP = 300.0
     def shares(self, market, st, side, n, tag):
         px = market.best_ask if side == "up" else (1 - market.best_bid)
-        return self.buy(market, st, side, n * px, tag)
+        return self.buy(market, st, side, n * px * self.scale, tag)
     def decide(self, market, st, p, det, now, left, bb, ba):
         el = now - market.start; z = det.get("z", 0.0); fav = "up" if z > 0 else "down"
         up, dn = st.get("up", 0.0), st.get("down", 0.0); skew = max(up, dn) / max(min(up, dn), 1e-9)
@@ -251,6 +270,7 @@ class SirMartingale(Replica):
     are held to settlement."""
     name = "rep_sirmartingale"; ASSETS = ("btc", "eth"); DURS = (FIVE, FIFTEEN); LEFT_MIN = 10; PERIOD = 4.0
     SIZE = (5.50, 39.15, 366.30); MARKET_CAP = 120.0; HOURS_OFF = (23, 0, 1); EDGE = 0.05; STEPS = (1.0, 1.2, 1.7, 2.4)
+    REWARD_RATE = 0.0067       # live wallet, 10 days to 11-11: $37.12 maker rebates on $5,571 bought
     def on_tick(self, market, ctx, now):
         if market.asset == "eth" and market.dur == FIFTEEN: return
         super().on_tick(market, ctx, now)
@@ -278,6 +298,7 @@ class BTC5MScour(Replica):
     (capped at $250 here) (report rules 1-6)."""
     name = "rep_btc5mscour"; ASSETS = ("btc",); LEFT_MIN = 5; LEFT_MAX = 120; PERIOD = 3.0
     SIZE = (34.08, 242.50, 878.56); MARKET_CAP = 250.0
+    REWARD_RATE = 0.00015      # report: $229.54 rewards on $1,497,961 bought
     def decide(self, market, st, p, det, now, left, bb, ba):
         K = det.get("K"); m = det.get("mean")
         if not K or m is None or abs(m - K) / K < 0.0005: return

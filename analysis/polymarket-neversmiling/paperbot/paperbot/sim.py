@@ -33,6 +33,9 @@ class Account:
         self.fees = 0.0; self.maker_fills = 0; self.taker_fills = 0; self.rejected = 0; self.events = collections.deque(maxlen=200)
         self.universe = "std"   # set by the Universe
         self.n_settled = 0; self.n_won = 0; self.realized_closed = 0.0   # running totals, so settled positions can be dropped
+        # Estimated liquidity rewards / rebates (report replicas only): dollars filled x the rate the trader's report
+        # shows on polymarket.com. Tracked beside the account, never added to cash or P/L: Polymarket US Tier 1 pays none.
+        self.reward_rate = 0.0; self.est_rewards = 0.0
     @property
     def liq_key(self):
         """Liquidity consumption is tracked per account: each bot is evaluated as if it alone traded against the
@@ -157,6 +160,7 @@ class Account:
     # ---- fills ---------------------------------------------------------
     def _fill(self, market, o, px, qty, maker):
         fee = self.fee(px, qty, maker); p = self.positions[o.slug]; signed = qty if o.side == "buy" else -qty
+        if self.reward_rate: self.est_rewards += qty * (px if o.side == "buy" else 1 - px) * self.reward_rate
         realized = 0.0
         if p.qty * signed < 0:   # reduces or flips existing position: realize vs avg
             closing = min(abs(p.qty), qty)
@@ -230,6 +234,6 @@ class Account:
                    for s, p in self.positions.items() if not p.closed and abs(p.qty) > 1e-9}
         return {"name": self.name, "cash": round(self.cash, 4), "equity": round(eq, 4), "pnl": round(eq - self.start_cash, 4),
                 "buying_power": round(self.buying_power(), 4), "fees": round(self.fees, 4), "maker_fills": self.maker_fills,
-                "taker_fills": self.taker_fills, "rejected": self.rejected, "open_orders": len(self.orders), "open_positions": openpos,
+                "est_rewards": round(self.est_rewards, 4), "taker_fills": self.taker_fills, "rejected": self.rejected, "open_orders": len(self.orders), "open_positions": openpos,
                 "markets_settled": self.n_settled, "markets_won": self.n_won,
                 "realized": round(self.realized_closed + sum(p.realized for p in self.positions.values()), 4)}

@@ -144,7 +144,7 @@ class Universe:
                 snap = json.load(open(p))
                 for name, s in snap.get("accounts", {}).items():
                     if name not in self.accounts: continue
-                    a = self.accounts[name]; a.cash = s["cash"]; a.fees = s["fees"]; a.maker_fills = s["maker_fills"]; a.taker_fills = s["taker_fills"]; a.start_cash = s.get("start_cash", self.cash)
+                    a = self.accounts[name]; a.cash = s["cash"]; a.fees = s["fees"]; a.maker_fills = s["maker_fills"]; a.taker_fills = s["taker_fills"]; a.start_cash = s.get("start_cash", self.cash); a.est_rewards = s.get("est_rewards", 0.0)
                     for slug, ps in s.get("positions", {}).items():
                         pos = a.positions[slug]; pos.qty = ps["qty"]; pos.avg = ps["avg"]; pos.realized = ps["realized"]; pos.fees = ps["fees"]; pos.fills = ps["fills"]; pos.closed = ps["closed"]
                     a.settlements = s.get("settlements", [])
@@ -161,7 +161,7 @@ class Universe:
     def save(self):
         snap = {"started": self.started, "accounts": {}}
         for name, a in self.accounts.items():
-            snap["accounts"][name] = {"cash": a.cash, "fees": a.fees, "maker_fills": a.maker_fills, "taker_fills": a.taker_fills, "start_cash": a.start_cash,
+            snap["accounts"][name] = {"cash": a.cash, "fees": a.fees, "maker_fills": a.maker_fills, "taker_fills": a.taker_fills, "start_cash": a.start_cash, "est_rewards": a.est_rewards,
                 "positions": {s: {"qty": p.qty, "avg": p.avg, "realized": p.realized, "fees": p.fees, "fills": p.fills, "closed": p.closed} for s, p in a.positions.items() if not p.closed},
                 "n_settled": a.n_settled, "n_won": a.n_won, "realized_closed": a.realized_closed,
                 "settlements": a.settlements[-500:]}
@@ -365,7 +365,7 @@ class Engine:
         for a_, m in live.items(): m["index"] = (st.get("index") or {}).get(a_, {}).get("value"); m["spot"] = (st.get("spot") or {}).get(a_, {}).get("value")
         labels = (st.get("config") or {}).get("labels") or {}
         bots = sorted(({"name": a["name"], "pnl": round(a.get("pnl", 0), 4), "equity": a.get("equity"), "settled": a.get("markets_settled"), "won": a.get("markets_won"),
-                        "fees": a.get("fees"), "fills": (a.get("maker_fills") or 0) + (a.get("taker_fills") or 0), "open": len(a.get("open_positions") or {}),
+                        "fees": a.get("fees"), "fills": (a.get("maker_fills") or 0) + (a.get("taker_fills") or 0), "est_rewards": a.get("est_rewards") or 0, "open": len(a.get("open_positions") or {}),
                         "label": labels.get(a["name"])} for a in (st.get("accounts") or {}).values()), key=lambda b: -b["pnl"])
         ro = st.get("roster") or {}
         return {"ts": now, "uptime": round(now - self.started), "errors": self.errors, "loop": self.loop_count,

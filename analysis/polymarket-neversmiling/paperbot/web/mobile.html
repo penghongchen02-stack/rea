@@ -123,7 +123,7 @@ function render(){
     <div class="kv"><span>Open positions</span><b>${open}</b></div>
     <div class="kv"><span>Deleted losers · new bots</span><b>${(D.roster||{}).removed||0} · ${Object.keys((D.roster||{}).added||{}).length}</b></div></div>`;
   const botRow=(b,i)=>`<div class="row"><div class="grow"><div class="name">${i+1}. ${esc(b.name)}${(D.roster.added||{})[b.name]?' <span class="badge">new</span>':""}</div>
-    <div class="small">${b.settled||0} windows · ${b.settled?Math.round((b.won||0)/b.settled*100):0}% won · ${b.fills} fills${b.open?` · ${b.open} open`:""}</div>
+    <div class="small">${b.settled||0} windows · ${b.settled?Math.round((b.won||0)/b.settled*100):0}% won · ${b.fills} fills${b.open?` · ${b.open} open`:""}${b.est_rewards>0.005?` · est. rewards +${money(b.est_rewards)} (not in P/L)`:""}</div>
     ${b.label?`<div class="why">${esc(b.label)}</div>`:""}</div><div class="num">${pl(b.pnl)}</div></div>`;
   $("top5").innerHTML=B.slice(0,5).map(botRow).join("")||`<div class="row small">No bots</div>`;
   $("botshead").textContent=`All ${B.length} bots · ${up} up · ${dn} down`;

@@ -58,7 +58,7 @@ def pool(engine, skip, b, assets, horizons, min_markets=MIN_POOL, min_per_coin=0
                 genes = spec.get("genes", {}); base = spec["base"]; src = spec["src"]; key = bot if genes else base
             else:
                 if bot not in u.accounts: continue                     # deleted from its dashboard
-                src = "lab" if u.name == "bonelab" and bot in b["lab"] else ("main" if bot in b["main"] else None)
+                src = "lab" if u.name == "bonelab" and bot in b["lab"] else ("main" if bot in b["main"] else "rep" if bot in b.get("rep", {}) else None)
                 if src is None: continue                                # scanners and children without a registry entry
                 genes = {}; base = key = bot
             per.setdefault(key, []).append(pnl / u.cash * 1000.0)

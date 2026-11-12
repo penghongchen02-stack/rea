@@ -39,15 +39,16 @@ class Roster:
             from .strategies import build_registry
             from .bonelab import build_lab_registry
             from .arbs import scanner_builders
+            from .reports import build_report_registry
             self._builders = {"main": build_registry(self.cfg.get("pos_mult", 1.0)), "lab": build_lab_registry(),
-                              "scan": scanner_builders(self.engine)}
+                              "scan": scanner_builders(self.engine), "rep": build_report_registry()}
         return self._builders
 
     def spec_of(self, name):
         """How to rebuild a bot of this dashboard: {name, base, src, genes}; None if it cannot be rebuilt."""
         if name in self.added: return self.added[name]
         b = self.builders()
-        src = ("lab" if self.u.lab and name in b["lab"] else "scan" if name in b["scan"] else "main" if name in b["main"] else None)
+        src = ("lab" if self.u.lab and name in b["lab"] else "scan" if name in b["scan"] else "main" if name in b["main"] else "rep" if name in b["rep"] else None)
         return src and {"name": name, "base": name, "src": src, "genes": {}}
 
     def _build(self, spec, account):
@@ -71,16 +72,17 @@ class Roster:
         u.labels.pop(name, None); self.added.pop(name, None)
         return a
 
-    def _attach(self, spec):
+    def _attach(self, spec, record=True):
         from .sim import Account
         u = self.u; c = self.cfg
         a = Account(spec["name"], u.cash, size_mode=c["size_mode"], size_min=c.get("size_min", 0.1), size_max=c.get("size_max", 10.0))
         a.universe = u.name; obj = self._build(spec, a)
         if spec["src"] == "scan": u.arbs[spec["name"]] = obj
         else: u.strats.append(obj)
-        u.accounts[spec["name"]] = a; u.active.append(spec["name"]); self.added[spec["name"]] = spec
+        u.accounts[spec["name"]] = a; u.active.append(spec["name"])
+        if record: self.added[spec["name"]] = spec
         ch = "; ".join(f"{g} {o:g}->{n:g}" for g, o, n in spec.get("muts", []))
-        u.labels[spec["name"]] = f"new, child of {spec['parent']} ({ch})"
+        u.labels[spec["name"]] = spec.get("note") or f"new, child of {spec['parent']} ({ch})"
 
     def child(self, parent, now):
         from .evolve import genes, mutate_genes, _used_constants
@@ -118,7 +120,28 @@ class Roster:
         log.info("[%s] pruned %d losing bots; added %s", self.u.name, len(doomed), [s["name"] for s in born])
         return rec
 
+    def request(self, now):
+        """<dir>/roster_req.json (consumed once): {"add": [names], "restore": [names]}. add: a bot of any registry not
+        in this dashboard (the report replicas), on a fresh account, kept across restarts. restore: a deleted standard
+        bot comes back on a fresh account (its old losses stay in the prune record)."""
+        p = os.path.join(self.u.dir, "roster_req.json")
+        if not os.path.exists(p): return
+        try: req = json.load(open(p))
+        except Exception as e: log.warning("[%s] bad roster_req.json: %s", self.u.name, e); req = {}
+        os.remove(p); done = []
+        for n in req.get("restore", []):
+            if n in self.u.accounts or n not in self.removed: continue
+            spec = self.spec_of(n)
+            if spec is None: continue
+            self.removed.remove(n); self._attach(dict(spec, note=f"restored {time.strftime('%m-%d %H:%MZ', time.gmtime(now))} on a fresh account"), record=False); done.append(n)
+        for n in req.get("add", []):
+            spec = self.spec_of(n)
+            if n in self.u.accounts or spec is None: continue
+            self._attach(dict(spec, parent=None, born=now, muts=[], note=req.get("note") or "added by request")); done.append(n)
+        self.save(); log.info("[%s] roster request: %s", self.u.name, done)
+
     def tick(self, now):
+        self.request(now)
         p = os.path.join(self.u.dir, "prune.json")
         if not os.path.exists(p): return
         try: per = int(json.load(open(p)).get("per", 5))

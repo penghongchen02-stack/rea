@@ -105,6 +105,19 @@ these traders earned their profit from liquidity rewards, which the simulation d
 own orders (no $1-$30 range). At 23:50Z rep_whiskas, rep_flippingsharks and rep_pbot6 were rebuilt and restarted on a
 fresh $1,000 after losing $768, $576 and $1,000 in their first hour; remove a tryout bot with `{"remove": key}` in add.json.
 
+## Report replicas in the standard universe, and estimated rewards (11-12 00:43Z)
+
+The nine report replicas also run in the standard universe (user's request), added through `paperbot-data/roster_req.json`
+(`{"add": [...], "restore": [...]}`, paperbot/roster.py), with sizes and per-market caps scaled to the $100 bank
+(written for $1,000). The standard `bonereaper` bot, deleted at -$100 in the 17:15Z prune, was restored on a fresh
+account. Several report traders earn mostly liquidity rewards and rebates, so each replica carries the rate its report
+shows (dollars of rewards per dollar filled: Doggystyie 2.69%, Whiskas 1.05%, Bonereaper 0.82%, SirMartingale 0.67%
+from its live wallet, BTC5MScour 0.015%; none reported for the others) and its account accumulates `est_rewards`
+beside its P/L. These are polymarket.com rates; Polymarket US Tier 1 pays no maker rebate, so the estimate is never
+added to cash or P/L. Both-sides replicas (Doggystyie, NeverSmiling, Bonereaper) now quote a side only while its filled
+shares are at most 1.5x the other side's plus one median clip, so a one-way run stops adding (it kept buying the
+falling side before).
+
 ## Late favourite (late_fav)
 
 From the PR&R trader reports (BTC5MScour, SLIP-ME) and their TWAP settlement study: 5-minute windows settle on an
