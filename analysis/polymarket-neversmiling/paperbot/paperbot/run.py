@@ -65,6 +65,11 @@ UNIVERSES = [
     {"name": "br133", "port": int(os.environ.get("PAPERBOT_PORT12", "8092")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05,
      "dir": os.path.join(DATA, "br133"), "cash": 1000.0, "registry": "single", "bot": "br133", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m"],
      "note": "passed the tryout 11-12 (53 windows, +$59); here since 11-12 19:15Z on a fresh $1,000"},
+    # br133, fast and doubled (user, 11-12 19:25Z): the same bot on Bitcoin 5-minute windows only, on the 50-passes-a-second
+    # loop (Engine.t_fast), with twice the tryout's stakes: 0.2%-4% of the bank an order, 10% a window.
+    {"name": "br133fast", "port": int(os.environ.get("PAPERBOT_PORT13", "8093")), "size_mode": "pct", "size_pct": (PCT[0] * 2, PCT[1] * 2), "window_pct": 0.10,
+     "dir": os.path.join(DATA, "br133fast"), "cash": 1000.0, "registry": "single", "bot": "br133", "assets": ["btc"], "horizons": ["5m"], "fast_hz": 50,
+     "note": "Bitcoin only, fast loop, double the tryout's stakes; here since 11-12 19:25Z on a fresh $1,000"},
     # Fast20: the 20 most profitable strategy bots, $1,000 each, on their own 20-passes-a-second loop (paperbot/fast20.py).
     {"name": "fast20", "port": int(os.environ.get("PAPERBOT_PORT11", "8091")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05,
      "dir": os.path.join(DATA, "fast20"), "pos_mult": 15.0, "cash": 1000.0, "registry": "fast20", "fast_hz": 50},
@@ -240,6 +245,9 @@ class Universe:
         if self.roster is not None: self.last_state["roster"] = self.roster.snapshot()
         if self.tryout is not None: self.last_state["tryout"] = self.tryout.snapshot(now)
         if self.fast20 is not None: self.last_state["fast20"] = self.fast20.snapshot(now)
+        elif self.fast:      # a fast dashboard without the Fast 20 picker: the loop's speed and input ages only
+            f = self.fast_stats; self.last_state["fastloop"] = {"hz": self.cfg.get("fast_hz"), "ages": f.get("ages"),
+                                                                "loop": {k: f.get(k) for k in ("passes_per_s", "pass_ms", "pass_ms_max", "passes")}}
 
 
 class Engine:

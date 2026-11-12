@@ -18,7 +18,7 @@ def state(port):
 
 def main():
     label = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].isdigit() else ""
-    ports = [int(p) for p in sys.argv[1:] if p.isdigit()] or list(range(8080, 8090)) + [8091, 8092]
+    ports = [int(p) for p in sys.argv[1:] if p.isdigit()] or list(range(8080, 8090)) + [8091, 8092, 8093]
     parts = []; stream = None
     for port in ports:
         try: s = state(port)

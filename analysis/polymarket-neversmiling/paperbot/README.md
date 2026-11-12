@@ -272,3 +272,9 @@ runs with none, so the effect can be measured. The guards had no settled record 
 
 br133, the first bot to pass the tryout, on its own fresh $1,000 account as it ran there: BTC, ETH, SOL and XRP
 5-minute windows with the share-of-bank sizing, no guards.
+
+## br133 fast dashboard (port 8093)
+
+A second copy of br133 on a fresh $1,000 account: Bitcoin 5-minute windows only, run by its own 50-passes-a-second loop
+(`Engine.t_fast`, as the Fast 20), with twice the tryout's stakes (0.2%-4% of the bank an order, 10% a window). The
+entry rule is unchanged: still one entry per window.
