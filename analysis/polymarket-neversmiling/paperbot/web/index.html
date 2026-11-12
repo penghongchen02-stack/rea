@@ -154,7 +154,7 @@ const L=F.loop||{};let h='<b>Loop</b>: target '+F.hz+' passes a second, measured
 const M=Object.entries(F.members||{}).sort((a,b)=>a[1].rank-b[1].rank);
 if(!M.length){h+='<br>Picking the 20 bots'+(F.ready_in>0?' in '+F.ready_in+' s':' now')+'.'}
 else{h+='<table style="margin-top:6px;border-collapse:collapse;font-size:12px"><tr style="text-align:left"><th>#</th><th>bot</th><th>return when picked</th><th>picked from</th><th>windows here</th><th>P/L here</th></tr>';
-for(const[n,m]of M){const a=(S.accounts||{})[n]||{};h+='<tr><td>'+m.rank+'</td><td>'+esc(n)+'</td><td>'+pl(m.ret*100)+'%</td><td>'+esc((m.where||[]).join(', '))+'</td><td>'+(a.n_settled==null?'-':a.n_settled)+'</td><td>'+pl(a.pnl)+'</td></tr>'}
+for(const[n,m]of M){const a=(S.accounts||{})[n]||{};h+='<tr><td>'+m.rank+'</td><td>'+esc(n)+'</td><td>'+pl(m.ret*100)+'%</td><td>'+esc((m.where||[]).join(', '))+'</td><td>'+(a.markets_settled==null?'-':a.markets_settled)+'</td><td>'+pl(a.pnl)+'</td></tr>'}
 h+='</table>'}
 document.getElementById('fast').innerHTML=h};})();
 </script>
