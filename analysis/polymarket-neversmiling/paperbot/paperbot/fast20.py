@@ -1,5 +1,5 @@
 """Fast20 universe (port 8091; user, 11-12 10:05Z): the 20 most profitable strategy bots of the other dashboards, $1,000
-each, run by their own loop FAST_HZ times a second instead of the engine's one pass a second.
+each, run by their own loop 50 times a second (cfg fast_hz) instead of the engine's one pass a second.
 
 Picking (once, when the universe first starts; kept in <dir>/fast20.json): every strategy bot of dollar, dollar30,
 dollar1000, top20, bonelab and evolve with at least MIN_WINDOWS settled windows, ranked by return on its starting cash
@@ -100,5 +100,5 @@ class Fast20:
     def snapshot(self, now):
         f = getattr(self.u, "fast_stats", None) or {}
         return {"hz": self.cfg.get("fast_hz"), "picked_at": self.picked_at, "ready_in": round(self.ready - now) if not self.members else None,
-                "loop": {k: f.get(k) for k in ("passes_per_s", "pass_ms", "pass_ms_max", "passes")},
+                "loop": {k: f.get(k) for k in ("passes_per_s", "pass_ms", "pass_ms_max", "passes")}, "ages": f.get("ages"),
                 "members": {n: {k: s.get(k) for k in ("rank", "ret", "where", "base", "src", "was")} for n, s in self.members.items()}}

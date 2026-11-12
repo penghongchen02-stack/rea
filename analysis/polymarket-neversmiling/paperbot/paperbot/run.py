@@ -62,7 +62,7 @@ UNIVERSES = [
     # Rep1000: the nine report replicas alone with $1,000 each (user, 11-12 01:55Z), beside the $100 ones in std.
     # Fast20: the 20 most profitable strategy bots, $1,000 each, on their own 20-passes-a-second loop (paperbot/fast20.py).
     {"name": "fast20", "port": int(os.environ.get("PAPERBOT_PORT11", "8091")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05,
-     "dir": os.path.join(DATA, "fast20"), "pos_mult": 15.0, "cash": 1000.0, "registry": "fast20", "fast_hz": 20},
+     "dir": os.path.join(DATA, "fast20"), "pos_mult": 15.0, "cash": 1000.0, "registry": "fast20", "fast_hz": 50},
     {"name": "rep1000", "port": int(os.environ.get("PAPERBOT_PORT10", "8089")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05, "dir": os.path.join(DATA, "rep1000"),
      "cash": 1000.0, "registry": "reports"},
 ]
@@ -242,17 +242,20 @@ class Engine:
 
     # ---- threads -----------------------------------------------------------
     def t_index(self):
-        last_log = 0
+        last_log = 0; last_full = 0.0
         while True:
             try:
-                self.idx.poll()
+                # the benchmark prints once a second; ask twice a second for the last few seconds (one request for all
+                # coins), and for the full 3 minutes every 30 s to fill any gap
+                if time.time() - last_full > 30: self.idx.poll(); last_full = time.time()
+                else: self.idx.poll(lookback=8)
                 if time.time() - last_log > 10:
                     for a in feeds.ASSETS:
                         ts, v = self.idx.last(a)
                         if ts: self.index_store.insert("index_log", {"ts": ts, "asset": a, "value": v})
                     last_log = time.time()
             except Exception as e: log.warning("index poll: %s", e)
-            time.sleep(2)
+            time.sleep(0.5)
 
     def t_discover(self):
         while True:
@@ -398,10 +401,18 @@ class Engine:
         from . import fair
         hz = float(u.cfg["fast_hz"]); period = 1.0 / hz; fair.set_resolution(hz)
         ctx = {"index": self.idx, "spot": self.spot}; st = u.fast_stats; st.update(passes=0, pass_ms=0.0, pass_ms_max=0.0, passes_per_s=0.0)
-        win_t = time.time(); win_n = 0; last_err = 0.0
+        win_t = time.time(); win_n = 0; last_err = 0.0; last_age = 0.0
         while True:
             t0 = time.perf_counter(); now = time.time()
             try:
+                if now - last_age >= 1:      # how old each input is when the bots read it (shown on the dashboard)
+                    last_age = now
+                    bk = sorted(now - m.book_ts for m in list(self.mf.markets.values()) if m.kind == "updown" and m.start <= now < m.end)
+                    sp = [now - t for a in feeds.ASSETS for t in [self.spot.last(a)[1]] if t]
+                    ix = [now - t for a in feeds.ASSETS for t in [self.idx.last(a)[0]] if t]
+                    st["ages"] = {"book_ms": round(bk[len(bk) // 2] * 1000) if bk else None, "book_ws": sum(1 for m in self.mf.markets.values() if m.kind == "updown" and m.start <= now < m.end and m.book_src == "ws"), "books": len(bk),
+                                  "spot_ms": round(min(sp) * 1000) if sp else None, "spot_ms_max": round(max(sp) * 1000) if sp else None,
+                                  "index_ms": round(sum(ix) / len(ix) * 1000) if ix else None}
                 with u.lock:
                     for m in list(self.mf.markets.values()):
                         if now >= m.end or m.book_ts < now - 10: continue

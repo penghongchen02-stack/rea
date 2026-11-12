@@ -241,8 +241,10 @@ evolve dashboards (return on starting cash after fees, at least 10 settled windo
 `paperbot-data/fast20/fast20.json`; delete that file and restart to pick again), each on a fresh $1,000 account with
 the share-of-bank sizing (0.1%-2% of the bank an order, 5% a window). Scanners are not eligible.
 
-These bots run on their own thread (`Engine.t_fast`), 20 passes a second (`fast_hz`), instead of the shared loop's
-roughly one pass a second; the model is recomputed at that rate. The dashboard shows the measured passes a second and
+These bots run on their own thread (`Engine.t_fast`), 50 passes a second asked (`fast_hz`), about 40 measured, instead of the shared loop's
+roughly one pass a second; the model is recomputed at that rate. Inputs: Coinbase spot is streamed
+(every trade), the order books are streamed, and the benchmark index, which prints once a second, is polled twice a
+second (was every 2 s; this applies to every dashboard). The panel shows how old each input is when the bots read it. The dashboard shows the measured passes a second and
 the time one pass takes. Paper fills at the quote seen are the best case: a real order also has to reach the exchange,
 and most bots wait 2-3 s between their own orders, so the gain is reacting sooner, not ordering more often. Past profit
 of the picked bots is not evidence they will profit here (see the walk-forward result above).
