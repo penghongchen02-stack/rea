@@ -62,6 +62,8 @@ section{display:none}section.on{display:block}
   <div class="card" id="hero"></div>
   <h2>Live 5-minute windows</h2>
   <div class="grid" id="live"></div>
+  <h2 id="rephead">Report traders</h2>
+  <div class="card" id="reps"></div>
   <h2>Top 5 bots</h2>
   <div class="card" id="top5"></div>
 </section>
@@ -125,6 +127,9 @@ function render(){
   const botRow=(b,i)=>`<div class="row"><div class="grow"><div class="name">${i+1}. ${esc(b.name)}${(D.roster.added||{})[b.name]?' <span class="badge">new</span>':""}</div>
     <div class="small">${b.settled||0} windows · ${b.settled?Math.round((b.won||0)/b.settled*100):0}% won · ${b.fills} fills${b.open?` · ${b.open} open`:""}${b.est_rewards>0.005?` · est. rewards +${money(b.est_rewards)} (not in P/L)`:""}</div>
     ${b.label?`<div class="why">${esc(b.label)}</div>`:""}</div><div class="num">${pl(b.pnl)}</div></div>`;
+  const RP=B.filter(b=>b.name.startsWith("rep_")), rnet=RP.reduce((x,b)=>x+b.pnl,0), rrw=RP.reduce((x,b)=>x+(b.est_rewards||0),0);
+  $("rephead").textContent=`Report traders · ${RP.length} bots · P/L ${rnet>=0?"+":""}${money(rnet)} · est. rewards +${money(rrw)}`;
+  $("reps").innerHTML=RP.map(botRow).join("")||`<div class="row small">None in this universe</div>`;
   $("top5").innerHTML=B.slice(0,5).map(botRow).join("")||`<div class="row small">No bots</div>`;
   $("botshead").textContent=`All ${B.length} bots · ${up} up · ${dn} down`;
   $("bots").innerHTML=B.map(botRow).join("");

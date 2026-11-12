@@ -26,6 +26,7 @@ canvas{width:100%;height:260px;display:block}.tip{position:absolute;pointer-even
 <div class="sub">$100 each, live Polymarket US crypto Up/Down markets (BTC, ETH, SOL, XRP · 5m and 15m). Add <span class="mono">?bots=whiskas</span> (or any comma list of old, improved, final, whiskas, lastcall, lastcall_tilt, lastcall_hold, lastcall_rest) to the URL to focus on some bots. Settlement index: CF Benchmarks BRTI and the other reference indices as served by Polymarket US, checked against cfbenchmarks.com. Fast signal: Coinbase spot. Fees: Tier 1 taker coefficient 0.095, no rebates.</div>
 <div class="chips" id="chips"></div>
 <div class="card" style="margin-bottom:14px"><h2>Leaderboard (all bots, by P/L)</h2><div class="wrap"><table id="lb"><thead><tr><th>Bot</th><th>key</th><th>Equity</th><th>P/L</th><th>Fees</th><th>Fills</th><th>Windows</th><th>Profitable</th></tr></thead><tbody></tbody></table></div></div>
+<div class="card" id="repcard" style="margin-bottom:14px;display:none"><h2>Report traders (PR&amp;R report replicas, filtered)</h2><div id="rep" class="mono" style="font-size:12px;line-height:1.6;overflow-x:auto"></div></div>
 <div class="card" id="trycard" style="margin-bottom:14px;display:none"><h2>Tryout (champion candidates side by side, $1,000 each, BTC/ETH/SOL/XRP 5-minute)</h2><div id="try" class="mono" style="font-size:12px;line-height:1.6;overflow-x:auto"></div></div>
 <div class="card" id="champcard" style="margin-bottom:14px;display:none"><h2>Champion ($1,000 bank, BTC/ETH/SOL/XRP 5-minute only)</h2><div id="champ" class="mono" style="font-size:12px;line-height:1.6"></div></div>
 <div class="card" id="evocard" style="margin-bottom:14px;display:none"><h2>Evolution (bottom 5 replaced by 3 children of the top 5 and 2 immigrants)</h2><div id="evo" class="mono" style="font-size:12px;line-height:1.6"></div></div>
@@ -129,4 +130,19 @@ h+='</table>';
 if((T.dropped||[]).length)h+='<div style="margin-top:6px"><b>Dropped</b><br>'+T.dropped.slice(0,10).map(d=>esc(d.key)+' '+hm(d.ts)+' '+esc(d.why)+' (n='+d.n+', P/L '+pl(d.pnl)+', edge '+ec(d.edge)+')').join('<br>')+'</div>';
 if((T.board||[]).length)h+='<div style="margin-top:6px"><b>Waiting list</b> (luck-adjusted score on other dashboards, markets)<br>'+T.board.map((x,i)=>(i+1)+'. '+esc(x.key)+' '+pl(x.score)+', n='+x.n+(T.members[x.key]?' <i>(in tryout)</i>':'')).join('<br>')+'</div>';
 document.getElementById('try').innerHTML=h};})();
-</script></body></html>
+</script><script>
+// Report-replica panel: shown when the universe has rep_* bots (standard universe and tryout).
+(function(){const base=render;const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]);
+const pl=v=>'<span style="color:'+(v>0?'#1baf7a':v<0?'#e34948':'inherit')+'">'+(v>0?'+':'')+v.toFixed(2)+'</span>';
+const STYLE={rep_bonereaper:'late leading side at 80-97c',rep_whiskas:'both sides early, then adds to the leader (<90c)',rep_doggystyie:'rests both sides, pair <= 99c',rep_neversmiling:'rests both sides at 30-70c, 4 coins',rep_flippingsharks:'cheap side, completes pairs <= 90c (BTC)',rep_pbot6:'15m, high conviction at 30-60c',rep_slipme:'opens both, adds to the favourite',rep_sirmartingale:'one side below fair value, sells into strength',rep_btc5mscour:'near-certain side at 90-99c, last 2 min'};
+render=function(){base();const card=document.getElementById('repcard');const R=Object.values(S.accounts||{}).filter(a=>a.name.startsWith('rep_')).sort((a,b)=>b.pnl-a.pnl);
+if(!R.length){card.style.display='none';return}card.style.display='';
+const net=R.reduce((s,a)=>s+a.pnl,0),rw=R.reduce((s,a)=>s+(a.est_rewards||0),0);
+let h='<span style="color:var(--muted)">Each copies what pays in its trader\'s report and skips that trader\'s losing bands, hours and coins. At most 5% of the bank per window; stops for the day after losing 10%. Est. rewards = what the trader\'s reported reward rate would pay on this volume; it is <b>not</b> in P/L (Polymarket US pays none at this tier).</span>';
+h+='<table style="margin-top:6px;border-collapse:collapse;font-size:12px"><tr style="text-align:left"><th>bot</th><th>style</th><th>P/L</th><th>windows</th><th>won</th><th>fills (maker)</th><th>fees</th><th>est. rewards</th><th>P/L + est. rewards</th></tr>';
+for(const a of R){const n=a.markets_settled||0,f=(a.maker_fills||0)+(a.taker_fills||0),r=a.est_rewards||0;
+h+='<tr><td>'+esc(a.name)+'</td><td style="color:var(--muted)">'+esc(STYLE[a.name]||'')+'</td><td>'+pl(a.pnl)+'</td><td>'+n+'</td><td>'+(n?Math.round((a.markets_won||0)/n*100)+'%':'-')+'</td><td>'+f+' ('+(a.maker_fills||0)+')</td><td>'+(a.fees||0).toFixed(2)+'</td><td>'+(r?'+'+r.toFixed(2):'-')+'</td><td>'+pl(a.pnl+r)+'</td></tr>'}
+h+='<tr style="font-weight:600"><td>all '+R.length+'</td><td></td><td>'+pl(net)+'</td><td></td><td></td><td></td><td></td><td>'+(rw?'+'+rw.toFixed(2):'-')+'</td><td>'+pl(net+rw)+'</td></tr></table>';
+document.getElementById('rep').innerHTML=h};})();
+</script>
+</body></html>
