@@ -47,9 +47,13 @@ class Replica(LastCallHold):
     def cap(self): return min(self.MARKET_CAP * self.scale, self.RISK_FRAC * self.acct.start_cash)
 
     def stopped_today(self, now):
-        day = int(now // 86400); a = self.acct
-        if getattr(self, "_day", None) != day: self._day = day; self._day_base = a.realized_closed
-        return a.realized_closed - self._day_base <= -self.DAY_STOP * a.start_cash
+        """True once this UTC day's settled windows have lost DAY_STOP of the bank. Summed from the account's own
+        settlement records, which survive a restart (a counter kept here was reset by every engine restart)."""
+        if now - getattr(self, "_stop_at", 0) > 5:
+            day0 = now - now % 86400; a = self.acct
+            self._stop = sum(r.get("pnl_total", 0.0) for r in a.settlements if r.get("ts", 0) >= day0) <= -self.DAY_STOP * a.start_cash
+            self._stop_at = now
+        return self._stop
 
     # ---- helpers ---------------------------------------------------------------
     def dollars(self, mult=1.0):
