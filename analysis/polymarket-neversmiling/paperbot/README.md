@@ -118,6 +118,19 @@ added to cash or P/L. Both-sides replicas (Doggystyie, NeverSmiling, Bonereaper)
 shares are at most 1.5x the other side's plus one median clip, so a one-way run stops adding (it kept buying the
 falling side before).
 
+## Filtered replicas (11-12 00:52Z)
+
+At the user's request the replicas keep what pays in each trader's report and leave out its losing parts; all nine
+restarted on fresh accounts in the standard universe ($100) and the tryout ($1,000). For every replica: at most 5% of the
+bank in one window (the reports' per-market sizes reach 30% of $1,000) and no new entries for the rest of the UTC day after
+settled losses of 10% of the bank. Per trader: Bonereaper only the late dominant side at $0.80-0.97 (every band under
+$0.80 lost in its report; its pairs cost a median $1.15 live); Doggystyie only pairs at or under $0.99 and a tilt on a
+strong signal (its trading alone lost 1%); Whiskas no leg at $0.90+ and no trading at 08 and 14 UTC; NeverSmiling off at
+1, 14, 15, 16 and 23 UTC; FlippingSharks BTC only (ETH 5m lost 10% live) and no weekends; PBOT-6 15-minute windows only,
+$0.30-0.60, high conviction only (its BTC 5m lost 26% live; its $0.10-0.20 and $0.60-0.70 bands lost). SLIP-ME,
+SirMartingale and BTC5MScour already carried their reports' filters. The filters come from the same data that showed
+the losses, so they are in-sample and still have to prove themselves.
+
 ## Late favourite (late_fav)
 
 From the PR&R trader reports (BTC5MScour, SLIP-ME) and their TWAP settlement study: 5-minute windows settle on an

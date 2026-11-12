@@ -4,7 +4,8 @@ Each trades its own coins, window lengths and style, and sizes its own orders fr
 They run in the tryout universe with $1,000 each. The other reports (sports, esports, weather, politics) cannot trade
 here: the engine only sees crypto Up/Down markets.
 
-Both-sides traders (Doggystyie, NeverSmiling, Bonereaper) rest bids on both sides (see Pair); Whiskas and FlippingSharks
+Both-sides traders (Doggystyie, NeverSmiling) rest bids on both sides (see Pair); Bonereaper was cut on 11-12 to the
+part its report shows paying (late dominant side); Whiskas and FlippingSharks
 were rebuilt 11-11 23:50Z from their live trades (they take),
 as their reports describe them providing liquidity; the others take.
 
@@ -32,6 +33,10 @@ class Replica(LastCallHold):
     # Rewards and rebates the trader's report shows, as a fraction of dollars filled (0 = none reported). The account
     # accumulates them as est_rewards beside its P/L; they are polymarket.com rates and are not paid in this sim.
     REWARD_RATE = 0.0
+    # Guards against the traders' own bad losses (user, 11-12 00:55Z): no window may hold more than RISK_FRAC of the
+    # bank (the reports' per-market sizes reach 30% of a $1,000 bank), and after losing DAY_STOP of the bank in settled
+    # windows in one UTC day the bot places no new entries until the next day. DAYS_OFF = UTC weekdays skipped (0 = Mon).
+    RISK_FRAC = 0.05; DAY_STOP = 0.10; DAYS_OFF = ()
 
     def __init__(self, account, seed=31):
         super().__init__(account, seed=seed); self.assets = set(self.ASSETS); self.durs = set(self.DURS)
@@ -39,7 +44,12 @@ class Replica(LastCallHold):
         account.reward_rate = self.REWARD_RATE
 
     @property
-    def cap(self): return self.MARKET_CAP * self.scale
+    def cap(self): return min(self.MARKET_CAP * self.scale, self.RISK_FRAC * self.acct.start_cash)
+
+    def stopped_today(self, now):
+        day = int(now // 86400); a = self.acct
+        if getattr(self, "_day", None) != day: self._day = day; self._day_base = a.realized_closed
+        return a.realized_closed - self._day_base <= -self.DAY_STOP * a.start_cash
 
     # ---- helpers ---------------------------------------------------------------
     def dollars(self, mult=1.0):
@@ -69,7 +79,9 @@ class Replica(LastCallHold):
         slug = market.slug; st = self.m(slug); left = market.remaining(now)
         if left < self.LEFT_MIN or left > self.LEFT_MAX or market.state not in (None, "MARKET_STATE_OPEN"): return
         if now - market.start < self.OPEN_MIN or now < st["next_take"]: return
-        if time.gmtime(now).tm_hour in self.HOURS_OFF: return
+        g = time.gmtime(now)
+        if g.tm_hour in self.HOURS_OFF or g.tm_wday in self.DAYS_OFF: return
+        if self.stopped_today(now): self.acct.cancel_all(slug); return
         bb, ba = market.best_bid, market.best_ask
         if bb is None or ba is None: return
         p, det = p_up(market, ctx["index"], ctx["spot"], now)
@@ -131,7 +143,7 @@ class Whiskas(Replica):
     model agrees, up to 3x the other side. Sizes from the report ($8.20 median, P95 $41.59); about $180 per market (live
     average)."""
     name = "rep_whiskas"; ASSETS = ("btc",); LEFT_MIN = 30; LEFT_MAX = 300; PERIOD = 6.0
-    SIZE = (8.20, 41.59, 134.53); MARKET_CAP = 180.0; PAIR_MAX = 1.02; LEAN_MAX = 3.0
+    SIZE = (8.20, 41.59, 134.53); MARKET_CAP = 180.0; PAIR_MAX = 1.02; LEAN_MAX = 3.0; HOURS_OFF = (8, 14)   # its report's loss hours
     REWARD_RATE = 0.0105       # report: $37,619 taker + $5,255 maker rebates + $594 LP on $4,128,425 bought
     def decide(self, market, st, p, det, now, left, bb, ba):
         up_c, dn_c = ba, 1 - bb; u, d = st.get("up", 0.0), st.get("down", 0.0)
@@ -144,7 +156,7 @@ class Whiskas(Replica):
         lead, c, other = ("up", up_c, d) if up_c >= dn_c else ("down", dn_c, u)
         agrees = (p > 0.5) == (lead == "up")
         mine = u if lead == "up" else d
-        if agrees and 0.60 <= c <= 0.92 and mine < self.LEAN_MAX * max(other, 1.0):
+        if agrees and 0.60 <= c < 0.90 and mine < self.LEAN_MAX * max(other, 1.0):
             self.buy(market, st, lead, self.dollars(), f"{self.name} lean {lead} {c:.2f}")
 
 
@@ -153,7 +165,7 @@ class Doggystyie(Pair):
     over the first 60-180 s, never sells, optional tilt to the favoured side (report rules 1-8). Its profit was
     liquidity rewards (trading ROI -1.00%), which this sim does not pay."""
     name = "rep_doggystyie"; ASSETS = ("btc",); OPEN_MIN = 0; LEFT_MIN = 120; LEFT_MAX = 300; PERIOD = 8.0
-    SIZE = (17.81, 48.72, 83.52); MARKET_CAP = 200.0; PAIR_CAP = 1.02; TILT = 2.0; TILT_Z = 1.5
+    SIZE = (17.81, 48.72, 83.52); MARKET_CAP = 200.0; PAIR_CAP = 0.99; TILT = 3.0; TILT_Z = 2.0   # filtered: pair must lock a profit; tilt only on a strong signal (its 3x+ side won 96.8%)
     REWARD_RATE = 0.0269       # report: $93,668 rewards on $3,480,124 bought (its trading alone lost 1.00%)
 
 
@@ -163,7 +175,7 @@ class NeverSmiling(Pair):
     max $267), about $161 per market, skip 14-16 UTC (report rules 1-9)."""
     name = "rep_neversmiling"; ASSETS = ("btc", "eth", "sol", "xrp"); DURS = (FIVE, FIFTEEN); PERIOD = 6.0
     SIZE = (3.51, 16.41, 267.09); MARKET_CAP = 161.0; PAIR_CAP = 0.97; BAND = (0.30, 0.70); TILT = 3.0; TILT_Z = 1.0
-    SKIP_WEAK_ABOVE_1 = True; HOURS_OFF = (14, 15, 16)
+    SKIP_WEAK_ABOVE_1 = True; HOURS_OFF = (1, 14, 15, 16, 23)
     def on_tick(self, market, ctx, now):
         el = (now - market.start) / market.dur
         if 0.10 <= el <= 0.90: super().on_tick(market, ctx, now)
@@ -178,7 +190,7 @@ class FlippingSharks(Replica):
     as soon as both average costs add to <= PAIR_TARGET, sized to match the shares held; add to the held side only
     below $0.30 and 5c under its average. Sizes from the report ($4.21 median, P95 $74.81); $60 per market (live
     average about $46). Hours 4, 16, 19, 20 UTC skipped (report)."""
-    name = "rep_flippingsharks"; ASSETS = ("btc", "eth"); DURS = (FIVE, FIFTEEN); LEFT_MIN = 30; PERIOD = 7.0
+    name = "rep_flippingsharks"; ASSETS = ("btc",); DURS = (FIVE, FIFTEEN); LEFT_MIN = 30; PERIOD = 7.0; DAYS_OFF = (5, 6)   # filtered: no ETH (live -10%), no weekends (report: Sat -$469, Sun -$1,143)
     SIZE = (4.21, 74.81, 222.75); MARKET_CAP = 60.0; CHEAP = 0.40; PAIR_TARGET = 0.90; HOURS_OFF = (4, 16, 19, 20)
     def on_tick(self, market, ctx, now):
         if market.asset == "eth" and market.dur == FIFTEEN: return          # live: BTC 5m, ETH 5m, BTC 15m only
@@ -207,14 +219,27 @@ class FlippingSharks(Replica):
                 take(k, (sh[o_] - sh[k]) * cost[k], f"{self.name} balance {k} {cost[k]:.2f}")
 
 
-class Bonereaper(Pair):
-    """Bonereaper: BTC/ETH/SOL 5m and BTC/ETH 15m, from 30 s after open to 15 s before close, both sides when the pair
-    is at most $1.10, tilt to the spot-confirmed side only at 2x+ (|z| >= 2), hold; per market at most 1% of bankroll
-    ($10 here), fills median $3.94 (P95 $37.93). 60% of its capital was at $0.90-1.00. Its profit was liquidity rewards
-    (trading ROI +0.20%), which this sim does not pay."""
-    name = "rep_bonereaper"; ASSETS = ("btc", "eth", "sol"); DURS = (FIVE, FIFTEEN); OPEN_MIN = 30; LEFT_MIN = 15; PERIOD = 5.0
-    SIZE = (3.94, 37.93, 196.02); MARKET_CAP = 10.0; PAIR_CAP = 1.10; TILT = 3.0; TILT_Z = 2.0
+class Bonereaper(Replica):
+    """Bonereaper, filtered to what its own report shows paying: every price band under $0.80 lost money (-$40,350 in
+    all) and the whole trading profit came from $0.80-1.00 (+$128,952, 69% of its live dollars at $0.90+), i.e. the
+    dominant side late in the window; its pairs cost a median $1.15 live and lost. So: BTC/ETH/SOL 5m and BTC/ETH 15m,
+    in the last 120 s, take the leading side priced $0.80-0.97 when the model's probability beats the price plus the
+    fee by 1c and the projected settlement leads by at least 2 bp; one side only; 1% of bankroll per market (report);
+    fills median $3.94 (P95 $37.93); hold. Rewards (its main income, 0.82% of volume) are estimated separately."""
+    name = "rep_bonereaper"; ASSETS = ("btc", "eth", "sol"); DURS = (FIVE, FIFTEEN); LEFT_MIN = 5; LEFT_MAX = 120; PERIOD = 5.0
+    SIZE = (3.94, 37.93, 196.02); MARKET_CAP = 10.0
     REWARD_RATE = 0.0082       # report: $369,887 rewards on $45,064,788 bought (trading alone +0.20%)
+    def on_tick(self, market, ctx, now):
+        if market.asset == "sol" and market.dur == FIFTEEN: return
+        super().on_tick(market, ctx, now)
+    def decide(self, market, st, p, det, now, left, bb, ba):
+        K = det.get("K"); m = det.get("mean")
+        if not K or m is None or abs(m - K) / K < 0.0002: return
+        theta = self.acct.theta
+        if m > K and 0.80 <= ba <= 0.97 and st.get("down", 0) == 0 and p - ba - theta * ba * (1 - ba) >= 0.01:
+            self.buy(market, st, "up", self.dollars(), f"{self.name} up {ba:.2f}")
+        elif m < K and 0.80 <= 1 - bb <= 0.97 and st.get("up", 0) == 0 and (1 - p) - (1 - bb) - theta * bb * (1 - bb) >= 0.01:
+            self.buy(market, st, "down", self.dollars(), f"{self.name} down {1 - bb:.2f}")
 
 
 class PBot6(Replica):
@@ -224,15 +249,16 @@ class PBot6(Replica):
     39 windows (it entered at the open, when the model has nothing pinned and an 8c gap is noise, and re-entered every
     3 s up to $150 a window; live PBOT-6 lost 17% the same day the same way): now it enters only once at least 10 of
     the settlement seconds are pinned, takes one entry per window, and caps a window at $30."""
-    name = "rep_pbot6"; ASSETS = ("btc", "eth", "sol", "xrp"); DURS = (FIVE, FIFTEEN); LEFT_MIN = 5; PERIOD = 3.0
+    name = "rep_pbot6"; ASSETS = ("btc", "eth", "sol", "xrp"); DURS = (FIFTEEN,); LEFT_MIN = 5; PERIOD = 3.0; BAND = (0.30, 0.60)   # filtered: 15m only, its profitable bands only, high conviction only
     SIZE = (3.69, 27.35, 660.0); MARKET_CAP = 30.0; MIN_KNOWN = 10
     def decide(self, market, st, p, det, now, left, bb, ba):
         t1 = st.get("t1")
         if t1 is None:
             if det.get("n_known", 0) < self.MIN_KNOWN: return
             mid = (bb + ba) / 2; gap = p - mid; side = "up" if gap > 0 else "down"
-            if abs(gap) >= 0.08: self.buy(market, st, side, self.dollars(2.0), f"{self.name} high {side} gap {gap:+.2f}"); st["t1"] = now
-            elif abs(gap) >= 0.03: self.buy(market, st, side, self.dollars(0.5), f"{self.name} low {side} gap {gap:+.2f}"); st["t1"] = now
+            c = ba if side == "up" else 1 - bb
+            if abs(gap) >= 0.08 and self.BAND[0] <= c <= self.BAND[1]:
+                self.buy(market, st, side, self.dollars(2.0), f"{self.name} high {side} gap {gap:+.2f}"); st["t1"] = now
             return
         if not st.get("hedged") and 60 <= now - t1 <= 120 and ba + (1 - bb) < 0.98:
             other = "down" if st.get("up", 0) >= st.get("down", 0) else "up"

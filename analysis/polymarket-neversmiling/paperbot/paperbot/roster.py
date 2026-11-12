@@ -121,7 +121,8 @@ class Roster:
         return rec
 
     def request(self, now):
-        """<dir>/roster_req.json (consumed once): {"add": [names], "restore": [names]}. add: a bot of any registry not
+        """<dir>/roster_req.json (consumed once): {"remove": [names], "add": [names], "restore": [names]}. remove: an added bot
+        leaves (applied first, so remove + add restarts it fresh). add: a bot of any registry not
         in this dashboard (the report replicas), on a fresh account, kept across restarts. restore: a deleted standard
         bot comes back on a fresh account (its old losses stay in the prune record)."""
         p = os.path.join(self.u.dir, "roster_req.json")
@@ -129,6 +130,8 @@ class Roster:
         try: req = json.load(open(p))
         except Exception as e: log.warning("[%s] bad roster_req.json: %s", self.u.name, e); req = {}
         os.remove(p); done = []
+        for n in req.get("remove", []):          # take an added bot out (to rebuild it); not recorded as deleted
+            if n in self.added: self._remove(n); done.append("-" + n)
         for n in req.get("restore", []):
             if n in self.u.accounts or n not in self.removed: continue
             spec = self.spec_of(n)
