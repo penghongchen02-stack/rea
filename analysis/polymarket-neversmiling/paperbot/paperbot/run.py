@@ -142,7 +142,9 @@ class Universe:
         if managed: pass
         elif self.lab or cfg.get("registry") in ("reports", "single"):
             if cfg.get("registry") == "single":       # the coins and windows it passed the tryout on
-                for s in self.strats: s.assets = set(cfg["assets"]); s.durs = {300}
+                for s in self.strats:
+                    s.assets = set(cfg["assets"]); s.durs = {300}
+                    if cfg.get("fast_hz"): s.period = 1.0 / cfg["fast_hz"]      # look for an entry on every fast pass, not every 3 s
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None; self.arbs = {}
         else:
             self.ladder = LadderArb(self.accounts["ladder"], engine.lf); self.ladder_model = LadderModel(self.accounts["ladder_model"], engine.lf, engine.idx, engine.spot)

@@ -277,4 +277,4 @@ br133, the first bot to pass the tryout, on its own fresh $1,000 account as it r
 
 A second copy of br133 on a fresh $1,000 account: Bitcoin 5-minute windows only, run by its own 50-passes-a-second loop
 (`Engine.t_fast`, as the Fast 20), with twice the tryout's stakes (0.2%-4% of the bank an order, 10% a window). The
-entry rule is unchanged: still one entry per window.
+entry rule is unchanged (one entry per window), but it looks for that entry on every pass instead of every 3 s.
