@@ -365,4 +365,6 @@ def build_report_registry(engine=None):
     if engine is not None:
         from .combo import Combo
         reg["combo"] = lambda acct: Combo(acct, engine)
+        from .fastpick import FastPick
+        reg["fast_pickoff"] = lambda acct: FastPick(acct, engine)
     return reg

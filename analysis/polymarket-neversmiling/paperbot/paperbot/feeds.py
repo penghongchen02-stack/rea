@@ -274,6 +274,7 @@ class SpotFeed:
     PRODUCTS = {"btc": "BTC-USD", "eth": "ETH-USD", "sol": "SOL-USD", "xrp": "XRP-USD"}
     def __init__(self):
         self.price = {}; self.ts = {}; self.lock = threading.Lock(); self.connected = False; self.msgs = 0
+        self.listeners = []          # fn(asset, price, ts), called on every tick in this feed's thread (paperbot/fastpick.py)
         self.hist = {a: collections.deque(maxlen=20000) for a in self.PRODUCTS}   # (ts, price) ticks for the last minutes
         self.sec_px = {a: collections.OrderedDict() for a in self.PRODUCTS}        # int second -> last price in that second
 
@@ -294,6 +295,9 @@ class SpotFeed:
                                         self.price[a] = float(m["price"]); self.ts[a] = time.time(); self.msgs += 1; self.hist[a].append((self.ts[a], self.price[a]))
                                         sp = self.sec_px[a]; sp[int(self.ts[a])] = self.price[a]
                                         while len(sp) > 1800: sp.popitem(last=False)
+                                    for fn in self.listeners:
+                                        try: fn(a, self.price[a], self.ts[a])
+                                        except Exception as e: log.warning("spot listener: %s", e)
                 except Exception as e:
                     self.connected = False; log.warning("coinbase ws: %s", e); await asyncio.sleep(3)
         asyncio.run(main())

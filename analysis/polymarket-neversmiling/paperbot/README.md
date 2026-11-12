@@ -179,6 +179,16 @@ as a bot loses. It applies to strategies, lab bots, replicas, late_fav and the c
 eleven br177 copies in the tryout keep br177's own sizes, because they test one change each against the champion's
 br177.
 
+## Fast pick-off (fast_pickoff, 11-12 09:47Z)
+
+The engine's loop makes about 0.85 passes a second, so every other bot reacts about 1.2 s after a price change.
+`paperbot/fastpick.py` reacts inside the Coinbase tick instead (`SpotFeed.listeners`): on a spot jump of 2.5 sd over
+1 s with the 5-minute window's mid unchanged and 2c of model edge after the fee, it plans a take at the touch and
+reserves that size; the engine books it on its next pass at the decision-time price. Measured: 0.08 ms per tick live
+(571 ticks, no signal yet), 0.07-0.44 ms per decision offline with the model stubbed. In the tryout with share-of-bank
+sizes. Not measured: the delay of the Coinbase feed and of an order reaching the exchange; paper fills at the
+decision-time quote are the best case, so its results are an upper bound.
+
 ## Late favourite (late_fav)
 
 From the PR&R trader reports (BTC5MScour, SLIP-ME) and their TWAP settlement study: 5-minute windows settle on an
