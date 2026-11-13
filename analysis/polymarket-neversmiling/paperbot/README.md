@@ -353,3 +353,22 @@ minutes; `paperbot/stopflip.py` was removed, the confidence findings above stand
 versions of a new idea on the fast loop, $1,000 each: in the last seconds of a 5-minute window, when Coinbase and the
 index show the result strongly decided and the winning side is still cheap on Polymarket, buy it once and hold. The
 module note lists the versions and what the records said beforehand (late cheap sides won less often than their price).
+
+## New tryout bots (11-13 18:51Z)
+
+At the user's request, 21 new bots joined the tryout (`paperbot/newbots.py`, builder source `new`), each on its own
+$1,000 account, exempt from the hourly review until 100 settled windows. Every name starts with `new_`:
+`new_00_volume_rest_all_windows_plus_trend_take` (one resting order at the better side of fair value on all four
+coins, 5- and 15-minute windows, plus a small take when the model's edge is 5c and the 3-minute trend agrees) and
+`new_01` to `new_20`, the twenty ideas shown to the user: five resting-order bots (both-sides quoter, fair-value
+rester, early-window rester, inventory balancer, queue sitter), five that bet less often (strong trend, big move,
+quiet-market skipper, one bet an hour, cheap side only), five that use other information (Bitcoin leads, order-book
+pressure, exchange gap, 15-minute window versus 5-minute, last-window echo), four that manage risk (hedged pair,
+lock-in, shrink after losses, profit target) and a committee of all_horizons, stairstep and consensus. Each bot's
+rule is its label on the tryout page and its docstring.
+
+They size their own orders (1% of the settled bank a bet, at most 3% in one window) and keep their own coins and
+window lengths (`tryout.OWN_SIZE`, `tryout.OWN_MARKETS`). None trades in its first 60 seconds or on stale prices: bots
+that traded two seconds after the 18:34Z engine restart lost about $420. `add.json` now also accepts a list of
+requests. Paper fills of resting orders are generous, so the quoters' results are a best case.
+

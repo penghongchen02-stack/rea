@@ -48,9 +48,10 @@ class Champion:
     def hire(self, spec, now, reason):
         a = self.acct; a.cancel_all()
         a.size_mode = "contracts"           # the hired bot sizes its own orders, as in the tryout (user, 11-11 22:40Z)
+        from .tryout import OWN_MARKETS
         obj = self.builders()[spec["src"]][spec["base"]](a)
         for k, v in spec.get("genes", {}).items(): setattr(obj, k, v)
-        if spec["src"] not in ("rep", "var") and not spec.get("own") and isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)   # every coin here; replicas keep theirs
+        if spec["src"] not in OWN_MARKETS and not spec.get("own") and isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)   # every coin here; replicas keep theirs
         obj.name = spec["key"]
         self.u.strats = [obj]
         eq = a.equity(self.engine.mf.markets)

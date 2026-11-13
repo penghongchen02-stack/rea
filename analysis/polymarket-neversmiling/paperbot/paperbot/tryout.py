@@ -41,6 +41,8 @@ SIZE = 12; REVIEW = 3600.0; MIN_WINDOWS = 50; MIN_POOL = 20; DROP_N = 20; IDLE =
 PILOT_WINDOWS = 200; PILOT_DAYS = 3.0
 MONEY_WINDOWS = 300; MONEY_DAYS = 7.0; MONEY_DROP = 0.15; MONEY_TOP = 5
 COINS_FRAC = 0.75      # share of the coins a bot has traded that must be in profit
+OWN_SIZE = ("var", "new")              # builder sources whose bots size their own orders (the rest take the dashboard's share of the bank)
+OWN_MARKETS = ("rep", "var", "new")    # ... and that keep their own coins and window lengths
 
 
 def luck_k(n): return math.sqrt(2 * math.log(max(n, 2)))
@@ -51,8 +53,10 @@ def builders(cfg, engine=None):
     from .bonelab import build_lab_registry
     from .reports import build_report_registry
     from .br177lab import build_br177_registry
+    from .newbots import build_new_registry
     return {"main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(engine),
-            "var": build_br177_registry(), "extra": build_extra_registry(cfg.get("pos_mult", 15.0))}
+            "var": build_br177_registry(), "extra": build_extra_registry(cfg.get("pos_mult", 15.0)),
+            "new": build_new_registry(engine, cfg.get("pos_mult", 15.0))}
 
 
 def pool(engine, skip, b, assets, horizons, min_markets=MIN_POOL, min_per_coin=0):
@@ -109,13 +113,13 @@ class Tryout:
         n = spec["key"]
         # Share-of-bank sizing since 11-12 09:35Z. The br177 copies (src "var") keep br177's own sizes: they exist to test
         # one change each against the champion's br177, and a different size would change the test.
-        own = spec["src"] == "var" or not self.cfg.get("size_pct")
+        own = spec["src"] in OWN_SIZE or not self.cfg.get("size_pct")
         a = Account(n, self.cash, size_mode="contracts" if own else "pct")
         if not own: a.configure(self.cfg)
         a.universe = self.u.name
         obj = self.builders()[spec["src"]][spec["base"]](a)
         for k, v in spec.get("genes", {}).items(): setattr(obj, k, v)
-        if spec["src"] not in ("rep", "var") and not spec.get("own"):       # pool bots: the champion's coins and 5-minute windows; report replicas keep their own
+        if spec["src"] not in OWN_MARKETS and not spec.get("own"):       # pool bots: the champion's coins and 5-minute windows; report replicas keep their own
             if isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)
             if isinstance(getattr(obj, "durs", None), (set, tuple, list)): obj.durs = {300}
         obj.name = n
@@ -245,7 +249,7 @@ class Tryout:
         log.info("[tryout] review: dropped %s; added %s", out, added)
 
     def requested(self, now):
-        """A hand-added candidate: <dir>/add.json {"key", "base", "src", "genes"?, "keep"?} (consumed once; may exceed SIZE; "own": true keeps the bot's own coins and windows; "keep": N exempts it
+        """A hand-added candidate: <dir>/add.json {"key", "base", "src", "genes"?, "keep"?}, or a list of them (consumed once; may exceed SIZE; "own": true keeps the bot's own coins and windows; "keep": N exempts it
         from the hourly review until it has N settled windows), or
         {"remove": key} to take one out."""
         p = os.path.join(self.u.dir, "add.json")
@@ -253,15 +257,19 @@ class Tryout:
         try: req = json.load(open(p))
         except Exception as e: log.warning("[tryout] bad add.json: %s", e); req = None
         os.remove(p)
+        for r in (req if isinstance(req, list) else [req]): self._request(r, now)      # one request or a list of them
+        self._stats_at = 0; self.save()
+
+    def _request(self, req, now):
         if req and req.get("remove"):        # take a bot out (to rebuild it); its account and record go with it
             n = req["remove"]
-            if n in self.members: self._detach(n); self._stats_at = 0; self.save(); log.info("[tryout] removed %s by request", n)
+            if n in self.members: self._detach(n); log.info("[tryout] removed %s by request", n)
             return
         if not req or req.get("key") in self.members or req.get("base") not in self.builders().get(req.get("src"), {}):
             log.warning("[tryout] cannot add %s", req); return
         spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"], "note": req.get("note"), "keep": int(req.get("keep", 0)), "own": bool(req.get("own")),
                 "joined": now, "entry_score": None, "entry_n": 0}
-        self._attach(spec); self._stats_at = 0; self.save(); log.info("[tryout] added %s by request", spec["key"])
+        self._attach(spec); log.info("[tryout] added %s by request", spec["key"])
 
     def tick(self, now):
         self.requested(now)
