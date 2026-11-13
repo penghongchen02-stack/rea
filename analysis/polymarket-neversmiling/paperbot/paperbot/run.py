@@ -62,6 +62,9 @@ UNIVERSES = [
     # Rep1000: the nine report replicas alone with $1,000 each (user, 11-12 01:55Z), beside the $100 ones in std.
     # The br133 and br133fast dashboards (ports 8092, 8093; registry "single") were taken out at the user's request on
     # 11-13 02:45Z at -$40 and -$6; their records stay in paperbot-data/br133 and paperbot-data/br133fast.
+    # Stop-and-flip bots (user, 11-13 09:30Z): fifteen versions on the fast loop, $1,000 each, own bet sizes (paperbot/stopflip.py).
+    {"name": "stopflip", "port": int(os.environ.get("PAPERBOT_PORT12", "8092")), "size_mode": "contracts", "dir": os.path.join(DATA, "stopflip"),
+     "cash": 1000.0, "registry": "stopflip", "fast_hz": 50},
     # Fast20: the 20 most profitable strategy bots, $1,000 each, on their own 20-passes-a-second loop (paperbot/fast20.py).
     {"name": "fast20", "port": int(os.environ.get("PAPERBOT_PORT11", "8091")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05,
      "dir": os.path.join(DATA, "fast20"), "pos_mult": 15.0, "cash": 1000.0, "registry": "fast20", "fast_hz": 50},
@@ -113,6 +116,9 @@ class Universe:
             self.accounts = {}; self.strats = []; self.arbs = {}; self.active = []
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None
             self.evolver = Evolver(self, engine); self.evolver.restore()
+        elif cfg.get("registry") == "stopflip":
+            from .stopflip import build_stopflip_registry
+            reg = build_stopflip_registry(); self.accounts = {k: mk(k) for k in reg}
         elif cfg.get("registry") == "single":       # one lab bot on its own dashboard (cfg "bot")
             from .bonelab import build_lab_registry
             reg = {cfg["bot"]: build_lab_registry()[cfg["bot"]]}; self.accounts = {k: mk(k) for k in reg}
@@ -132,7 +138,7 @@ class Universe:
             self.active = list(self.accounts) if active == ["all"] else active
             self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
         if managed: pass
-        elif self.lab or cfg.get("registry") in ("reports", "single"):
+        elif self.lab or cfg.get("registry") in ("reports", "single", "stopflip"):
             if cfg.get("registry") == "single":       # the coins and windows it passed the tryout on
                 for s in self.strats:
                     s.assets = set(cfg["assets"]); s.durs = {300}
@@ -161,6 +167,8 @@ class Universe:
             from .bonelab import LAB_LABELS; self.labels = dict(LAB_LABELS)
         if cfg.get("registry") == "reports":
             self.labels = {k: "PR&R report replica, filtered: leading side only, 5% of bank per window, stops for the day at -10%" for k in self.accounts}
+        if cfg.get("registry") == "stopflip":
+            from .stopflip import LABELS as _sf; self.labels = dict(_sf)
         if cfg.get("registry") == "single":
             from .bonelab import LAB_LABELS; self.labels = {k: LAB_LABELS.get(k, k) + "; " + cfg.get("note", "") for k in self.accounts}
         if self.evolver is not None: self.labels = self.evolver.labels

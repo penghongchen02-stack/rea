@@ -299,3 +299,15 @@ Tryout "real money?" column (11-13): a bot is marked ready for a small real-mone
 settled windows over 3 days in the tryout (300 over 7 days for a larger stake; loosened 11-13 05:45Z at the user's request), a luck-adjusted score above zero, a profit that survives removing its five
 best windows, no drop of more than 15% of the bank from a peak, and most days in profit (`MONEY_*` in
 `paperbot/tryout.py`). It grades the paper record only; paper fills are the best case.
+
+## Stop-and-flip dashboard (port 8092) and the corrected confidence (11-13 09:45Z)
+
+`paperbot/stopflip.py`: fifteen versions of the user's idea (back a side with 3-5 minutes left, stop out at a set
+loss, optionally flip to the other side, optionally sized to win the loss back), each on a fresh $1,000 account that
+chooses its own bet, on the 50-passes-a-second loop. The module note lists the versions and the limits.
+
+Confidence check behind it (read-only, from the recorded fills and settlements): of 2,185 distinct mid-window lab
+entries where the model claimed at least 3c of edge after fees, sides bought at 20-40c won 12-17c less often than
+their price, at 40-50c 3c more, at 50-60c 11c more, at 60-70c 18c more (55 cases); of about 4,100 late entries where
+the model said 95-100%, 92-93% won whatever it said, at an average price of 93c. The stop-and-flip bots use that table
+(`stopflip.CAL`, capped at 93%) in place of the model's own number; the other bots are unchanged.
