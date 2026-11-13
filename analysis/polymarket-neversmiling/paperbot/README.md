@@ -372,3 +372,21 @@ window lengths (`tryout.OWN_SIZE`, `tryout.OWN_MARKETS`). None trades in its fir
 that traded two seconds after the 18:34Z engine restart lost about $420. `add.json` now also accepts a list of
 requests. Paper fills of resting orders are generous, so the quoters' results are a best case.
 
+## New arbitrage bots in the tryout, and the start-up pause (11-13 21:30Z)
+
+Nine arbitrage bots joined the tryout (`paperbot/newarbs.py`, names `new_arb_*`, builder source `new`, exempt from the
+hourly review until 100 settled windows): the full set of buckets (the ladder bot's bucket check on its own), after
+the bell (the known winner on a book still open after the last index value), already-touched sweep (a one-touch
+market already reached), a puzzle solver (every basket of up to three windows, strikes and ranges that settle on one
+number, taken when its worst case is a profit), tie goes to Up, head start on the next window, index decides, a
+fat-finger catcher (resting orders 25c from fair value) and a reopen sweep (quotes left over after a book goes quiet).
+The first four are locks if every leg fills; the rest are rule edges. Two of the ten ideas shown to the user changed:
+the butterfly is not an arbitrage for contracts that pay $1 above a strike and was not built, and the two-source
+mismatch uses the index and Coinbase, the two prices the engine has every second, instead of the official benchmark
+page, which is only read every 15 minutes.
+
+`run.START_QUIET` (90 s): no strategy or scanner acts until the engine has run that long. The price model needs
+about a minute of Coinbase history; bots that acted sooner bet on edges that were not there (about -$420 after the
+18:34Z start and -$3,000 after 18:50Z). Books, fills of resting orders and settlements run as usual. After the 21:30Z
+start the first order on any dashboard was at 21:31:40.
+

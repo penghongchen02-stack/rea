@@ -54,9 +54,10 @@ def builders(cfg, engine=None):
     from .reports import build_report_registry
     from .br177lab import build_br177_registry
     from .newbots import build_new_registry
+    from .newarbs import build_new_arb_registry
     return {"main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(engine),
             "var": build_br177_registry(), "extra": build_extra_registry(cfg.get("pos_mult", 15.0)),
-            "new": build_new_registry(engine, cfg.get("pos_mult", 15.0))}
+            "new": {**build_new_registry(engine, cfg.get("pos_mult", 15.0)), **build_new_arb_registry(engine)}}
 
 
 def pool(engine, skip, b, assets, horizons, min_markets=MIN_POOL, min_per_coin=0):

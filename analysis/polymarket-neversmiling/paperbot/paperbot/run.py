@@ -79,6 +79,10 @@ log = logging.getLogger("run")
 
 # The dashboard chart: one equity point per bot every EQUITY_EVERY seconds (it was 5 s, 112 commits a pass on the lab),
 # at most HIST_POINTS points per bot and HIST_BUDGET in all sent to the page, rows older than EQUITY_KEEP dropped from the database.
+# No bot acts in the first START_QUIET seconds after the engine starts: the price model needs about a minute of Coinbase
+# history, and bots that acted sooner bet on edges that were not there (11-13: -$420 after the 18:34Z start, about
+# -$3,000 after 18:50Z). Books, fills of resting orders and settlements run as usual.
+START_QUIET = 90.0
 EQUITY_EVERY = 30.0; HIST_POINTS = 240; HIST_BUDGET = 8000; EQUITY_KEEP = 2 * 86400.0
 
 
@@ -347,16 +351,16 @@ class Engine:
         while True:
             t0 = time.time(); self.loop_count += 1
             try:
-                self.mf.poll_books(); now = time.time()
+                self.mf.poll_books(); now = time.time(); warm = now - self.started >= START_QUIET
                 for u in self.universes:
                     if u.fast: continue          # no scanners there; its positions are all Up/Down windows
                     try:
-                        if "ladder" in u.active: u.ladder.scan(now)
-                        if "ladder_model" in u.active: u.ladder_model.scan(now)
-                        if "touch_model" in u.active: u.touch_model.scan(now)
-                        if "xarb" in u.active: u.xarb.scan(now)
+                        if warm and "ladder" in u.active: u.ladder.scan(now)
+                        if warm and "ladder_model" in u.active: u.ladder_model.scan(now)
+                        if warm and "touch_model" in u.active: u.touch_model.scan(now)
+                        if warm and "xarb" in u.active: u.xarb.scan(now)
                         for name, sc in u.arbs.items():
-                            if name in u.active:
+                            if warm and name in u.active:
                                 try: sc.scan(now)
                                 except Exception as e: self.errors += 1; log.exception("[%s] arb %s: %s", u.name, name, e)
                         for a in u.accounts.values():
@@ -381,7 +385,7 @@ class Engine:
                     for u in self.universes:
                         if u.fast: continue        # run by t_fast
                         if "assets" in u.cfg and (m.asset not in u.cfg["assets"] or m.horizon not in u.cfg["horizons"]): continue
-                        for s in u.strats:
+                        for s in (u.strats if warm else ()):
                             try: s.on_tick(m, ctx, now)
                             except Exception as e: self.errors += 1; log.exception("[%s] strategy %s on %s: %s", u.name, s.name, m.slug, e)
                     for u, a in self.all_accounts():
@@ -453,7 +457,7 @@ class Engine:
                         if now >= m.end or m.book_ts < now - 10: continue
                         for a in u.accounts.values(): a.on_book(m)
                         if m.kind != "updown": continue
-                        for s in u.strats:
+                        for s in (u.strats if now - self.started >= START_QUIET else ()):
                             try: s.on_tick(m, ctx, now)
                             except Exception as e:
                                 self.errors += 1
