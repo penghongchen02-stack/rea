@@ -329,3 +329,9 @@ the model said 95-100%, 92-93% won whatever it said, at an average price of 93c.
 early exit and a stake that grows with its confidence (0.5% of the bank an order below z 2, 1% to z 3, 2% to z 4, 3%
 above; 5% a window), next to the original. The confidence check above found that late bets won 92-93% whatever z
 was, so the larger stakes are not expected to pick better windows.
+
+Stop-and-flip, 11-13 11:00Z (approved by the user): in its first hour the fifteen bots lost $332; their first bets cost
+65c on average and the side won 12 of 23 distinct windows. Holding every first bet instead of stopping would have lost
+about $734, so the entry, not the stop, was at fault: `CAL` above 60c rests on 63 cases. First bets are now limited to
+47-60c and to BTC and ETH, and the fifteen accounts were restarted at $1,000 (the first hour's records are in
+`paperbot-data/stopflip-first-hour`).

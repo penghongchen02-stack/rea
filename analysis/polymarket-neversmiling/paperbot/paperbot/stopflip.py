@@ -10,7 +10,8 @@ comes from what the lab's 2,185 distinct mid-window entries actually did (paperb
 was an entry where the model claimed at least 3c of edge after fees): a side bought below 40c won 12-17c LESS often
 than its price, at 40-50c 3c more, at 50-60c 11c more, at 60-70c about 15c more. CAL holds that as win rate minus
 price, by price; a bot here enters only if that corrected chance beats the price and the fee by MIN_EDGE, which in
-practice means the side already ahead (priced about 47c or more). Late in a window the model said 95-100% and those
+practice means the side already ahead (priced about 47c or more); since 11:00Z a first bet is also limited to
+ENTRY_BAND and the bots trade Bitcoin and Ether only (SOL lost most in the first hour: wider gaps, bigger jumps). Late in a window the model said 95-100% and those
 bets won 92-93% whatever it said (4,100 entries of the late bots), so the corrected chance is capped at CAP.
 
 Sizes: "conf" bets $2 at the minimum edge up to $20 at 10c of corrected edge; "bank" bets 0.5%-2% of the settled bank
@@ -24,6 +25,10 @@ from .fair import p_up
 
 CAL = ((0.25, -0.14), (0.35, -0.12), (0.45, 0.03), (0.55, 0.10), (0.65, 0.15), (0.80, 0.10))   # (price, win rate - price)
 CAP = 0.93; MIN_EDGE = 0.02; MODEL_EDGE = 0.03; WINDOW_CAP = 0.05
+# First bets only between these prices (user, 11-13 11:00Z). In the first hour the bots paid 65c on average for sides that
+# won 12 of 23 distinct windows: CAL's figures above 60c rest on 63 cases (against 1,660 for 40-60c) and were trusted too
+# far. A flip after a stop is not bound by this; it takes the other side at whatever it costs.
+ENTRY_BAND = (0.47, 0.60)
 
 
 def corrected(x):
@@ -38,7 +43,7 @@ def corrected(x):
 
 class StopFlip(Base):
     def __init__(self, account, name, stop=0.05, flips=0, recover=0.0, flip_if=None, sizing="conf", window=(180, 290), tp=None,
-                 rest=False, assets=("btc", "eth", "sol", "xrp"), two_step=False, day_stop=None):
+                 rest=False, assets=("btc", "eth"), two_step=False, day_stop=None):
         super().__init__(account)
         self.name = name; self.stop = stop; self.flips = flips; self.recover = recover; self.flip_if = flip_if; self.sizing = sizing
         self.t_lo, self.t_hi = window; self.tp = tp; self.rest = rest; self.assets = set(assets); self.two_step = two_step; self.day_stop = day_stop
@@ -62,6 +67,11 @@ class StopFlip(Base):
         buy, _ = self.side_px(market, side); pm = p if side == "up" else 1 - p
         if not 0.05 <= buy <= 0.95 or pm - buy - self.fee(buy) < MODEL_EDGE: return None
         return corrected(buy) - buy - self.fee(buy)
+
+    def first_edge(self, market, side, p):
+        """edge(), for a window's first bet: only inside ENTRY_BAND."""
+        buy, _ = self.side_px(market, side)
+        return self.edge(market, side, p) if ENTRY_BAND[0] <= buy <= ENTRY_BAND[1] else None
 
     def dollars(self, e):
         k = min(1.0, max(0.0, e - MIN_EDGE) / 0.08)
@@ -142,7 +152,7 @@ class StopFlip(Base):
 
         if not self.t_lo <= left <= self.t_hi: return      # first entry
         if self.day_stop is not None and self.day_loss(now) >= self.day_stop * acct.start_cash: return
-        best = max(((self.edge(market, s, p), s) for s in ("up", "down")), key=lambda t: -1 if t[0] is None else t[0])
+        best = max(((self.first_edge(market, s, p), s) for s in ("up", "down")), key=lambda t: -1 if t[0] is None else t[0])
         e, side = best
         if e is None or e < MIN_EDGE or not self.tight(market, side): return
         usd = self.dollars(e) * (0.5 if self.two_step else 1.0)
