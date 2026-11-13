@@ -302,7 +302,7 @@ best windows, no drop of more than 15% of the bank from a peak, and most days in
 
 ## Stop-and-flip dashboard (port 8092) and the corrected confidence (11-13 09:45Z)
 
-Running since 11-13 09:55Z on fresh $1,000 accounts, on the user's go-ahead. (An earlier 5-minute run, started before
+Running since 11-13 09:50Z on fresh $1,000 accounts, on the user's go-ahead. (An earlier 5-minute run, started before
 they had approved it, was taken down at their request and its records discarded.)
 
 `paperbot/stopflip.py`: fifteen versions of the user's idea (back a side with 3-5 minutes left, stop out at a set

@@ -63,7 +63,7 @@ UNIVERSES = [
     # The br133 and br133fast dashboards (ports 8092, 8093; registry "single") were taken out at the user's request on
     # 11-13 02:45Z at -$40 and -$6; their records stay in paperbot-data/br133 and paperbot-data/br133fast.
     # Stop-and-flip bots: fifteen versions on the fast loop, $1,000 each, own bet sizes (paperbot/stopflip.py). Approved by
-    # the user on 11-13 09:55Z ("just finish it ... in new dashboard") after a 5-minute run they had not asked for was taken down.
+    # the user on 11-13 09:50Z ("just finish it ... in new dashboard") after a 5-minute run they had not asked for was taken down.
     {"name": "stopflip", "port": int(os.environ.get("PAPERBOT_PORT12", "8092")), "size_mode": "contracts", "dir": os.path.join(DATA, "stopflip"),
      "cash": 1000.0, "registry": "stopflip", "fast_hz": 50},
     # Fast20: the 20 most profitable strategy bots, $1,000 each, on their own 20-passes-a-second loop (paperbot/fast20.py).
