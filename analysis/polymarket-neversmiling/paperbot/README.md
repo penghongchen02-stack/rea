@@ -294,3 +294,8 @@ the `persist` option remain in the code. br133 still runs in the lab and the try
 
 Tryout pass rule since 11-13 05:15Z: a bot must be in profit on at least three quarters of the coins it has traded (3 of
 4, both of 2), not on 3 of the 4 listed coins, so a bot built for BTC and ETH only can pass.
+
+Tryout "real money?" column (11-13): a bot is marked ready for a small real-money pilot only if it passes, has 300
+settled windows over 7 days in the tryout, a luck-adjusted score above zero, a profit that survives removing its five
+best windows, no drop of more than 15% of the bank from a peak, and most days in profit (`MONEY_*` in
+`paperbot/tryout.py`). It grades the paper record only; paper fills are the best case.
