@@ -106,7 +106,7 @@ class Tryout:
         a.universe = self.u.name
         obj = self.builders()[spec["src"]][spec["base"]](a)
         for k, v in spec.get("genes", {}).items(): setattr(obj, k, v)
-        if spec["src"] not in ("rep", "var"):       # pool bots: the champion's coins and 5-minute windows; report replicas keep their own
+        if spec["src"] not in ("rep", "var") and not spec.get("own"):       # pool bots: the champion's coins and 5-minute windows; report replicas keep their own
             if isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)
             if isinstance(getattr(obj, "durs", None), (set, tuple, list)): obj.durs = {300}
         obj.name = n
@@ -218,7 +218,7 @@ class Tryout:
         log.info("[tryout] review: dropped %s; added %s", out, added)
 
     def requested(self, now):
-        """A hand-added candidate: <dir>/add.json {"key", "base", "src", "genes"?, "keep"?} (consumed once; may exceed SIZE; "keep": N exempts it
+        """A hand-added candidate: <dir>/add.json {"key", "base", "src", "genes"?, "keep"?} (consumed once; may exceed SIZE; "own": true keeps the bot's own coins and windows; "keep": N exempts it
         from the hourly review until it has N settled windows), or
         {"remove": key} to take one out."""
         p = os.path.join(self.u.dir, "add.json")
@@ -232,7 +232,7 @@ class Tryout:
             return
         if not req or req.get("key") in self.members or req.get("base") not in self.builders().get(req.get("src"), {}):
             log.warning("[tryout] cannot add %s", req); return
-        spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"], "note": req.get("note"), "keep": int(req.get("keep", 0)),
+        spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"], "note": req.get("note"), "keep": int(req.get("keep", 0)), "own": bool(req.get("own")),
                 "joined": now, "entry_score": None, "entry_n": 0}
         self._attach(spec); self._stats_at = 0; self.save(); log.info("[tryout] added %s by request", spec["key"])
 

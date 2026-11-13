@@ -283,3 +283,7 @@ entry rule is unchanged (one entry per window), but it looks for that entry on e
 Since 11-12 21:30Z (its first four trades were two wins and two losses on openings the 3-second copies never saw): an
 entry signal must hold for 1 s before it is taken (`persist`), the three direction guards are on, and the stakes are
 back to the tryout's 0.1%-2% an order and 5% a window.
+
+`v_early_rest` was added to the tryout by request on 11-13 (`"own": true` in `add.json` keeps a bot's own coins and
+windows, here BTC and ETH 5-minute; `"keep": 300`). In this run it lost on all four dashboards it ran on from 11-10 22:40Z
+to its deletion in the 11-11 prune.
