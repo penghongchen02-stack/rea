@@ -59,7 +59,7 @@ class WSBooks:
             try:
                 async with websockets.connect(URL, additional_headers=auth_headers(), ssl=feeds._CTX, open_timeout=30, ping_interval=20) as ws:
                     self.connected = True; backoff = 2; self.subs = {}; log.info("markets websocket connected")
-                    last_sync = 0.0
+                    last_sync = 0.0; conn_at = time.time()      # a quiet stream is judged from this connection's start
                     while True:
                         now = time.time()
                         if now - last_sync > 2:
@@ -75,7 +75,7 @@ class WSBooks:
                                     await ws.send(self._sub_msg(rid, batch)); self.subs[rid] = batch
                         try: raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
                         except asyncio.TimeoutError:
-                            if self.last_msg and now - self.last_msg > 60: raise RuntimeError("no messages for 60 s")
+                            if now - max(self.last_msg, conn_at) > 60: raise RuntimeError("no messages for 60 s")
                             continue
                         msg = json.loads(raw)
                         if "heartbeat" in msg:
