@@ -291,3 +291,6 @@ to its deletion in the 11-11 prune.
 The br133 and br133 fast dashboards were removed on 11-13 02:45Z at the user's request (-$40.21 over 47 windows and
 -$5.85 over 12). Their records stay in `paperbot-data/br133` and `paperbot-data/br133fast`; the `single` registry and
 the `persist` option remain in the code. br133 still runs in the lab and the tryout.
+
+Tryout pass rule since 11-13 05:15Z: a bot must be in profit on at least three quarters of the coins it has traded (3 of
+4, both of 2), not on 3 of the 4 listed coins, so a bot built for BTC and ETH only can pass.

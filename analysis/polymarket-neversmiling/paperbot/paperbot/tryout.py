@@ -18,7 +18,8 @@ Edge: per settled window, 1 if the side it bought won else 0, minus the average 
 A bot that buys at 55c and wins 62% of its windows has a 7c edge, whatever its P/L luck.
 
 Pass (the champion may hire only passing bots), all of:
-  at least MIN_WINDOWS settled windows here; P/L above zero; profitable on at least 3 of the 4 coins; profitable in
+  at least MIN_WINDOWS settled windows here; P/L above zero; profitable on at least three quarters of the coins it has traded (3 of 4, both of 2; user, 11-13 05:15Z:
+  a bot is not judged on how many coins it uses); profitable in
   more than half of the hours it traded; edge above zero; and profitable in both the first and the second half of its
   windows (it kept working on data it had not been chosen on).
 Review every hour: a bot with at least DROP_N windows that is losing money with a negative edge is dropped, a bot
@@ -31,7 +32,7 @@ import os, json, math, time, logging, statistics
 
 log = logging.getLogger("tryout")
 SIZE = 12; REVIEW = 3600.0; MIN_WINDOWS = 50; MIN_POOL = 20; DROP_N = 20; IDLE = 3 * 3600.0; COOLDOWN = 86400.0; WARMUP = 60.0
-COINS_NEEDED = 3
+COINS_FRAC = 0.75      # share of the coins a bot has traded that must be in profit
 
 
 def luck_k(n): return math.sqrt(2 * math.log(max(n, 2)))
@@ -168,7 +169,8 @@ class Tryout:
         why = []
         if nw < MIN_WINDOWS: why.append(f"{nw}/{MIN_WINDOWS} windows")
         if pnl <= 0: why.append("not in profit")
-        if st["coins_up"] < COINS_NEEDED: why.append(f"profitable on {st['coins_up']}/4 coins")
+        traded = len(st["coins"]); need = math.ceil(COINS_FRAC * traded)
+        if st["coins_up"] < need: why.append(f"profitable on {st['coins_up']}/{traded} coins it trades")
         if st["hours"] and st["hours_up"] * 2 <= st["hours"]: why.append(f"profitable in {st['hours_up']}/{st['hours']} hours")
         if edge is None or edge <= 0: why.append("no positive edge")
         if not st["halves"] or min(st["halves"]) <= 0: why.append("not profitable in both halves")
