@@ -36,6 +36,9 @@ SIZE = 12; REVIEW = 3600.0; MIN_WINDOWS = 50; MIN_POOL = 20; DROP_N = 20; IDLE =
 # days that luck is unlikely, the luck-adjusted score above zero, still in profit without its five best windows, no
 # deep drop from a peak, and most days in profit. It says the paper record is strong enough to risk a small pilot; it
 # cannot say real orders will fill at paper prices.
+# Two levels (user, 11-13 05:45Z): a small pilot ($100-$200) after PILOT_WINDOWS over PILOT_DAYS, a larger stake only
+# after MONEY_WINDOWS over MONEY_DAYS. The other checks are the same for both.
+PILOT_WINDOWS = 200; PILOT_DAYS = 3.0
 MONEY_WINDOWS = 300; MONEY_DAYS = 7.0; MONEY_DROP = 0.15; MONEY_TOP = 5
 COINS_FRAC = 0.75      # share of the coins a bot has traded that must be in profit
 
@@ -186,13 +189,17 @@ class Tryout:
         for (slug, asset, ts, up, x) in rows:
             run += x; peak = max(peak, run); drop = max(drop, peak - run); day[int(ts // 86400)] = day.get(int(ts // 86400), 0.0) + x
         rest = sum(sorted(xs)[:-MONEY_TOP]) if nw > MONEY_TOP else 0.0
-        if nw < MONEY_WINDOWS: m.append(f"{nw}/{MONEY_WINDOWS} windows")
-        if days < MONEY_DAYS: m.append(f"{days:.1f}/{MONEY_DAYS:.0f} days")
+        if nw < PILOT_WINDOWS: m.append(f"{nw}/{PILOT_WINDOWS} windows")
+        if days < PILOT_DAYS: m.append(f"{days:.1f}/{PILOT_DAYS:.0f} days")
         if st["score"] is None or st["score"] <= 0: m.append("has not beaten the luck test")
         if rest <= 0: m.append(f"not in profit without its {MONEY_TOP} best windows ({rest:+.0f})")
         if drop > MONEY_DROP * a.start_cash: m.append(f"dropped {drop:.0f} from a peak (limit {MONEY_DROP * a.start_cash:.0f})")
         if day and sum(1 for v in day.values() if v > 0) * 2 <= len(day): m.append(f"profitable on {sum(1 for v in day.values() if v > 0)}/{len(day)} days")
-        st["money"] = {"ready": not m, "why": m, "days": round(days, 1), "drop": round(drop, 2), "without_top": round(rest, 2)}
+        more = [] if not m else None       # what a larger stake still needs, once the pilot level is reached
+        if more is not None:
+            if nw < MONEY_WINDOWS: more.append(f"{nw}/{MONEY_WINDOWS} windows")
+            if days < MONEY_DAYS: more.append(f"{days:.1f}/{MONEY_DAYS:.0f} days")
+        st["money"] = {"ready": not m, "why": m, "more_ready": more == [], "more_why": more or [], "days": round(days, 1), "drop": round(drop, 2), "without_top": round(rest, 2)}
         return st
 
     def all_stats(self, now):
@@ -269,7 +276,7 @@ class Tryout:
     def snapshot(self, now):
         st = self.all_stats(now)
         fast = {x.acct.name: x.snapshot() for x in self.u.strats if hasattr(x, "lat")}      # tick-driven bots: decision timing
-        return {"fast": fast, "size": SIZE, "min_windows": MIN_WINDOWS, "money_rules": {"windows": MONEY_WINDOWS, "days": MONEY_DAYS, "drop": MONEY_DROP, "top": MONEY_TOP}, "assets": list(self.assets), "horizons": list(self.horizons),
+        return {"fast": fast, "size": SIZE, "min_windows": MIN_WINDOWS, "money_rules": {"windows": PILOT_WINDOWS, "days": PILOT_DAYS, "more_windows": MONEY_WINDOWS, "more_days": MONEY_DAYS, "drop": MONEY_DROP, "top": MONEY_TOP}, "assets": list(self.assets), "horizons": list(self.horizons),
                 "next_review_in": round(self.next_review - now) if self.next_review else None,
                 "members": {n: dict(st[n], joined=s["joined"], entry_score=s.get("entry_score"), where=s.get("where")) for n, s in self.members.items()},
                 "dropped": self.dropped[-20:][::-1], "reviews": self.reviews[-6:][::-1],
