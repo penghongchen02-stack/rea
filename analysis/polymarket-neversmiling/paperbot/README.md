@@ -259,6 +259,11 @@ exit) and `br177_trend_and_hold_to_the_close`. They were added with `"keep": 300
 from the tryout's hourly review until it has that many settled windows (the first set of br177 copies was dropped
 after about 24).
 
+On 11-13 18:35Z, at the user's request, `br177_trend_hold_and_steady_10_dollar_bets` joined them (the trend rule, held
+to the close, every order $10 and at most $40 a window instead of random $0.10-$100 orders), and the champion was
+switched by `hire.json` from br177 to `br177_trend_and_hold_to_the_close`, the copy that passes the tryout. The bank
+carried over ($581.98 at the switch); the earlier state is in `paperbot-data/champion/champion.before-trend-hold.json`.
+
 ## Direction guards on the losing lab bots and the champion (11-12 18:50Z)
 
 The Bonereaper-lab bots (`bonelab.BoneVar`) that were losing, on whichever dashboard they run, and the champion's

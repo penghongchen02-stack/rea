@@ -9,6 +9,7 @@ from .bonelab import BoneVar, VARIANTS
 from .fair import p_up
 
 _KW = VARIANTS["br177"][1]; _SEED = 100 + list(VARIANTS).index("br177")
+STEADY_USD = 10.0; STEADY_CAP = 40.0      # the steady copy: every order $10, at most $40 in one window
 COLD_N = 8; COLD_WINS = 2; COLD_SIZE = 0.25; BANK_FRAC = 0.05; DAY_STOP = 0.10; GIVEBACK = 0.5; QUIET = 0.7
 
 
@@ -28,17 +29,18 @@ class _Maker:
 
 class Br177Var(BoneVar):
     """mode: None (plain) or one of cold, cap, signal, btc, daystop, giveback, quiet, noexit, maker, blend, trend,
-    balance, trend_noexit (the lab's direction guards, bonelab.BoneVar, one at a time)."""
+    balance, trend_noexit (the lab's direction guards, bonelab.BoneVar, one at a time), trend_noexit_steady (trend,
+    held to the close, and fixed $10 orders up to $40 a window instead of random sizes)."""
     def __init__(self, account, name, mode=None):
         kw = dict(_KW)
         if mode == "btc": kw["assets"] = ("btc",)
         if mode == "blend": kw["shrink"] = 0.8                    # 80% model, 20% the market's own price
         super().__init__(account, name, seed=_SEED, **kw)
-        self.mode = mode; self.base_cap = self.cap; self._mult = 1.0; self._edge = None
+        self.mode = mode; self.base_cap = self.cap if mode != "trend_noexit_steady" else STEADY_CAP; self._mult = 1.0; self._edge = None
         self._sig = collections.defaultdict(lambda: collections.deque(maxlen=900))
         self._decided = True
-        self.trend = mode in ("trend", "trend_noexit", "guards"); self.balance = mode in ("balance", "guards")
-        self.hold = mode in ("noexit", "trend_noexit", "guards")       # the lab's guards, one at a time here
+        self.trend = mode in ("trend", "trend_noexit", "trend_noexit_steady", "guards"); self.balance = mode in ("balance", "guards")
+        self.hold = mode in ("noexit", "trend_noexit", "trend_noexit_steady", "guards")       # the lab's guards, one at a time here
         if mode == "maker": self.acct = _Maker(account)
 
     # ---- what the account's own settled windows say (known at entry) ------------
@@ -68,6 +70,7 @@ class Br177Var(BoneVar):
         n = super().contracts(price)                       # draws the same random size as plain br177
         if self.mode == "signal" and self._edge is not None:
             n = min(100.0, 15.0 * self._edge / 0.05) / price      # $9 at a 3c edge, $30 at 10c, capped at $100
+        if self.mode == "trend_noexit_steady": n = STEADY_USD / price
         return n * self._mult
 
     def on_tick(self, market, ctx, now):
@@ -100,6 +103,7 @@ VARS = {
     "br177_no_more_than_3_windows_in_a_row_on_one_side": ("balance", "br177, skips a 4th window in a row on the same side"),
     "br177_hold_to_the_close": ("noexit", "br177, every bet held to settlement (no early exit)"),
     "br177_trend_and_hold_to_the_close": ("trend_noexit", "br177, only with the 3-minute trend and held to settlement"),
+    "br177_trend_hold_and_steady_10_dollar_bets": ("trend_noexit_steady", "br177, only with the 3-minute trend, held to settlement, every order $10 and at most $40 a window"),
     "br177_unchanged_for_comparison": (None, "br177 unchanged, run next to the direction fixes"),
 }
 
