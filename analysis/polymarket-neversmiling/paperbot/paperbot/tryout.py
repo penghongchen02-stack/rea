@@ -285,7 +285,8 @@ class Tryout:
     def snapshot(self, now):
         st = self.all_stats(now)
         fast = {x.acct.name: x.snapshot() for x in self.u.strats if hasattr(x, "lat")}      # tick-driven bots: decision timing
-        return {"fast": fast, "size": SIZE, "min_windows": MIN_WINDOWS, "money_rules": {"windows": PILOT_WINDOWS, "days": PILOT_DAYS, "more_windows": MONEY_WINDOWS, "more_days": MONEY_DAYS, "drop": MONEY_DROP, "top": MONEY_TOP}, "assets": list(self.assets), "horizons": list(self.horizons),
+        scans = {x.acct.name: dict(x.sc.stats) for x in self.u.strats if hasattr(x, "sc")}       # whole-book scanners: what they have seen
+        return {"fast": fast, "scans": scans, "size": SIZE, "min_windows": MIN_WINDOWS, "money_rules": {"windows": PILOT_WINDOWS, "days": PILOT_DAYS, "more_windows": MONEY_WINDOWS, "more_days": MONEY_DAYS, "drop": MONEY_DROP, "top": MONEY_TOP}, "assets": list(self.assets), "horizons": list(self.horizons),
                 "next_review_in": round(self.next_review - now) if self.next_review else None,
                 "members": {n: dict(st[n], joined=s["joined"], entry_score=s.get("entry_score"), where=s.get("where")) for n, s in self.members.items()},
                 "dropped": self.dropped[-20:][::-1], "reviews": self.reviews[-6:][::-1],

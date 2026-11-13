@@ -179,31 +179,28 @@ class TieUp(Picker):
 
 # ---- 7: a head start on the next window -------------------------------------------------------------------------------
 class HeadStart(_New):
-    """The next window's price to beat is this window's settlement: an average of the last 60 seconds, which lags a
-    moving price. In the last LAST seconds that average is nearly known. If Coinbase's price now sits far enough from
-    it that the next window is at least P_MIN likely to finish on that side, and the next window's quote has not
-    priced it, buy that side of the next window. One bet per window."""
-    LAST = 15; P_MIN = 0.60; EDGE = 0.05
+    """A window's price to beat is the settlement of the window before it, and the exchange publishes it about eight
+    seconds after the window opens. This bot works the line out itself (the index value at the last second before the
+    open) and, in the window's first LAST seconds, buys the side the model puts EDGE above its price. One bet per
+    window. (First built to trade the next window before it opened; watched on 11-13 22:15Z, a window has no book
+    until it opens, so it acts at the open instead.)"""
+    FIRST = 1.0; LAST = 12.0; EDGE = 0.05
     def __init__(self, account, name, engine=None, **kw): super().__init__(account, name, **kw); self.engine = engine; self.done = set()
     def on_tick(self, market, ctx, now):
-        left = market.remaining(now)
-        if now - self.born < WARMUP or market.asset not in self.assets or market.dur not in self.durs or not (2 <= left <= self.LAST): return
-        nxt = next((m for m in list(self.engine.mf.markets.values()) if m.asset == market.asset and m.kind == "updown" and m.dur == market.dur and abs(m.start - market.end) < 1), None)
-        if nxt is None or nxt.slug in self.done or nxt.slug in self.acct.positions: return
-        if nxt.state not in OPEN or nxt.best_bid is None or nxt.best_ask is None or now - nxt.book_ts > 10: return
-        idx, spot = ctx["index"], ctx["spot"]; est = settle_estimate(market.asset, market.end, idx, spot, now)
-        cb, ts = spot.last(market.asset); its, rm = idx.last(market.asset)
-        if est is None or not cb or not ts or now - ts > 5 or rm is None or now - its > 8 or est[2] < 40: return
-        m60 = spot.mean(market.asset, int(its) - 59, int(its) + 1)
-        if not m60: return
-        raw = rm + (cb - m60)                                              # the raw index level now, from Coinbase's move
-        sd = spot.sigma(market.asset) * raw * math.sqrt(nxt.dur - 20)
-        if sd <= 0: return
-        p = phi((raw - est[0]) / sd); th = self.acct.theta
-        if p >= self.P_MIN and p - nxt.best_ask - fee(th, nxt.best_ask) >= self.EDGE: up = True
-        elif 1 - p >= self.P_MIN and (1 - p) - (1 - nxt.best_bid) - fee(th, nxt.best_bid) >= self.EDGE: up = False
+        el = now - market.start
+        if not (self.FIRST <= el <= self.LAST) or market.slug in self.done or market.slug in self.acct.positions or not self.ready(market, now): return
+        idx, spot = ctx["index"], ctx["spot"]; line = market.p2b
+        if line is None:
+            v = idx.value_at(market.asset, int(market.start) - 1)
+            if v is None: return
+            line = round(v, market.decimals)
+        cb, ts = spot.last(market.asset); est = settle_estimate(market.asset, market.end, idx, spot, now)
+        if est is None or not cb or not ts or now - ts > 5 or est[1] <= 0: return
+        p = phi((est[0] - line) / max(est[1], 2 * 10 ** (-market.decimals))); th = self.acct.theta; bb, ba = market.best_bid, market.best_ask
+        if p - ba - fee(th, ba) >= self.EDGE: up = True
+        elif (1 - p) - (1 - bb) - fee(th, bb) >= self.EDGE: up = False
         else: return
-        if self.bet(nxt, up, STAKE * self.acct.bank(), f"{self.name} {'up' if up else 'down'} p {p if up else 1 - p:.2f}"): self.done.add(nxt.slug)
+        if self.bet(market, up, STAKE * self.acct.bank(), f"{self.name} {'up' if up else 'down'} p {p if up else 1 - p:.2f} line {line:g} {el:.0f}s"): self.done.add(market.slug)
 
 
 # ---- 8: the index and Coinbase disagree -------------------------------------------------------------------------------
@@ -246,7 +243,7 @@ BOTS = {
                                  lambda a, e: _Scan(a, "new_arb_05_puzzle_solver", Solver(a, e))),
     "new_arb_06_tie_goes_to_up": ("NEW ARB 6: buys Up late in a window when the price sits on the line and a tie, which pays Up, is likely enough",
                                   lambda a, e: TieUp(a, "new_arb_06_tie_goes_to_up", t_hi=30, t_lo=3, band=(0.30, 0.75), edge=None)),
-    "new_arb_07_head_start_on_next_window": ("NEW ARB 7: in a window's last 15 s, buys the side of the next window that its nearly known starting line favours",
+    "new_arb_07_head_start_on_next_window": ("NEW ARB 7: in a window's first 12 s, before its starting line is published, works the line out from the previous window and buys the side that is 5c too cheap",
                                              lambda a, e: HeadStart(a, "new_arb_07_head_start_on_next_window", engine=e)),
     "new_arb_08_index_decides": ("NEW ARB 8: late in a window, when the index and Coinbase are on opposite sides of the line, bets the index's side",
                                  lambda a, e: IndexDecides(a, "new_arb_08_index_decides", t_hi=40, t_lo=5, band=(0.30, 0.85), edge=0.02)),

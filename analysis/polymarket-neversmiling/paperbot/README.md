@@ -390,3 +390,9 @@ about a minute of Coinbase history; bots that acted sooner bet on edges that wer
 18:34Z start and -$3,000 after 18:50Z). Books, fills of resting orders and settlements run as usual. After the 21:30Z
 start the first order on any dashboard was at 21:31:40.
 
+What the arbitrage bots found in their first hour (11-13 22:25Z): a window's book closes within two seconds of its end
+and nobody offers the winning side in its last seconds, so after-the-bell has nothing to buy; a window has no book
+before it opens, so the head-start bot now acts in the window's first 12 seconds with a line it works out itself; and
+the solver's best basket over 35 groups had no positive worst case (the pair scanners' best gap in the same period
+was 0.78c, under their 1c threshold). The tryout state now carries each scanner's counters under `tryout.scans`.
+
