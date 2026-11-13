@@ -92,19 +92,6 @@ class Account:
 
     def fee(self, price, qty, maker): return 0.0 if maker else round(self.theta * qty * price * (1 - price), 6)
 
-    def mark_value(self, markets):
-        """Mark-to-market of open positions: long at best bid, short at (1 - best ask), fallback mid."""
-        v = 0.0
-        for slug, p in self.positions.items():
-            if p.closed or abs(p.qty) < 1e-9: continue
-            m = markets.get(slug); px = None
-            if m is not None:
-                px = m.best_bid if p.qty > 0 else m.best_ask
-                if px is None: px = m.mid
-            if px is None: px = p.avg
-            v += p.qty * px if p.qty > 0 else (-p.qty) * (1 - px) - (-p.qty)   # short: margin $1 locked already counted in cash? no: cash holds proceeds
-        return v
-
     def equity(self, markets):
         # cash already includes short proceeds; a short's liability at mark is qty*px; long asset is qty*px
         e = self.cash

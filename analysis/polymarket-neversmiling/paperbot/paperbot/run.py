@@ -5,7 +5,7 @@ A universe is a complete set of bot accounts with its own sizing rule, database,
   dollar : every order sized to a random $0.10-$10, port 8081, data in PAPERBOT_DATA/dollar/
 Every bot in strategies.build_registry() (plus drop-ins under paperbot/bots/) is created in every universe.
 """
-import os, sys, time, json, threading, logging, sqlite3, http.server, socketserver, functools, collections
+import os, sys, time, json, gzip, threading, logging, sqlite3, http.server, socketserver, functools, collections
 from . import feeds
 from .sim import Account
 from .strategies import build_registry, LADDER_BOTS
@@ -60,8 +60,6 @@ UNIVERSES = [
     {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05, "dir": os.path.join(DATA, "tryout"),
      "pos_mult": 15.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m", "15m"], "pool_horizons": ["5m"]},
     # Rep1000: the nine report replicas alone with $1,000 each (user, 11-12 01:55Z), beside the $100 ones in std.
-    # The br133 and br133fast dashboards (ports 8092, 8093; registry "single") were taken out at the user's request on
-    # 11-13 02:45Z at -$40 and -$6; their records stay in paperbot-data/br133 and paperbot-data/br133fast.
     # Stop-and-flip bots: fifteen versions on the fast loop, $1,000 each, own bet sizes (paperbot/stopflip.py). Approved by
     # the user on 11-13 09:50Z ("just finish it ... in new dashboard") after a 5-minute run they had not asked for was taken down.
     {"name": "stopflip", "port": int(os.environ.get("PAPERBOT_PORT12", "8092")), "size_mode": "contracts", "dir": os.path.join(DATA, "stopflip"),
@@ -78,6 +76,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 log = logging.getLogger("run")
 
 
+# The dashboard chart: one equity point per bot every EQUITY_EVERY seconds (it was 5 s, 112 commits a pass on the lab),
+# at most HIST_POINTS points per bot and HIST_BUDGET in all sent to the page, rows older than EQUITY_KEEP dropped from the database.
+EQUITY_EVERY = 30.0; HIST_POINTS = 240; HIST_BUDGET = 8000; EQUITY_KEEP = 2 * 86400.0
+
+
 class Store:
     def __init__(self, path):
         self.db = sqlite3.connect(path, check_same_thread=False); self.lock = threading.Lock()
@@ -90,6 +93,15 @@ class Store:
     def insert(self, table, rec):
         with self.lock:
             keys = list(rec.keys()); self.db.execute(f"insert into {table}({','.join(keys)}) values({','.join('?' * len(keys))})", [rec[k] for k in keys]); self.db.commit()
+    def insert_many(self, table, recs):
+        """Several rows of one table in one transaction (one commit instead of one per row)."""
+        if not recs: return
+        keys = list(recs[0].keys())
+        with self.lock:
+            self.db.executemany(f"insert into {table}({','.join(keys)}) values({','.join('?' * len(keys))})", [[r[k] for k in keys] for r in recs]); self.db.commit()
+    def prune_equity(self, keep_seconds):
+        """The equity table only feeds the dashboard's chart; drop rows older than keep_seconds."""
+        with self.lock: self.db.execute("delete from equity where ts < ?", (time.time() - keep_seconds,)); self.db.commit()
     def query(self, sql, args=()):
         with self.lock: return self.db.execute(sql, args).fetchall()
 
@@ -120,9 +132,6 @@ class Universe:
         elif cfg.get("registry") == "stopflip":
             from .stopflip import build_stopflip_registry
             reg = build_stopflip_registry(); self.accounts = {k: mk(k) for k in reg}
-        elif cfg.get("registry") == "single":       # one lab bot on its own dashboard (cfg "bot")
-            from .bonelab import build_lab_registry
-            reg = {cfg["bot"]: build_lab_registry()[cfg["bot"]]}; self.accounts = {k: mk(k) for k in reg}
         elif self.lab:
             from .bonelab import build_lab_registry
             reg = build_lab_registry(); self.accounts = {k: mk(k) for k in reg}
@@ -139,12 +148,7 @@ class Universe:
             self.active = list(self.accounts) if active == ["all"] else active
             self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
         if managed: pass
-        elif self.lab or cfg.get("registry") in ("reports", "single", "stopflip"):
-            if cfg.get("registry") == "single":       # the coins and windows it passed the tryout on
-                for s in self.strats:
-                    s.assets = set(cfg["assets"]); s.durs = {300}
-                    if cfg.get("fast_hz"): s.period = 1.0 / cfg["fast_hz"]      # look for an entry on every fast pass, not every 3 s
-                    s._persist = float(cfg.get("persist", 0.0))
+        elif self.lab or cfg.get("registry") in ("reports", "stopflip"):
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None; self.arbs = {}
         else:
             self.ladder = LadderArb(self.accounts["ladder"], engine.lf); self.ladder_model = LadderModel(self.accounts["ladder_model"], engine.lf, engine.idx, engine.spot)
@@ -170,8 +174,6 @@ class Universe:
             self.labels = {k: "PR&R report replica, filtered: leading side only, 5% of bank per window, stops for the day at -10%" for k in self.accounts}
         if cfg.get("registry") == "stopflip":
             from .stopflip import LABELS as _sf; self.labels = dict(_sf)
-        if cfg.get("registry") == "single":
-            from .bonelab import LAB_LABELS; self.labels = {k: LAB_LABELS.get(k, k) + "; " + cfg.get("note", "") for k in self.accounts}
         if self.evolver is not None: self.labels = self.evolver.labels
         if self.champion is not None: self.labels = self.champion.labels; self.champion.restore()
         if self.tryout is not None: self.labels = self.tryout.labels
@@ -205,7 +207,9 @@ class Universe:
                         a.n_settled = sum(1 for p in cl if p.fills); a.n_won = sum(1 for p in cl if p.realized > 0); a.realized_closed = sum(p.realized for p in cl)
                     for slug in [k for k, p in a.positions.items() if p.closed]: del a.positions[slug]
                 self.started = snap.get("started", self.started)
-                for row in self.store.query("select ts, bot, equity from equity order by ts"): self.equity_hist.append(row)
+                # only what the chart keeps (the newest rows), not the whole table
+                rows = self.store.query("select ts, bot, equity from equity order by rowid desc limit ?", (self.equity_hist.maxlen,))
+                self.equity_hist.extend(reversed(rows))
                 log.info("[%s] resumed state from %s", self.name, p)
             except Exception as e: log.warning("[%s] could not resume: %s", self.name, e)
 
@@ -231,9 +235,10 @@ class Universe:
         spot = {a: dict(zip(("value", "ts"), engine.spot.last(a))) for a in feeds.ASSETS}
         hist = {}
         for ts, name, eq in self.equity_hist:
-            if name in self.accounts: hist.setdefault(name, []).append([round(ts), round(eq, 3)])
+            if name in self.accounts: hist.setdefault(name, []).append([round(ts), round(eq, 2)])
+        cap = max(40, min(HIST_POINTS, HIST_BUDGET // max(1, len(hist))))      # fewer points per line when there are many lines
         for name in hist:
-            if len(hist[name]) > 1500: step = len(hist[name]) // 1500 + 1; hist[name] = hist[name][::step] + hist[name][-1:]
+            if len(hist[name]) > cap: step = len(hist[name]) // cap + 1; hist[name] = hist[name][::step] + hist[name][-1:]
         settles = []; fills = []
         for a in self.accounts.values(): settles += a.settlements[-60:]; fills += list(a.events)[:60]
         settles.sort(key=lambda r: -r["ts"]); fills.sort(key=lambda r: -r["ts"])
@@ -337,7 +342,7 @@ class Engine:
 
     # ---- main loop -----------------------------------------------------------
     def loop(self):
-        ctx = {"index": self.idx, "spot": self.spot}; last_save = 0; last_eq = 0
+        ctx = {"index": self.idx, "spot": self.spot}; last_save = 0; last_eq = 0; last_prune = time.time()
         while True:
             t0 = time.time(); self.loop_count += 1
             try:
@@ -402,12 +407,16 @@ class Engine:
                     if u.champion is not None:
                         try: u.champion.tick(now)
                         except Exception as e: self.errors += 1; log.exception("[%s] champion: %s", u.name, e)
-                if now - last_eq >= 5:
+                if now - last_eq >= EQUITY_EVERY:      # one chart point per bot, written in one transaction per dashboard
                     for u in self.universes:
                         with u.lock:
+                            recs = []
                             for a in u.accounts.values():
                                 eq = a.equity(self.mf.markets); u.equity_hist.append((now, a.name, eq))
-                                u.store.insert("equity", {"ts": now, "bot": a.name, "equity": eq, "cash": a.cash, "bp": a.buying_power(), "fees": a.fees})
+                                recs.append({"ts": now, "bot": a.name, "equity": eq, "cash": a.cash, "bp": a.buying_power(), "fees": a.fees})
+                            u.store.insert_many("equity", recs)
+                            if now - last_prune > 3600: u.store.prune_equity(EQUITY_KEEP)
+                    if now - last_prune > 3600: last_prune = now
                     last_eq = now
                 for u in self.universes:
                     with u.lock: u.build_state(self, now)
@@ -520,7 +529,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_GET(self):
         if self.path.startswith("/state.json"):
-            body = json.dumps(self.universe.last_state).encode(); self.send_response(200); self.send_header("Content-Type", "application/json")
+            # serialized and compressed once per state, not once per request (the page asks every 2 s; about 600 kB raw)
+            u = self.universe; st = u.last_state; key = st.get("ts"); gz = "gzip" in (self.headers.get("Accept-Encoding") or "")
+            c = getattr(u, "_body", None)
+            if c is None or c[0] != key:
+                raw = json.dumps(st).encode(); c = (key, raw, gzip.compress(raw, 5)); u._body = c
+            body = c[2] if gz else c[1]; self.send_response(200); self.send_header("Content-Type", "application/json")
+            if gz: self.send_header("Content-Encoding", "gzip")
             self.send_header("Cache-Control", "no-store"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body); return
         if self.path.startswith("/history.json"):
             rows = self.universe.store.query("select ts, bot, slug, asset, horizon, up, p2b, settle_px, final_qty, pnl_settle, pnl_total, fees, fills from settlements order by ts desc limit 2000")

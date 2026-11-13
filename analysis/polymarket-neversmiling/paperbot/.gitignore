@@ -3,6 +3,7 @@ paperbot-data-run*/
 paperbot-data-stdout.log
 __pycache__/
 dashboard-*.png
+dashboard-*.jpg
 trade-history-*.html
 trade-history-*.png
 phone-*.png

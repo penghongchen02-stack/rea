@@ -290,7 +290,7 @@ to its deletion in the 11-11 prune.
 
 The br133 and br133 fast dashboards were removed on 11-13 02:45Z at the user's request (-$40.21 over 47 windows and
 -$5.85 over 12). Their records stay in `paperbot-data/br133` and `paperbot-data/br133fast`; the `single` registry and
-the `persist` option remain in the code. br133 still runs in the lab and the tryout.
+the `persist` option were removed from the code on 11-13. br133 still runs in the lab and the tryout.
 
 Tryout pass rule since 11-13 05:15Z: a bot must be in profit on at least three quarters of the coins it has traded (3 of
 4, both of 2), not on 3 of the 4 listed coins, so a bot built for BTC and ETH only can pass.
@@ -314,3 +314,13 @@ entries where the model claimed at least 3c of edge after fees, sides bought at 
 their price, at 40-50c 3c more, at 50-60c 11c more, at 60-70c 18c more (55 cases); of about 4,100 late entries where
 the model said 95-100%, 92-93% won whatever it said, at an average price of 93c. The stop-and-flip bots use that table
 (`stopflip.CAL`, capped at 93%) in place of the model's own number; the other bots are unchanged.
+
+## Speed and clean-up (11-13 10:30Z)
+
+- Dashboard page: `/state.json` is serialized and gzip-compressed once per state instead of once per request, and the
+  chart sends at most 240 points per bot and 8,000 in all (was 1,500 per bot).
+- Start-up: a dashboard loads only the newest chart rows instead of its whole equity table (5.7 million rows on the lab).
+- Recording: one chart point per bot every 30 s in one transaction per dashboard (was every 5 s with a commit per
+  bot); equity rows older than two days are deleted hourly. The old rows were deleted and the databases compacted once.
+- Removed: the `single` registry and the `persist` option (their two dashboards are gone) and the unused
+  `Account.mark_value`.

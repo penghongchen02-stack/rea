@@ -37,8 +37,7 @@ CASH = 1000.0
 # br177lab's copies switch them per variant, and its unchanged copy runs without them as the comparison.
 TREND_S = 180.0; RUN_MAX = 3
 # The champion's bot (user, 11-12 21:15Z): as the lab's br177, no trend or balance guard, but held to settlement.
-# The fast br133 (user, 11-12 21:30Z): all three.
-GUARD_DIRS = {}; ALWAYS_GUARDED = {("champion", "champion"): ["hold"], ("br133fast", "br133"): True}; _GUARDS = {}      # dashboard name -> its directory (set by run.Universe)
+GUARD_DIRS = {}; ALWAYS_GUARDED = {("champion", "champion"): ["hold"]}; _GUARDS = {}      # dashboard name -> its directory (set by run.Universe)
 
 
 def guarded(acct):
@@ -68,7 +67,6 @@ class BoneVar(LastCallHold):
         self.cap = cap if cap is not None else (None if sizing[0] == "clip" else 0.15 * CASH)
         self.max_edge = max_edge; self.late = late
         self.max_pos = max_pos; self.shrink = shrink; self.tp_c = tp_c; self.sl_c = sl_c; self.tp_x = tp_x; self.sl_x = sl_x
-        self._persist = 0.0      # seconds an entry signal must last before it is taken (0 = at once; run.py sets it per dashboard)
         self.trend = self.balance = self.hold = False; self._decided = False      # set on the first tick, once the account is restored
         self._ctx = None; self._sides = collections.deque(maxlen=RUN_MAX); self._seen = set()
         for r in account.settlements[-50:]:                      # the sides of its last windows survive a restart
@@ -148,11 +146,7 @@ class BoneVar(LastCallHold):
             side, px = "buy", ba
         elif self.lo <= 1 - bb <= self.hi and ok((1 - p) - (1 - bb) - theta * bb * (1 - bb)) and q <= 0:
             side, px = "sell", 1 - bb
-        else: st.pop("sig", None); return
-        if self._persist > 0:      # ignore blips: the same side must have qualified without a break for this long
-            sig = st.get("sig")
-            if not sig or sig[0] != side: st["sig"] = (side, now); return
-            if now - sig[1] < self._persist: return
+        else: return
         n = self.contracts(px)
         if not self.allow(side, market, now): return      # after the size draw, so a variant that skips keeps its sizes in step
         if self.cap is None:
