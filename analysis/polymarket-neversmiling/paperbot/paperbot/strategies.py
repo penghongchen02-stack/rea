@@ -383,6 +383,41 @@ class Param(LastCallHold):
             acct.cancel_all(slug)
 
 
+class _SureSized:
+    """Account wrapper for ParamSure: its entries are sized by the owner's confidence instead of by the dashboard."""
+    def __init__(self, acct, owner): object.__setattr__(self, "_a", acct); object.__setattr__(self, "_o", owner)
+    def __getattr__(self, k): return getattr(self._a, k)
+    def __setattr__(self, k, v): setattr(self._a, k, v)
+    def place(self, market, side, price, qty, post_only=False, tag="", fixed=False):
+        qty = self._o.stake(market, side, price)
+        return self._a.place(market, side, price, qty, post_only=post_only, tag=tag, fixed=True) if qty > 0 else None
+    def take(self, market, side, qty, limit=None, tag="", fixed=False):
+        px = market.best_ask if side == "buy" else market.best_bid
+        qty = self._o.stake(market, side, px) if px is not None else 0.0
+        return self._a.take(market, side, qty, limit=limit, tag=tag, fixed=True) if qty > 0 else None
+
+
+class ParamSure(Param):
+    """Param that never exits early and bets more the surer it is (user, 11-13 10:50Z, for v_early_rest): SURE_STAKES of
+    the settled bank an order by |z|, at most SURE_WINDOW of the bank in one window. Held to settlement."""
+    SURE_STAKES = ((4.0, 0.03), (3.0, 0.02), (2.0, 0.01), (0.0, 0.005)); SURE_WINDOW = 0.05
+    def __init__(self, account, *a, **k):
+        super().__init__(account, *a, **k); self.acct = _SureSized(account, self); self.EXIT_Z = -99.0; self._z = 0.0
+
+    def stake(self, market, side, price):
+        a = self.acct._a; unit = price if side == "buy" else 1 - price; pos = a.positions.get(market.slug)
+        held = abs(pos.qty) * (pos.avg if pos.qty > 0 else 1 - pos.avg) if pos and abs(pos.qty) > 1e-9 else 0.0
+        frac = next(f for z0, f in self.SURE_STAKES if abs(self._z) >= z0)
+        usd = min(frac * a.bank(), self.SURE_WINDOW * a.bank() - held)
+        return round(usd / max(unit, 0.01), 2) if usd > 0 else 0.0
+
+    def on_tick(self, market, ctx, now):
+        if market.asset in self.assets and market.dur in self.durs:
+            p, det = p_up(market, ctx["index"], ctx["spot"], now)
+            if p is not None: self._z = det["z"]
+        super().on_tick(market, ctx, now)
+
+
 SWEEP = {
     # name:            (t_lo, t_hi, z_min, max_price, entry,  durs,        assets,                        n_min)
     "v_mid_take":      (90,   180,  1.5,   0.85,      "take", (300,),      ("btc", "eth"),                0),
@@ -608,6 +643,13 @@ class Crouch(LastCallHold):
         elif self.p_lo <= 1 - bb <= self.p_hi and z <= -self.z_min:
             o = acct.take(market, "sell", self.clip, limit=bb, tag=f"crouch-down {1-bb:.2f} z{z:.1f}")
             if o and o.filled > 0: st["done"] = True
+
+
+def build_extra_registry(pos_mult=1.0):
+    """Bots that exist only where they are asked for (the tryout's add.json, src "extra"), not on every dashboard."""
+    def f(acct):
+        st = ParamSure(acct, "v_early_rest_hold_and_bet_more_when_sure", *SWEEP["v_early_rest"]); st.max_pos *= pos_mult; return st
+    return {"v_early_rest_hold_and_bet_more_when_sure": f}
 
 
 def build_registry(pos_mult=1.0):

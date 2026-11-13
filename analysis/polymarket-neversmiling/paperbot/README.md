@@ -324,3 +324,8 @@ the model said 95-100%, 92-93% won whatever it said, at an average price of 93c.
   bot); equity rows older than two days are deleted hourly. The old rows were deleted and the databases compacted once.
 - Removed: the `single` registry and the `persist` option (their two dashboards are gone) and the unused
   `Account.mark_value`.
+
+`v_early_rest_hold_and_bet_more_when_sure` (tryout only, 11-13 10:55Z, at the user's request): v_early_rest with no
+early exit and a stake that grows with its confidence (0.5% of the bank an order below z 2, 1% to z 3, 2% to z 4, 3%
+above; 5% a window), next to the original. The confidence check above found that late bets won 92-93% whatever z
+was, so the larger stakes are not expected to pick better windows.
