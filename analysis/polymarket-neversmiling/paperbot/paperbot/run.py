@@ -60,10 +60,11 @@ UNIVERSES = [
     {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05, "dir": os.path.join(DATA, "tryout"),
      "pos_mult": 15.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m", "15m"], "pool_horizons": ["5m"]},
     # Rep1000: the nine report replicas alone with $1,000 each (user, 11-12 01:55Z), beside the $100 ones in std.
-    # Stop-and-flip bots: fifteen versions on the fast loop, $1,000 each, own bet sizes (paperbot/stopflip.py). Approved by
-    # the user on 11-13 09:50Z ("just finish it ... in new dashboard") after a 5-minute run they had not asked for was taken down.
-    {"name": "stopflip", "port": int(os.environ.get("PAPERBOT_PORT12", "8092")), "size_mode": "contracts", "dir": os.path.join(DATA, "stopflip"),
-     "cash": 1000.0, "registry": "stopflip", "fast_hz": 50},
+    # Sure-shot bots (user, 11-13 12:30Z): fifteen versions on the fast loop, $1,000 each, own bet sizes (paperbot/sureshot.py).
+    # They replaced the stop-and-flip dashboard (15 bots, -$72 after 95 minutes on its second run; records in
+    # paperbot-data/stopflip-second-run and stopflip-first-hour).
+    {"name": "sureshot", "port": int(os.environ.get("PAPERBOT_PORT12", "8092")), "size_mode": "contracts", "dir": os.path.join(DATA, "sureshot"),
+     "cash": 1000.0, "registry": "sureshot", "fast_hz": 50},
     # Fast20: the 20 most profitable strategy bots, $1,000 each, on their own 20-passes-a-second loop (paperbot/fast20.py).
     {"name": "fast20", "port": int(os.environ.get("PAPERBOT_PORT11", "8091")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05,
      "dir": os.path.join(DATA, "fast20"), "pos_mult": 15.0, "cash": 1000.0, "registry": "fast20", "fast_hz": 50},
@@ -129,9 +130,9 @@ class Universe:
             self.accounts = {}; self.strats = []; self.arbs = {}; self.active = []
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None
             self.evolver = Evolver(self, engine); self.evolver.restore()
-        elif cfg.get("registry") == "stopflip":
-            from .stopflip import build_stopflip_registry
-            reg = build_stopflip_registry(); self.accounts = {k: mk(k) for k in reg}
+        elif cfg.get("registry") == "sureshot":
+            from .sureshot import build_sureshot_registry
+            reg = build_sureshot_registry(); self.accounts = {k: mk(k) for k in reg}
         elif self.lab:
             from .bonelab import build_lab_registry
             reg = build_lab_registry(); self.accounts = {k: mk(k) for k in reg}
@@ -148,7 +149,7 @@ class Universe:
             self.active = list(self.accounts) if active == ["all"] else active
             self.strats = [reg[k](self.accounts[k]) for k in self.active if k in reg]
         if managed: pass
-        elif self.lab or cfg.get("registry") in ("reports", "stopflip"):
+        elif self.lab or cfg.get("registry") in ("reports", "sureshot"):
             self.ladder = self.ladder_model = self.touch_model = self.xarb = None; self.arbs = {}
         else:
             self.ladder = LadderArb(self.accounts["ladder"], engine.lf); self.ladder_model = LadderModel(self.accounts["ladder_model"], engine.lf, engine.idx, engine.spot)
@@ -172,8 +173,8 @@ class Universe:
             from .bonelab import LAB_LABELS; self.labels = dict(LAB_LABELS)
         if cfg.get("registry") == "reports":
             self.labels = {k: "PR&R report replica, filtered: leading side only, 5% of bank per window, stops for the day at -10%" for k in self.accounts}
-        if cfg.get("registry") == "stopflip":
-            from .stopflip import LABELS as _sf; self.labels = dict(_sf)
+        if cfg.get("registry") == "sureshot":
+            from .sureshot import LABELS as _ss; self.labels = dict(_ss)
         if self.evolver is not None: self.labels = self.evolver.labels
         if self.champion is not None: self.labels = self.champion.labels; self.champion.restore()
         if self.tryout is not None: self.labels = self.tryout.labels

@@ -340,3 +340,11 @@ about $734, so the entry, not the stop, was at fault: `CAL` above 60c rests on 6
 $1,000 (one bet a window, placed with 15-45 s left, held to the close, stake by confidence). The first copy ended at
 -$14.90 over 5 windows. Background: about 2,750 late bets of this family on record won slightly less often than their
 price in every price range (80-85c: -2.6c a contract, 85-90c: -6.0c, 90-93c: -2.5c, 93-95c: -1.0c, 95c+: -0.7c).
+
+## Sure-shot dashboard (port 8092, 11-13 12:30Z)
+
+At the user's request the stop-and-flip dashboard was replaced (its second run ended at -$72 over 15 bots in 95
+minutes; `paperbot/stopflip.py` was removed, the confidence findings above stand). `paperbot/sureshot.py` runs fifteen
+versions of a new idea on the fast loop, $1,000 each: in the last seconds of a 5-minute window, when Coinbase and the
+index show the result strongly decided and the winning side is still cheap on Polymarket, buy it once and hold. The
+module note lists the versions and what the records said beforehand (late cheap sides won less often than their price).
