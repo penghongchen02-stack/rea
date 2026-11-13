@@ -41,11 +41,8 @@ class Champion:
     # ---- construction --------------------------------------------------------
     def builders(self):
         if self._builders is None:
-            from .strategies import build_registry
-            from .bonelab import build_lab_registry
-            from .reports import build_report_registry
-            self._builders = {"main": build_registry(self.cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(self.engine),
-                              "var": __import__("paperbot.br177lab", fromlist=["x"]).build_br177_registry()}
+            from .tryout import builders      # the same sources the tryout builds from, so any bot that passes there can be hired
+            self._builders = builders(self.cfg, self.engine)
         return self._builders
 
     def hire(self, spec, now, reason):
