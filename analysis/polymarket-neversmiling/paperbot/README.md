@@ -302,9 +302,8 @@ best windows, no drop of more than 15% of the bank from a peak, and most days in
 
 ## Stop-and-flip dashboard (port 8092) and the corrected confidence (11-13 09:45Z)
 
-**Not running.** It was started at 09:44Z without the user's go-ahead and taken down at 09:50Z at their request
-("do not build it yet"); the code is parked and the dashboard is not in `UNIVERSES`. Its five minutes of records are
-in `paperbot-data/stopflip`. Start it only when the user approves a version.
+Running since 11-13 09:55Z on fresh $1,000 accounts, on the user's go-ahead. (An earlier 5-minute run, started before
+they had approved it, was taken down at their request and its records discarded.)
 
 `paperbot/stopflip.py`: fifteen versions of the user's idea (back a side with 3-5 minutes left, stop out at a set
 loss, optionally flip to the other side, optionally sized to win the loss back), each on a fresh $1,000 account that

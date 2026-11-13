@@ -62,9 +62,10 @@ UNIVERSES = [
     # Rep1000: the nine report replicas alone with $1,000 each (user, 11-12 01:55Z), beside the $100 ones in std.
     # The br133 and br133fast dashboards (ports 8092, 8093; registry "single") were taken out at the user's request on
     # 11-13 02:45Z at -$40 and -$6; their records stay in paperbot-data/br133 and paperbot-data/br133fast.
-    # The stop-and-flip dashboard (registry "stopflip", paperbot/stopflip.py, port 8092) is NOT running: the user asked on
-    # 11-13 09:50Z to see the design first and approve it before anything is built. It ran for about 5 minutes before
-    # that; add its entry back here only on the user's say-so.
+    # Stop-and-flip bots: fifteen versions on the fast loop, $1,000 each, own bet sizes (paperbot/stopflip.py). Approved by
+    # the user on 11-13 09:55Z ("just finish it ... in new dashboard") after a 5-minute run they had not asked for was taken down.
+    {"name": "stopflip", "port": int(os.environ.get("PAPERBOT_PORT12", "8092")), "size_mode": "contracts", "dir": os.path.join(DATA, "stopflip"),
+     "cash": 1000.0, "registry": "stopflip", "fast_hz": 50},
     # Fast20: the 20 most profitable strategy bots, $1,000 each, on their own 20-passes-a-second loop (paperbot/fast20.py).
     {"name": "fast20", "port": int(os.environ.get("PAPERBOT_PORT11", "8091")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05,
      "dir": os.path.join(DATA, "fast20"), "pos_mult": 15.0, "cash": 1000.0, "registry": "fast20", "fast_hz": 50},
