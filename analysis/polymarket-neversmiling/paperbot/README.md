@@ -287,3 +287,7 @@ back to the tryout's 0.1%-2% an order and 5% a window.
 `v_early_rest` was added to the tryout by request on 11-13 (`"own": true` in `add.json` keeps a bot's own coins and
 windows, here BTC and ETH 5-minute; `"keep": 300`). In this run it lost on all four dashboards it ran on from 11-10 22:40Z
 to its deletion in the 11-11 prune.
+
+The br133 and br133 fast dashboards were removed on 11-13 02:45Z at the user's request (-$40.21 over 47 windows and
+-$5.85 over 12). Their records stay in `paperbot-data/br133` and `paperbot-data/br133fast`; the `single` registry and
+the `persist` option remain in the code. br133 still runs in the lab and the tryout.
