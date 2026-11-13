@@ -335,3 +335,8 @@ Stop-and-flip, 11-13 11:00Z (approved by the user): in its first hour the fiftee
 about $734, so the entry, not the stop, was at fault: `CAL` above 60c rests on 63 cases. First bets are now limited to
 47-60c and to BTC and ETH, and the fifteen accounts were restarted at $1,000 (the first hour's records are in
 `paperbot-data/stopflip-first-hour`).
+
+11-13 11:20Z, at the user's request: that copy was replaced by `v_early_rest_one_bet_in_the_last_45s` on a fresh
+$1,000 (one bet a window, placed with 15-45 s left, held to the close, stake by confidence). The first copy ended at
+-$14.90 over 5 windows. Background: about 2,750 late bets of this family on record won slightly less often than their
+price in every price range (80-85c: -2.6c a contract, 85-90c: -6.0c, 90-93c: -2.5c, 93-95c: -1.0c, 95c+: -0.7c).

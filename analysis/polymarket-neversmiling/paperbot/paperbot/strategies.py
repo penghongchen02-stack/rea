@@ -399,7 +399,8 @@ class _SureSized:
 
 class ParamSure(Param):
     """Param that never exits early and bets more the surer it is (user, 11-13 10:50Z, for v_early_rest): SURE_STAKES of
-    the settled bank an order by |z|, at most SURE_WINDOW of the bank in one window. Held to settlement."""
+    the settled bank an order by |z|, at most SURE_WINDOW of the bank in one window. Held to settlement. Since 11:20Z
+    one bet a window (its first loss, $20, was four orders stacked in one window)."""
     SURE_STAKES = ((4.0, 0.03), (3.0, 0.02), (2.0, 0.01), (0.0, 0.005)); SURE_WINDOW = 0.05
     def __init__(self, account, *a, **k):
         super().__init__(account, *a, **k); self.acct = _SureSized(account, self); self.EXIT_Z = -99.0; self._z = 0.0
@@ -412,9 +413,11 @@ class ParamSure(Param):
         return round(usd / max(unit, 0.01), 2) if usd > 0 else 0.0
 
     def on_tick(self, market, ctx, now):
-        if market.asset in self.assets and market.dur in self.durs:
-            p, det = p_up(market, ctx["index"], ctx["spot"], now)
-            if p is not None: self._z = det["z"]
+        if market.asset not in self.assets or market.dur not in self.durs: return
+        if abs(self.pos(market.slug)) > 1e-9:      # one bet a window: once it has a position it only waits for the close
+            self.acct.cancel_all(market.slug); return
+        p, det = p_up(market, ctx["index"], ctx["spot"], now)
+        if p is not None: self._z = det["z"]
         super().on_tick(market, ctx, now)
 
 
@@ -648,8 +651,11 @@ class Crouch(LastCallHold):
 def build_extra_registry(pos_mult=1.0):
     """Bots that exist only where they are asked for (the tryout's add.json, src "extra"), not on every dashboard."""
     def f(acct):
-        st = ParamSure(acct, "v_early_rest_hold_and_bet_more_when_sure", *SWEEP["v_early_rest"]); st.max_pos *= pos_mult; return st
-    return {"v_early_rest_hold_and_bet_more_when_sure": f}
+        # v_early_rest's settings with the band moved to the last 45 seconds (15-45 s left): of about 2,750 late bets on
+        # record only those placed with under 45 s left came out ahead (+0.8c a contract over 164 bets)
+        t_lo, t_hi, *rest = SWEEP["v_early_rest"]
+        st = ParamSure(acct, "v_early_rest_one_bet_in_the_last_45s", 15, 45, *rest); st.max_pos *= pos_mult; return st
+    return {"v_early_rest_one_bet_in_the_last_45s": f}
 
 
 def build_registry(pos_mult=1.0):
