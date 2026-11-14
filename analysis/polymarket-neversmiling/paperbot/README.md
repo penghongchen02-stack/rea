@@ -396,3 +396,20 @@ before it opens, so the head-start bot now acts in the window's first 12 seconds
 the solver's best basket over 35 groups had no positive worst case (the pair scanners' best gap in the same period
 was 0.78c, under their 1c threshold). The tryout state now carries each scanner's counters under `tryout.scans`.
 
+
+## Report-trader copies for Polymarket US (11-14 05:22Z)
+
+`paperbot/newreps.py` adds nine tryout bots, `new_rep_<trader>`, one for each crypto trader in the
+polyresearchrobotics.com reports (Ohanism, Gabigol, Ratue, B1C58, 080BEC, Sixx7, VidarX, 0x04B6D7, Sharky6999), each
+on a $1,000 account. The traders buy Up and Down separately on regular Polymarket and lean to one side; here that
+becomes one class, `PairMaker`: resting buy and sell orders at least 4c apart around the model's fair price, more
+held only on the side the model favours, orders pulled on a fast move, and an unfavoured holding closed late in the
+window. Each bot's coins, window lengths, price range, order size, timing and lean come from the trader's report.
+Sharky6999 buys at 90c or more almost exclusively, so that copy rests one late bid on the near-certain side.
+
+The reports do not say how much of each trader's volume is resting orders; resting-only is this build's choice
+because the taker fee here exceeds their whole margin. Paper fills of resting orders are generous.
+
+Taken out of the tryout the same day to make room (losing with a negative edge, bust, or never traded): the six
+br177 copies, `new_07`, `new_09`, `new_10`, `new_13`, and `new_arb_01`, `03`, `04`, `05`, `06`, `08`, `09`, `10`.
+The champion keeps its own trend-and-hold br177; only the tryout copies were removed.
