@@ -16,6 +16,13 @@ The five changes that make it fit Polymarket US (shown to the user before buildi
   5. Orders are pulled for PAUSE seconds when the coin moves fast, and with FLAT seconds left whatever is held on a
      side the model gives under HOLD is closed; a side the model favours is held to the close (the traders' lean).
 
+Three fixes after the first five hours (user, 11-14 10:30Z), when eight of the nine lost $230-$870 each and held the
+losing side at the close in 92 windows against 17: the pair-finishing order sold at 1c over the current fair price
+whatever the first side had cost, so in a falling window the bot bought and sold at a loss again and again. Now
+(1) that order is at least LOCK better than the first side's price, (2) nothing new is placed while the model's
+fair price is more than OFF from the market's mid price, and (3) nothing new is placed in a window that has already
+realized a loss. The nine were re-added with fresh records.
+
 Each trader's coins, window lengths, price range, order size, timing and lean come from their report. What the
 reports do not give is the split between resting and taking orders, so the resting-only rule is this build's choice.
 Sharky6999 is not a both-sides trader: 97% of their buys are at 90c or more, so their copy rests one bid on the
@@ -28,6 +35,8 @@ from .newbots import _New
 
 PAUSE = 5.0          # seconds without orders after a fast move
 FAST = 3.0           # a 10-second move this many times the usual size is fast
+LOCK = 0.02          # a finished pair earns at least this a contract
+OFF = 0.05           # no new order while the model's fair price is this far from the market's mid price
 
 
 class PairMaker(_New):
@@ -77,10 +86,14 @@ class PairMaker(_New):
         if mv is not None and sig > 0 and abs(mv) > FAST * sig * math.sqrt(10): st["pause"] = now + PAUSE      # rule 5: fast move
         if now < st["pause"]: self.pull(slug, st); return
         adding = left >= self.left and (self.stop_el is None or el <= self.stop_el) and (self.hours is None or time.gmtime(now).tm_hour in self.hours)
+        if abs(p - (bb + ba) / 2) > OFF: adding = False                         # fix 2: the model and the market disagree; the market is usually right
+        if pos is not None and pos.realized < -0.005: adding = False            # fix 3: this window has already cost money
         bank = a.bank(); risk = self.held(slug); d = self.clip * bank
         fav = 1 if p >= 0.5 + self.conv else -1 if p <= 0.5 - self.conv else 0
-        bid = min(self.level(market.bids, p - (self.margin / 2 if inv < 0 else self.margin), "buy"), ba - 0.01)
-        ask = max(self.level(market.offers, p + (self.margin / 2 if inv > 0 else self.margin), "sell"), bb + 0.01)
+        # fix 1: the order that finishes a pair is never worse than LOCK better than what the first side cost; if the
+        # market has moved away it waits, and the late close decides what happens to the holding
+        bid = min(self.level(market.bids, min(p - self.margin / 2, pos.avg - LOCK) if inv < 0 else p - self.margin, "buy"), ba - 0.01)
+        ask = max(self.level(market.offers, max(p + self.margin / 2, pos.avg + LOCK) if inv > 0 else p + self.margin, "sell"), bb + 0.01)
         bq = aq = 0.0
         if inv < 0 and not self.only_fav: bq = abs(inv)                             # rule 4: finish the pair
         elif adding and inv >= 0 and self.band[0] <= bid <= self.band[1] and (fav > 0 or not self.only_fav):
