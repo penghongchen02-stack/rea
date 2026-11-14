@@ -130,6 +130,7 @@ class Account:
         """fixed=True keeps the caller's contract count (arbitrage legs must match); otherwise dollar universes resize."""
         price = round(max(0.01, min(0.99, price)), 2); qty = round(qty if fixed else self.order_qty(market.slug, side, price, qty), 2)
         if qty < market.min_qty: return None
+        if self.coin_off(market, side, qty): return None
         need = self.cash_needed(market.slug, side, price, qty)
         if need > 1e-9 and need > self.buying_power() + 1e-9:
             self.rejected += 1; return None
@@ -150,6 +151,7 @@ class Account:
         """Immediate-or-cancel against the current book. fixed=True keeps the caller's contract count."""
         px = market.best_ask if side == "buy" else market.best_bid
         if px is None: return None
+        if self.coin_off(market, side, qty): return None
         if limit is not None and ((side == "buy" and px > limit) or (side == "sell" and px < limit)): return None
         o = Order(market.slug, side, limit if limit is not None else px, round(qty if fixed else self.order_qty(market.slug, side, px, qty), 2), False, tag)
         if o.qty < market.min_qty: return None
@@ -165,6 +167,14 @@ class Account:
             fq = min(q, o.remaining); self._fill(market, o, px, fq, maker=False)
             k = (self.liq_key, o.side, px); market.consumed[k] = market.consumed.get(k, 0.0) + fq
         if o.remaining > 1e-9 and o.id in self.orders: del self.orders[o.id]
+
+    def coin_off(self, market, side, qty):
+        """True when this account has the market's coin switched off (off_assets, set by the tryout) and the order
+        would open or add to a position; an order that only reduces what is held is always allowed."""
+        off = getattr(self, "off_assets", None)
+        if not off or getattr(market, "asset", None) not in off: return False
+        p = self.positions.get(market.slug); held = p.qty if p and not p.closed else 0.0
+        return not ((side == "sell" and held > 0 and qty <= held + 1e-6) or (side == "buy" and held < 0 and qty <= -held + 1e-6))
 
     def cancel(self, oid): return self.orders.pop(oid, None)
     def cancel_all(self, slug=None):

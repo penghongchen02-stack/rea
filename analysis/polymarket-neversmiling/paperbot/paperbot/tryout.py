@@ -32,6 +32,7 @@ import os, json, math, time, logging, statistics
 
 log = logging.getLogger("tryout")
 SIZE = 12; REVIEW = 3600.0; MIN_WINDOWS = 50; MIN_POOL = 20; DROP_N = 20; IDLE = 3 * 3600.0; COOLDOWN = 86400.0; WARMUP = 60.0
+COIN_N = 15          # settled windows in a coin before a losing coin is switched off for a bot
 # The stricter "ready for a small real-money pilot" grade (user, 11-13 05:30Z), on top of passing: enough windows and
 # days that luck is unlikely, the luck-adjusted score above zero, still in profit without its five best windows, no
 # deep drop from a peak, and most days in profit. It says the paper record is strong enough to risk a small pilot; it
@@ -124,9 +125,15 @@ class Tryout:
         if spec["src"] not in OWN_MARKETS and not spec.get("own"):       # pool bots: the champion's coins and 5-minute windows; report replicas keep their own
             if isinstance(getattr(obj, "assets", None), (set, tuple, list)): obj.assets = set(self.assets)
             if isinstance(getattr(obj, "durs", None), (set, tuple, list)): obj.durs = {300}
-        obj.name = n
+        obj.name = n; a.off_assets = set(spec.get("off", {}))
         self.u.accounts[n] = a; self.u.active.append(n); self.u.strats.append(obj); self.members[n] = spec
-        self.labels[n] = (spec["note"] + "; " if spec.get("note") else "") + f"tryout since {time.strftime('%H:%MZ', time.gmtime(spec['joined']))}" + (f" ({', '.join(spec['where'])})" if spec.get("where") else "")
+        self.label(n)
+
+    def label(self, n):
+        spec = self.members[n]; off = spec.get("off") or {}
+        offs = ", ".join("%s (%+.0f in %d windows)" % (c, v["pnl"], v["n"]) for c, v in off.items())
+        head = f"coins off: {offs}; pass rules count from {time.strftime('%H:%MZ', time.gmtime(spec['since']))}; " if off else ""
+        self.labels[n] = head + (spec["note"] + "; " if spec.get("note") else "") + f"tryout since {time.strftime('%H:%MZ', time.gmtime(spec['joined']))}" + (f" ({', '.join(spec['where'])})" if spec.get("where") else "")
 
     def _detach(self, n):
         a = self.u.accounts.pop(n, None)
@@ -154,14 +161,14 @@ class Tryout:
     # ---- judging -----------------------------------------------------------------
     def stats(self, n):
         """This member's live tryout record (since it joined)."""
-        spec = self.members[n]; a = self.u.accounts[n]; t0 = spec["joined"]
+        spec = self.members[n]; a = self.u.accounts[n]; t0 = max(spec["joined"], spec.get("since", 0))   # a coin switched off restarts the record
         rows = self.u.store.query("select slug, asset, ts, up, pnl_total - fees from settlements where bot = ? and fills > 0 and ts >= ? order by ts", (n, t0))
         fills = {}
         for slug, side, px, qty in self.u.store.query("select slug, side, price, qty from fills where bot = ? and ts >= ? order by ts", (n, t0)):
             fills.setdefault(slug, []).append((side, px, qty))
-        coin = {}; hour = {}; edges = []; xs = []
+        coin = {}; coin_n = {}; hour = {}; edges = []; xs = []
         for slug, asset, ts, up, pnl in rows:
-            xs.append(pnl); coin[asset] = coin.get(asset, 0.0) + pnl; hour[int(ts // 3600)] = hour.get(int(ts // 3600), 0.0) + pnl
+            xs.append(pnl); coin[asset] = coin.get(asset, 0.0) + pnl; coin_n[asset] = coin_n.get(asset, 0) + 1; hour[int(ts // 3600)] = hour.get(int(ts // 3600), 0.0) + pnl
             f = fills.get(slug)
             if f:
                 side = f[0][0]; ent = [(px, q) for s_, px, q in f if s_ == side]; qty = sum(q for _, q in ent)
@@ -171,11 +178,12 @@ class Tryout:
                     edges.append((1.0 if won else 0.0) - paid)
         nw = len(xs); half = nw // 2
         pnl = a.equity(self.engine.mf.markets) - a.start_cash
+        if spec.get("since"): pnl = sum(xs)                # after a restart of the record: settled results since then
         k = luck_k(len(self.members))
         mean = statistics.mean(xs) if xs else 0.0; se = statistics.stdev(xs) / math.sqrt(nw) if nw > 1 else 0.0
         edge = statistics.mean(edges) if edges else None
         st = {"n": nw, "pnl": round(pnl, 2), "score": round(mean - k * se, 3) if nw > 1 else None,
-              "coins": {c: round(v, 2) for c, v in sorted(coin.items())}, "coins_up": sum(1 for v in coin.values() if v > 0),
+              "coins": {c: round(v, 2) for c, v in sorted(coin.items())}, "coin_n": coin_n, "coins_up": sum(1 for v in coin.values() if v > 0),
               "hours": len(hour), "hours_up": sum(1 for v in hour.values() if v > 0),
               "edge": round(edge, 4) if edge is not None else None, "edge_se": round(statistics.stdev(edges) / math.sqrt(len(edges)), 4) if len(edges) > 1 else None,
               "halves": [round(sum(xs[:half]), 2), round(sum(xs[half:]), 2)] if nw >= 2 else None,
@@ -234,12 +242,34 @@ class Tryout:
             except Exception as e: log.warning("[tryout] could not add %s: %s", c["key"], e)
         return added
 
+    def coins_off(self, now, st):
+        """User, 11-14 10:45Z: a coin that is not working for a bot is taken away from that bot. A coin with COIN_N
+        settled windows and a loss is switched off for that bot (its account refuses new orders there; what it holds
+        still settles), unless it is the bot's last coin. The bot's record for the pass rules then restarts, so a
+        pass is earned on windows traded after the change, not by deleting past losses."""
+        changed = []
+        for n, spec in self.members.items():
+            s = st[n]; off = spec.setdefault("off", {}); live = [c for c in s["coins"] if c not in off]
+            bad = sorted((c for c in live if s["coin_n"].get(c, 0) >= COIN_N and s["coins"][c] < 0), key=lambda c: s["coins"][c])
+            for c in bad:
+                if len(live) <= 1: break
+                off[c] = {"ts": now, "n": s["coin_n"][c], "pnl": s["coins"][c]}; live.remove(c); changed.append((n, c))
+            if any(k == n for k, _ in changed):
+                spec["since"] = now; a = self.u.accounts[n]; a.off_assets = set(off)
+                for o in list(a.orders.values()):
+                    m = self.engine.mf.markets.get(o.slug)
+                    if m is not None and getattr(m, "asset", None) in off: a.cancel(o.id)
+                self.label(n)
+        if changed: log.info("[tryout] coins switched off: %s", changed); self._stats_at = 0
+        return changed
+
     def review(self, now):
         st = self.all_stats(now); out = []
+        if self.coins_off(now, st): st = self.all_stats(now)
         for n in list(self.members):
             s = st[n]; spec = self.members[n]
             losing = s["n"] >= DROP_N and s["pnl"] < 0 and (s["edge"] is None or s["edge"] < 0)
-            idle = now - (s["last"] or spec["joined"]) >= IDLE
+            idle = now - (s["last"] or max(spec["joined"], spec.get("since", 0))) >= IDLE
             if s["n"] < spec.get("keep", 0): continue        # an experiment added with "keep": N stays until N windows
             if losing or idle:
                 self._detach(n); out.append(n)
@@ -267,6 +297,8 @@ class Tryout:
             n = req["remove"]
             if n in self.members: self._detach(n); log.info("[tryout] removed %s by request", n)
             return
+        if req and req.get("coins_off"):     # apply the losing-coin rule now instead of at the next review
+            self.coins_off(now, self.all_stats(now)); return
         if not req or req.get("key") in self.members or req.get("base") not in self.builders().get(req.get("src"), {}):
             log.warning("[tryout] cannot add %s", req); return
         spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"], "note": req.get("note"), "keep": int(req.get("keep", 0)), "own": bool(req.get("own")),

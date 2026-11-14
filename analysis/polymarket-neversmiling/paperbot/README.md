@@ -413,3 +413,13 @@ because the taker fee here exceeds their whole margin. Paper fills of resting or
 Taken out of the tryout the same day to make room (losing with a negative edge, bust, or never traded): the six
 br177 copies, `new_07`, `new_09`, `new_10`, `new_13`, and `new_arb_01`, `03`, `04`, `05`, `06`, `08`, `09`, `10`.
 The champion keeps its own trend-and-hold br177; only the tryout copies were removed.
+
+## Losing coins switched off per tryout bot (11-14 10:38Z)
+
+By request: when a coin is not working for a tryout bot, that coin is taken away from that bot. At every hourly
+review (and once at 10:38Z), a coin in which a bot has `COIN_N` = 15 settled windows and a loss is switched off for
+that bot: its account refuses orders that open or add to a position in that coin (`Account.coin_off`), while what it
+holds still settles. A bot's last coin is never switched off; the ordinary drop rule covers that. The bot's record
+for the pass rules restarts at the switch, so a pass is earned on windows traded afterwards. The same day the
+trader copies got three fixes (see `paperbot/newreps.py`) and were re-added, and `new_arb_07` was hired as champion
+by hand (backup `champion.before-arb07.json`).
