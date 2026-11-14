@@ -80,6 +80,7 @@ class FastPick(LastCallHold):
         while self.queue:
             slug, side, px, q, ts, tag = self.queue.popleft(); m = self.engine.mf.markets.get(slug); a = self.acct
             if m is None: self.stats["gone"] += 1; continue
+            if getattr(self, "COIN_RULE", False) and a.coin_off(m, side, q): self.stats["coin_off"] += 1; continue   # copies that obey the tryout's losing-coin rule
             need = a.cash_needed(slug, side, px, q)
             if need > 1e-9 and need > a.buying_power() + 1e-9: a.rejected += 1; self.stats["rejected"] += 1; continue
             a._fill(m, Order(slug, side, px, q, False, tag), px, q, maker=False); self.stats["fills"] += 1

@@ -423,3 +423,33 @@ holds still settles. A bot's last coin is never switched off; the ordinary drop 
 for the pass rules restarts at the switch, so a pass is earned on windows traded afterwards. The same day the
 trader copies got three fixes (see `paperbot/newreps.py`) and were re-added, and `new_arb_07` was hired as champion
 by hand (backup `champion.before-arb07.json`).
+
+## Research behind the new3 bots (11-14 20:30Z)
+
+Scripts are in `research/` (run from this directory; `fetch.py` downloads Coinbase one-minute candles, `r1.py`
+builds the window and price-sample tables from every dashboard's `paper.db`, `r3.py` tests signals on the candles,
+`r4.py` tests them against the prices the bots actually paid).
+
+Data: 78,536 taker price samples in 3,941 five-minute and 894 fifteen-minute windows (11-10 to 11-14), and 21 days
+of one-minute prices for the four coins (23,960 five-minute windows). A sample is a taker fill of any bot, so it is
+the real touch price at a moment some bot chose; that choice is a bias the comparison between rules shares.
+
+| Measured | Result |
+|---|---|
+| Taking a side at the touch, all samples, 5-minute | -3.6c a contract after the fee (-2.1c before), t -9.8 |
+| By coin | Bitcoin -1.7c, XRP -3.7c, Solana -4.2c, Ether -5.0c |
+| Fee under 0.6c (7c or less, 93c or more) | -0.7c |
+| Side against a quarter hour that moved 1.5x its usual size | -0.4c; with it -4.2c; 15-minute windows +5.7c against (64 windows) |
+| The same on 21 days of prices | betting with the move is 3.9c worse than the plain model, t -7.4, both halves |
+| Leader at 55-90c in the last fifth of a window | -12.2c; favourite at 80-90c there -8.5c; at 90c or more -0.5c |
+| With a one-minute spike of 2x the usual size | -5.5c; against it -1.7c |
+| A side at 25c or less in the first 30% of a window | +0.3c after the fee (+1.7c before) |
+| Underdog when the leader is at 90% early, 21 days of prices | +2.4c against the model (15-minute: +4.0c), both halves |
+| Bitcoin leading the other coins; three coins pulling the fourth | no effect in 21 days |
+| Windows that closed Up, 11-14 11:00-20:00Z | 44% (Bitcoin 42.5%, Ether 40%) |
+
+No rule beat the fee against real prices with statistical confidence. The `new3_` bots (`paperbot/newbots3.py`)
+narrow bots that already earn to the part that earned, rest orders to avoid the fee, trade the reversal and
+early-extreme effects, or move a rule to the cheapest market. `fast_pickoff_bitcoin_and_solana_only` is the copy of
+fast_pickoff that obeys the losing-coin rule; the original books fills on a path the rule does not reach and was
+left as it is, trading all four coins.
