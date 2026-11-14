@@ -1,0 +1,143 @@
+### REPORT WINDOW ONLY
+
+== WHEN IN THE WINDOW DO FILLS HAPPEN (frac = seconds since window start / duration)
+fills before window start: 0.0%   after window end: 0.0%
+                fills        usdc  taker_fill_share  taker_usdc  maker_usdc  mean_price  usdc_share
+fbin                                                                                               
+(-0.0001, 0.1]  38413  495410.376             0.728  424058.610   71351.766       0.486       0.118
+(0.1, 0.2]      44800  566143.766             0.669  457847.066  108296.700       0.480       0.135
+(0.2, 0.3]      46884  592884.644             0.663  476571.215  116313.429       0.475       0.141
+(0.3, 0.4]      38593  486182.795             0.652  389171.241   97011.554       0.471       0.116
+(0.4, 0.5]      39670  503507.662             0.641  401479.250  102028.412       0.473       0.120
+(0.5, 0.6]      31484  401815.919             0.621  314629.191   87186.728       0.473       0.096
+(0.6, 0.7]      33261  417174.927             0.597  321715.728   95459.199       0.469       0.100
+(0.7, 0.8]      26371  334657.248             0.563  250960.580   83696.669       0.467       0.080
+(0.8, 0.9]      21536  287771.820             0.474  195239.082   92532.738       0.472       0.069
+(0.9, 0.95]      4903   73204.778             0.412   43125.797   30078.981       0.479       0.017
+(0.95, 1.0]      1984   30036.593             0.387   17603.976   12432.617       0.494       0.007
+(1.0, 9.0]         57    1414.602             0.772    1245.331     169.271       0.518       0.000
+
+== PRICE BAND x MAKER/TAKER (usdc)
+taker       maker_usdc  taker_usdc
+price                             
+(0.0, 0.1]         NaN       339.0
+(0.1, 0.2]     30864.0    104207.0
+(0.2, 0.4]    152255.0    596549.0
+(0.4, 0.6]    279925.0   1205675.0
+(0.6, 0.8]    324108.0   1102234.0
+(0.8, 0.9]    109334.0    284121.0
+(0.9, 1.0]        71.0       522.0
+
+== PRICE BAND x TIME-IN-WINDOW (usdc share within band)
+frac        (-9.0, 0.25]  (0.25, 0.5]  (0.5, 0.75]  (0.75, 0.9]  (0.9, 1.0]  (1.0, 9.0]
+price                                                                                  
+(0.0, 0.1]          0.04         0.04         0.16         0.32        0.40        0.03
+(0.1, 0.2]          0.14         0.32         0.32         0.17        0.05        0.00
+(0.2, 0.4]          0.34         0.31         0.23         0.09        0.02        0.00
+(0.4, 0.6]          0.44         0.29         0.19         0.07        0.01        0.00
+(0.6, 0.8]          0.29         0.31         0.26         0.12        0.03        0.00
+(0.8, 0.9]          0.10         0.29         0.32         0.21        0.07        0.00
+(0.9, 1.0]           NaN          NaN          NaN         0.12        0.74        0.14
+
+== MARKETS 6866  both-sided 97.5%  winner known 96.6%  merge used on 0.0% of both-sided markets
+per-market usdc: median 472 mean 610 p90 1319 max 3999
+both-sided: median paired cost 0.9697  mean 0.9653  share<1.00 73.5%  share<0.97 50.3%  median 2nd-side lag 6s
+paired shares merged: 0.0% of paired shares (merge usdc / paired shares)
+pnl total 36931 ; both-sided 36752 ; one-sided 179
+
+== PnL by asset/duration (ex rebates)
+             markets         usdc       pnl   both  dom_won
+asset dur                                                  
+BTC   300.0     6819  4184875.006  37001.76  0.976    0.769
+ETH   300.0       47     5330.124    -71.12  0.915    0.674
+
+== DOMINANCE BUCKETS: is 'dominant side wins' just price calibration?
+                      markets  dom_win_rate  dom_vwap  paired_cost        pnl         usdc    roi
+dbin                                                                                             
+(1.0, 1.5]               2444         0.628     0.526        0.963  -4635.589  1925343.228 -0.002
+(1.5, 2.0]               1529         0.804     0.603        0.963   7311.016  1008344.322  0.007
+(2.0, 3.0]               1441         0.881     0.668        0.970  12272.789   755591.692  0.016
+(3.0, 5.0]                770         0.938     0.711        0.966  16028.941   281470.899  0.057
+(5.0, 10.0]               202         0.911     0.728        0.964   3713.687    44477.903  0.083
+(10.0, 1000000000.0]       76         0.829     0.701        0.966   1156.669    10310.185  0.112
+
+== DOMINANT SIDE VWAP BUCKETS (win rate vs implied probability)
+            markets  dom_win_rate  dom_vwap        pnl         usdc    roi
+vbin                                                                      
+(0.0, 0.4]      290         0.162     0.309  -3809.787    64771.219 -0.059
+(0.4, 0.5]      834         0.508     0.461  22357.420   612669.497  0.036
+(0.5, 0.6]     1878         0.716     0.553  24844.557  1588022.111  0.016
+(0.6, 0.7]     2017         0.887     0.649   3590.771  1232981.418  0.003
+(0.7, 0.8]     1160         0.963     0.743  -7931.830   464855.866 -0.017
+(0.8, 0.9]      283         0.993     0.831  -3203.616    62238.117 -0.051
+
+== ORDER OF ENTRY: which side is bought first, and when
+first fill frac: median 0.05 ; p10 0.02 ; p90 0.21
+maker fills share of usdc on dominant side 21.8% ; on minor side 20.8%
+
+== MAKER FILLS: price distribution (usdc share)
+price
+(0.1, 0.2]     0.034
+(0.2, 0.3]     0.066
+(0.3, 0.4]     0.104
+(0.4, 0.45]    0.066
+(0.45, 0.5]    0.076
+(0.5, 0.55]    0.079
+(0.55, 0.6]    0.091
+(0.6, 0.7]     0.178
+(0.7, 0.8]     0.183
+(0.8, 0.9]     0.122
+(0.9, 1.0]     0.000
+Name: usdc_size, dtype: float64
+== TAKER FILLS: price distribution (usdc share)
+price
+(0.0, 0.1]     0.000
+(0.1, 0.2]     0.032
+(0.2, 0.3]     0.067
+(0.3, 0.4]     0.114
+(0.4, 0.45]    0.077
+(0.45, 0.5]    0.092
+(0.5, 0.55]    0.098
+(0.55, 0.6]    0.099
+(0.6, 0.7]     0.184
+(0.7, 0.8]     0.151
+(0.8, 0.9]     0.086
+(0.9, 1.0]     0.000
+Name: usdc_size, dtype: float64
+
+== FILL SIZE: most common exact share sizes (maker)
+size
+5.0     10270
+10.0     3580
+30.0     2581
+20.0     1952
+25.0     1831
+60.0     1755
+50.0     1474
+80.0     1164
+15.0     1152
+6.0      1047
+8.0       798
+2.0       772
+Name: count, dtype: int64
+== FILL SIZE: most common exact share sizes (taker)
+size
+30.0     38193
+25.0     17825
+60.0     13747
+5.0      13234
+50.0     11220
+10.0      8018
+20.0      7009
+80.0      6322
+15.0      4469
+90.0      3555
+75.0      3500
+100.0     3470
+Name: count, dtype: int64
+== USDC per fill quantiles maker: {0.1: 0.59, 0.5: 3.2, 0.9: 19.75, 0.99: 54.35}  taker: {0.1: 2.7, 0.5: 12.2, 0.9: 35.39, 0.99: 65.69}
+== taker fills: price decimals>3 share (multi-level sweep) 2.3%
+== maker fills: price decimals>3 share 35.1%
+
+== BURSTS: fills per (market, second) distribution {1: 138657, 2: 43628, 3: 15429, 4: 5980, 5: 2611, 6: 1201}
+== concurrent markets: distinct markets traded per minute, median/p90: {0.5: 1.0, 0.9: 1.0}

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Standard">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>Standard Paper Bots</title>
+<style>
+:root{--bg:#f2f2f7;--card:#ffffff;--text:#000000;--text2:#3c3c43cc;--sep:#3c3c4329;--fill:#7878801f;--green:#248a3d;--red:#d70015;--blue:#007aff;--orange:#c93400;--tint:#007aff}
+@media (prefers-color-scheme: dark){:root{--bg:#000000;--card:#1c1c1e;--text:#ffffff;--text2:#ebebf599;--sep:#54545899;--fill:#7878805c;--green:#30d158;--red:#ff453a;--blue:#0a84ff;--orange:#ff9f0a;--tint:#0a84ff}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:17px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;-webkit-text-size-adjust:100%}
+body{padding:env(safe-area-inset-top) max(16px,env(safe-area-inset-right)) calc(84px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+header{padding:10px 0 6px}
+h1{font-size:34px;font-weight:700;letter-spacing:.37px;margin:4px 0 2px}
+.sub{color:var(--text2);font-size:15px}
+h2{font-size:13px;font-weight:400;text-transform:uppercase;color:var(--text2);letter-spacing:-.08px;margin:24px 16px 7px}
+.card{background:var(--card);border-radius:12px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;min-height:44px;position:relative}
+.row+.row::before{content:"";position:absolute;top:0;left:16px;right:0;border-top:.5px solid var(--sep)}
+.grow{flex:1;min-width:0}
+.name{font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.small{font-size:13px;color:var(--text2)}
+.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.pos{color:var(--green)}.neg{color:var(--red)}.muted{color:var(--text2)}
+.big{font-size:34px;font-weight:700;letter-spacing:.37px;font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:4px 10px;border-radius:999px;background:var(--fill);margin:4px 6px 0 0}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--text2)}.dot.ok{background:var(--green)}.dot.bad{background:var(--red)}.dot.warn{background:var(--orange)}
+.badge{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;background:var(--fill)}
+.badge.pass{background:var(--green);color:#fff}.badge.paused{background:var(--orange);color:#fff}
+.bar{height:4px;border-radius:2px;background:var(--fill);margin-top:6px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--tint)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.coin{background:var(--card);border-radius:12px;padding:12px 14px}
+.coin .t{display:flex;justify-content:space-between;font-weight:600}
+.lead{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px}
+.kv{display:flex;justify-content:space-between;font-size:13px;color:var(--text2);margin-top:2px}
+.kv b{color:var(--text);font-weight:500;font-variant-numeric:tabular-nums}
+.hero{padding:16px}
+.hero .k{font-size:13px;color:var(--text2)}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-top:.5px solid var(--sep);padding:6px 0 calc(6px + env(safe-area-inset-bottom))}
+.tabs button{flex:1;background:none;border:0;color:var(--text2);font:500 10px -apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;min-height:44px}
+.tabs button.on{color:var(--tint)}
+.tabs svg{width:26px;height:26px}
+section{display:none}section.on{display:block}
+.why{font-size:12px;color:var(--text2);margin-top:2px;white-space:normal}
+.stale{color:var(--orange)}
+</style>
+</head>
+<body>
+<header>
+  <div class="sub" id="upd">Connecting…</div>
+  <h1 id="title">Overview</h1>
+  <div id="pills"></div>
+</header>
+
+<section id="t-home" class="on">
+  <h2 id="unihead">Standard universe</h2>
+  <div class="card" id="hero"></div>
+  <h2>Live 5-minute windows</h2>
+  <div class="grid" id="live"></div>
+  <h2 id="rephead">Report traders</h2>
+  <div class="card" id="reps"></div>
+  <h2>Top 5 bots</h2>
+  <div class="card" id="top5"></div>
+</section>
+
+<section id="t-bots">
+  <h2 id="botshead">All bots</h2>
+  <div class="card" id="bots"></div>
+</section>
+
+<section id="t-trades">
+  <h2>Latest settled windows</h2>
+  <div class="card" id="settled"></div>
+  <h2>Latest fills</h2>
+  <div class="card" id="fills"></div>
+</section>
+
+<section id="t-feed">
+  <h2>Polymarket key &amp; feeds</h2>
+  <div class="card" id="health"></div>
+</section>
+
+<nav class="tabs">
+  <button data-t="home" class="on"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 2 11h3v9h5v-6h4v6h5v-9h3z"/></svg>Overview</button>
+  <button data-t="bots"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 20h4V10H4zm6 0h4V4h-4zm6 0h4v-7h-4z"/></svg>Bots</button>
+  <button data-t="trades"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>Trades</button>
+  <button data-t="feed"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>Status</button>
+</nav>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=t=>String(t??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]);
+const money=(v,d=2)=>v==null?"–":(v<0?"−":"")+"$"+Math.abs(v).toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+const pl=(v,d=2)=>v==null?'<span class="muted">–</span>':`<span class="${v>0?"pos":v<0?"neg":"muted"}">${v>0?"+":""}${money(v,d)}</span>`;
+const hm=t=>t?new Date(t*1000).toISOString().slice(11,16)+"Z":"–";
+const mmss=s=>s==null?"–":s<=0?"due":(s>=3600?Math.floor(s/3600)+"h ":"")+Math.floor(s%3600/60)+"m "+String(Math.floor(s%60)).padStart(2,"0")+"s";
+const coinName={btc:"BTC",eth:"ETH",sol:"SOL",xrp:"XRP"};
+let D=null,fetchedAt=0,tab="home";
+
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll("section").forEach(s=>s.classList.toggle("on",s.id==="t-"+tab));$("title").textContent=b.textContent.trim();scrollTo(0,0)});
+
+function render(){
+  if(!D)return;
+  const age=(Date.now()/1000-D.ts), st=D.stream||{}, k=D.key||{};
+  $("upd").innerHTML=`Updated ${hm(D.ts)} · ${age<15?"live":`<span class="stale">${Math.round(age)} s old</span>`}`;
+  $("pills").innerHTML=[
+    [k.accepted?"ok":k.set?"warn":"bad",k.accepted?"Key working":k.set?"Key set, stream down":"No key"],
+    [st.connected?"ok":"bad",st.connected?`Stream · ${st.subscribed} markets`:"Stream offline"],
+    [D.errors?"warn":"ok",`${D.errors} errors`],
+  ].map(([c,t])=>`<span class="pill"><span class="dot ${c}"></span>${esc(t)}</span>`).join("");
+
+  const U=D.universe||{}, B=D.bots||[];
+  $("unihead").textContent=`Standard universe · port ${U.port} · ${money(U.start_cash,0)} per bot`;
+  const up=B.filter(b=>b.pnl>0).length, dn=B.filter(b=>b.pnl<0).length, settled=B.reduce((a,b)=>a+(b.settled||0),0), won=B.reduce((a,b)=>a+(b.won||0),0);
+  const fees=B.reduce((a,b)=>a+(b.fees||0),0), open=B.reduce((a,b)=>a+(b.open||0),0);
+  $("hero").innerHTML=`<div class="hero"><div class="k">Net P/L, all ${B.length} bots</div><div class="big">${pl(D.net)}</div>
+    <div class="kv"><span>Bots up / down</span><b>${up} / ${dn}</b></div>
+    <div class="kv"><span>Windows settled · won</span><b>${settled.toLocaleString()} · ${settled?Math.round(won/settled*100):0}%</b></div>
+    <div class="kv"><span>Fees paid</span><b>${money(fees)}</b></div>
+    <div class="kv"><span>Open positions</span><b>${open}</b></div>
+    <div class="kv"><span>Deleted losers · new bots</span><b>${(D.roster||{}).removed||0} · ${Object.keys((D.roster||{}).added||{}).length}</b></div></div>`;
+  const botRow=(b,i)=>`<div class="row"><div class="grow"><div class="name">${i+1}. ${esc(b.name)}${(D.roster.added||{})[b.name]?' <span class="badge">new</span>':""}</div>
+    <div class="small">${b.settled||0} windows · ${b.settled?Math.round((b.won||0)/b.settled*100):0}% won · ${b.fills} fills${b.open?` · ${b.open} open`:""}${b.est_rewards>0.005?` · est. rewards +${money(b.est_rewards)} (not in P/L)`:""}</div>
+    ${b.label?`<div class="why">${esc(b.label)}</div>`:""}</div><div class="num">${pl(b.pnl)}</div></div>`;
+  const RP=B.filter(b=>b.name.startsWith("rep_")), rnet=RP.reduce((x,b)=>x+b.pnl,0), rrw=RP.reduce((x,b)=>x+(b.est_rewards||0),0);
+  $("rephead").textContent=`Report traders · ${RP.length} bots · P/L ${rnet>=0?"+":""}${money(rnet)} · est. rewards +${money(rrw)}`;
+  $("reps").innerHTML=RP.map(botRow).join("")||`<div class="row small">None in this universe</div>`;
+  $("top5").innerHTML=B.slice(0,5).map(botRow).join("")||`<div class="row small">No bots</div>`;
+  $("botshead").textContent=`All ${B.length} bots · ${up} up · ${dn} down`;
+  $("bots").innerHTML=B.map(botRow).join("");
+  // live windows
+  $("live").innerHTML=["btc","eth","sol","xrp"].map(a=>{const m=(D.live||{})[a];if(!m)return `<div class="coin"><div class="t">${coinName[a]}</div><div class="small">No open window</div></div>`;
+    const px=m.index??m.spot, bp=(px&&m.p2b)?(px-m.p2b)/m.p2b*1e4:null, left=Math.max(0,m.end-(D.ts+(Date.now()/1000-fetchedAt)));
+    const pu=m.p_up, side=pu==null?"–":pu>=.5?"Up":"Down";
+    return `<div class="coin"><div class="t"><span>${coinName[a]}</span><span class="small">${mmss(left)}</span></div>
+      <div class="lead ${bp==null?"":bp>=0?"pos":"neg"}">${bp==null?"–":(bp>=0?"+":"")+bp.toFixed(1)+" bp"}</div>
+      <div class="kv"><span>To beat</span><b>${m.p2b==null?"–":m.p2b.toLocaleString()}</b></div>
+      <div class="kv"><span>Now</span><b>${px==null?"–":px.toLocaleString()}</b></div>
+      <div class="kv"><span>Up price</span><b>${m.bid==null?"–":Math.round(m.bid*100)}/${m.ask==null?"–":Math.round(m.ask*100)}¢</b></div>
+      <div class="kv"><span>Model</span><b>${pu==null?"–":side+" "+Math.round(Math.max(pu,1-pu)*100)+"%"}</b></div></div>`}).join("");
+  // trades
+  $("settled").innerHTML=(D.settlements||[]).map(r=>`<div class="row"><div class="grow"><div class="name">${esc(r.bot)}</div><div class="small">${hm(r.ts)} · ${coinName[r.asset]||r.asset} ${esc(r.horizon)} · ${r.up?"Up":"Down"} won · ${r.fills} fill${r.fills===1?"":"s"}</div></div><div class="num">${pl(r.pnl_total)}</div></div>`).join("")||`<div class="row small">None yet</div>`;
+  $("fills").innerHTML=(D.fills||[]).map(f=>{const c=(f.slug||"").split("-")[0].replace("cpc","")||"btc";
+    return `<div class="row"><div class="grow"><div class="name">${esc(f.bot)}</div><div class="small">${hm(f.ts)} · ${(coinName[c]||"BTC")} · ${f.side==="buy"?"buy Up":"buy Down"} at ${Math.round((f.side==="buy"?f.price:1-f.price)*100)}¢ · ${f.liq}</div></div><div class="num small">${(+f.qty).toFixed(2)} sh</div></div>`}).join("")||`<div class="row small">None yet</div>`;
+
+  // status
+  const F=D.feeds||{}, X=D.crosscheck||{};
+  $("health").innerHTML=[
+    ["Polymarket key",k.accepted?"Working: signed market stream accepted":k.set?"Set, but the stream is not connected":"Not set",k.accepted?"ok":k.set?"warn":"bad"],
+    ["Market stream",st.connected?`${(st.msgs||0).toLocaleString()} messages · last ${st.age}s ago · ${st.errors} drops`:"Offline",st.connected?"ok":"bad"],
+    ["Settlement index",F.index_age==null?"–":`updated ${F.index_age}s ago`,F.index_age!=null&&F.index_age<10?"ok":"warn"],
+    ["Coinbase spot",F.coinbase_connected?"connected":"offline",F.coinbase_connected?"ok":"bad"],
+    ["Order books polled",F.books_polled??"–","ok"],
+    ["BRTI cross-check",X.ok?`${X.compared} s compared · median diff ${X.median_abs_diff}`:"–",X.ok?"ok":"warn"],
+    ["Engine",`up ${mmss(D.uptime)} · ${D.errors} errors · loop ${D.loop}`,D.errors?"warn":"ok"],
+  ].map(([a,b,c])=>`<div class="row"><span class="dot ${c}"></span><div class="grow"><div class="name">${esc(a)}</div><div class="small">${esc(b)}</div></div></div>`).join("");
+}
+
+async function load(){
+  try{const r=await fetch("summary.json",{cache:"no-store"});D=await r.json();fetchedAt=Date.now()/1000;render()}
+  catch(e){$("upd").innerHTML='<span class="stale">Cannot reach the bots right now (the session may be asleep). Retrying…</span>'}
+}
+load();setInterval(load,5000);setInterval(render,1000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)load()});
+</script>
+</body>
+</html>
