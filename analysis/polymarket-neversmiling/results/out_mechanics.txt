@@ -1,0 +1,93 @@
+== P/L WATERFALL (lifetime and report window)
+                         lifetime     window
+buy notional (ex fee)  -9003765.6 -1042123.1
+settlement redeems      5838396.2   565186.2
+complete-set merges     3309826.6   496842.1
+sells                         0.0        0.0
+= gross trading result   144457.1    19905.2
+taker fees paid         -142190.7   -16398.5
+= net trading result       2266.4     3506.7
+maker rebates             19587.4     2239.3
+taker rebates             37462.5        0.0
+= net incl. rebates       59316.3     5746.1
+fees as % of gross           98.4       82.4
+
+== CAPITAL AT WORK: cumulative (buys incl fee - redeems - merges - rebates), i.e. cash drawn from the wallet
+deepest cash drawdown (capital needed) = $4946 on 2026-04-07 ; final cumulative = $59316
+typical intraday cash outstanding, median of daily minima: $-10735
+
+== ORDER SIZING LOGIC: the recurring exact share sizes vs price
+size   5.00  n=138966  price p10/p50/p90 = 0.200/0.430/0.730  usdc p50 = 2.24  taker share 0.72
+size   8.40  n=132284  price p10/p50/p90 = 0.200/0.480/0.830  usdc p50 = 4.09  taker share 0.65
+size  11.25  n= 65625  price p10/p50/p90 = 0.180/0.470/0.870  usdc p50 = 5.37  taker share 0.64
+size  19.60  n= 50617  price p10/p50/p90 = 0.160/0.500/0.860  usdc p50 = 10.00  taker share 0.62
+size  12.80  n= 50002  price p10/p50/p90 = 0.210/0.530/0.940  usdc p50 = 6.78  taker share 0.10
+size  20.00  n= 46379  price p10/p50/p90 = 0.140/0.510/0.920  usdc p50 = 10.20  taker share 0.05
+size  12.00  n= 43329  price p10/p50/p90 = 0.200/0.480/0.920  usdc p50 = 5.76  taker share 0.05
+size  14.70  n= 35414  price p10/p50/p90 = 0.140/0.490/0.860  usdc p50 = 7.35  taker share 0.62
+size  10.00  n= 28131  price p10/p50/p90 = 0.140/0.440/0.810  usdc p50 = 4.50  taker share 0.63
+size   8.00  n= 28105  price p10/p50/p90 = 0.210/0.510/0.840  usdc p50 = 4.08  taker share 0.18
+share of fills with size exactly in the top-10 set: 32.2%
+usdc_size (incl fee) most common values: {1.8: 41339, 2.0: 40061, 1.6: 39784, 1.9: 39157, 1.2: 38724, 1.4: 37776, 2.2: 37460, 1.7: 36910}
+notional (ex fee) most common values: {1.8: 45283, 1.6: 42463, 2.0: 42261, 1.4: 40614, 1.2: 40503, 2.2: 40309, 1.0: 36702, 1.3: 36399}
+
+== QUOTE STRUCTURE: maker fills per market, both sides?
+markets with maker fills: 26197 ; with maker fills on BOTH sides: 93.8%
+sum of maker VWAPs (Up+Down) on both-maker markets: median 0.979  p25 0.910  p75 1.059  share<1.00 57.5%
+sum of TAKER VWAPs (Up+Down) on both-taker markets: median 0.931  share<1.00 66.8%  (n=61289)
+
+== HEDGE SEQUENCING on both-sided markets: price of first fill on side A vs first fill on side B
+first-fill price: median 0.480 ; second-side first-fill price: median 0.460 ; sum median 0.960 ; share sum<1.00 64.3%
+lag to second side: p25/p50/p75 = 13/41/100 s ; share <10s 20.6%
+dominant side == side bought first: 50.3%
+one-sided markets: median usdc 7.7, median fills 3.0, dom_vwap median 0.374, win rate 0.373
+
+== WHERE DOES THE GROSS TRADING PROFIT COME FROM (per-market pnl incl fees, split)
+both-sided markets: n=64547 usdc=8670667 pnl=-6647 (-0.08%) | one-sided: n=18466 usdc=475289 pnl=8914 (1.88%)
+              markets        usdc        pnl     merged  dom_won
+pcbin                                                           
+(0.0, 0.9]      25053  1712701.66  185356.73  518015.25     0.45
+(0.9, 0.95]      8167  1262501.16   29673.72  527538.52     0.62
+(0.95, 0.97]     3546   639727.82    2754.64  294436.57     0.69
+(0.97, 1.0]      5552  1162003.02   -5379.90  576684.42     0.74
+(1.0, 1.03]      5366  1175370.73  -21883.70  558179.75     0.78
+(1.03, 1.1]      8422  1529823.50  -64437.39  552328.02     0.80
+(1.1, 5.0]       8441  1188539.03 -132731.55  282644.03     0.80
+
+== TAKER TIER INFERENCE: taker rebate paid on day D vs fees paid on day D-1
+               fees  taker_rebate  ratio
+date                                    
+2026-06-20  2692.25        374.33   0.15
+2026-06-21  2480.60        392.42   0.15
+2026-06-22  2451.80        374.71   0.15
+2026-06-23  2137.59       5156.44   2.10
+...
+               fees  taker_rebate  ratio
+date                                    
+2026-08-04  1261.34        439.28   0.32
+2026-08-05  1441.88        403.63   0.32
+2026-08-06  1317.66        461.40   0.32
+2026-08-07     1.79        421.65   0.32
+ratio by month: {6: 0.146, 7: 0.32, 8: 0.32}
+maker rebate per day: median $163, total $19587 over 88 days; taker rebate total $37462
+
+== VALIDATION vs REPORT (window 2026-05-18..2026-06-02, UTC days)
+fills 176965 (report 173,640) ; markets 6360 (6,360) ; notional ex-fee $1042123 incl-fee $1058522 (1,022,056) ; both-sided 79.2% (79.2) ; median paired 0.9695 (0.9836) ; median clip $3.57 (3.51) ; p99 $28.75 (28.82) ; max $267.09 (267.09)
+                     markets  dom_win_rate  dom_vwap  paired_cost
+dbin                                                             
+(1.0, 1.5]              1489         0.535     0.475        0.916
+(1.5, 2.0]               974         0.658     0.538        0.950
+(2.0, 3.0]              1100         0.747     0.612        0.980
+(3.0, 1000000000.0]     1434         0.787     0.656        0.981
+window taker fill share 54.5% ; window maker rebates $2239 ; taker rebates $0 ; fees $16398 ; merges $496842
+
+== MONTHLY EVOLUTION
+          fills  markets   notional  taker_share     fees  median_clip  max_clip           assets durs_min  both_sided  dom_win  mkt_pnl_ex_reb  maker_rebate  taker_rebate      merge
+month                                                                                                                                                                                 
+2026-04  369537     5550  1704699.0        0.221    381.0         3.15     242.0  BTC,ETH,SOL,XRP        5       0.985    0.829         -4138.0        6194.0           0.0   667364.0
+2026-05  134292     4223   824828.0        0.519  12498.0         3.75     267.0  BTC,ETH,SOL,XRP  5,15,60       0.808    0.673          3696.0        1896.0           0.0   419317.0
+2026-06  824583    35225  3672192.0        0.675  75060.0         3.03     281.0  BTC,ETH,SOL,XRP  5,15,60       0.805    0.574          1620.0        6034.0        7661.0  1292646.0
+2026-07  502296    31616  2386469.0        0.611  46113.0         2.95     359.0  BTC,ETH,SOL,XRP  5,15,60       0.721    0.539           976.0        4581.0       26751.0   811849.0
+2026-08   93523     6399   415577.0        0.621   8140.0         2.88     146.0  BTC,ETH,SOL,XRP  5,15,60       0.706    0.527           113.0         883.0        3051.0   118651.0
+
+== HOUR OF DAY (UTC) fill share: {0: 0.036, 1: 0.033, 2: 0.034, 3: 0.035, 4: 0.033, 5: 0.035, 6: 0.035, 7: 0.036, 8: 0.042, 9: 0.044, 10: 0.042, 11: 0.043, 12: 0.045, 13: 0.05, 14: 0.049, 15: 0.049, 16: 0.046, 17: 0.047, 18: 0.046, 19: 0.048, 20: 0.044, 21: 0.044, 22: 0.044, 23: 0.041}
