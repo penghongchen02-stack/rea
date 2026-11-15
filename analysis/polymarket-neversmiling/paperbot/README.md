@@ -492,3 +492,29 @@ at 50-70c they made 0.7-1.5%. 60% of the whole loss fell on 11-11, when eight $3
 their banks; two of them staked 22-23% of the bank in an average window. Bonereaper there paid $32,989 in fees
 on a $30,896 loss. An earlier line in this README's first pass ("75.6% held the wrong side") counts losing trades
 only; it is not a split of the net result.
+
+## Fifty fast_pickoff versions, the TOT dashboard, champion by hand (11-15 09:45Z)
+
+Asked for by the user on 11-15 09:40Z.
+
+- **Tryout clean-out.** 27 bots were taken out: 24 with a settled loss, two that never traded
+  (`new4_08_head_start_15_minute`, `new4_14_pinned_result_15_minute`) and `new4_12_pinned_result` (two bets in ten
+  hours). The list with each bot's windows and P/L is in `paperbot-data/tryout/removed-1115.json`; the state before is
+  `tryout.before-fp50.json`. 24 bots stayed.
+- **Fifty fast_pickoff versions** (`paperbot/fastpicks.py`, builder source `fp`, `fp_01_exact_copy` to
+  `fp_50_obeys_the_coin_rule`): fast_pickoff with one thing changed each, number 1 unchanged as the yardstick. All
+  fifty bet the same fixed share of the bank (the average of the 0.1%-2% range), keep their coins (the losing-coin
+  rule skips a bot added with `"all_coins": true`; number 50 is the exception) and stay until 150 windows. Versions
+  43-46 test whether the profit survives a real order: the quote must still be there on the engine's next pass, or
+  the fill costs 1-2c more.
+- **TOT dashboard** (port 8093, `paperbot-data/tot`, bots in `paperbot/totbots.py`, builder source `tot`): a second
+  tryout that is filled by hand (`"fill": False`), with fifty bots built from the methods that were ahead in the
+  tryout. Same panel and pass rules. Each bot has its own $1,000 and its own view of the book
+  (`Account.liq_key`), so a fill by one bot takes nothing from another. The champion still hires from the tryout
+  only.
+- **Champion**: `fast_pickoff`, hired by hand with `{"pin": true}` in `hire.json`, which keeps it until it is changed
+  by hand (without it the hourly review replaces a champion that is not ahead; it had hired four different bots
+  between 11-14 19:29Z and 11-15 09:29Z). The state before is `champion.before-fast-pickoff.json`.
+- **Load.** The 65 extra tick-driven bots took the engine from about 30% to about 70% of one core. The fast bots now
+  share one list of open windows a coin (`FastPick.windows`, rebuilt once a second).
+- `checkin.py` reads port 8093 as well.

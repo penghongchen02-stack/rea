@@ -59,6 +59,11 @@ UNIVERSES = [
     # universe passes 5- and 15-minute markets; pool bots are held to 5-minute windows (user, 11-11 22:40Z).
     {"name": "tryout", "port": int(os.environ.get("PAPERBOT_PORT9", "8088")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05, "dir": os.path.join(DATA, "tryout"),
      "pos_mult": 15.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m", "15m"], "pool_horizons": ["5m"]},
+    # TOT (user, 11-15 09:40Z): a second tryout, filled by hand with fifty bots (paperbot/totbots.py), nothing joins from
+    # the pool. Same rules and panel as the tryout; every bot has its own $1,000 and its own view of the book. It is listed
+    # after the tryout, so the champion still hires from the tryout only.
+    {"name": "tot", "port": int(os.environ.get("PAPERBOT_PORT13", "8093")), "size_mode": "pct", "size_pct": PCT, "window_pct": 0.05, "dir": os.path.join(DATA, "tot"),
+     "pos_mult": 15.0, "cash": 1000.0, "registry": "tryout", "assets": ["btc", "eth", "sol", "xrp"], "horizons": ["5m", "15m"], "pool_horizons": ["5m"], "fill": False},
     # Rep1000: the nine report replicas alone with $1,000 each (user, 11-12 01:55Z), beside the $100 ones in std.
     # Sure-shot bots (user, 11-13 12:30Z): fifteen versions on the fast loop, $1,000 each, own bet sizes (paperbot/sureshot.py).
     # They replaced the stop-and-flip dashboard (15 bots, -$72 after 95 minutes on its second run; records in

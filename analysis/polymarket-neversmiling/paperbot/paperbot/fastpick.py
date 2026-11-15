@@ -29,6 +29,22 @@ class FastPick(LastCallHold):
 
     def allow(self, market, side, ts): return True      # a last veto for subclasses (paperbot/newbots4.py)
 
+    def windows(self, asset, ts):
+        """This coin's Up/Down windows of this length. Every fast bot asks on every Coinbase tick, so the list is
+        kept on the engine and rebuilt once a second for all of them (seventy bots each scanning every market
+        cost a quarter of a core)."""
+        c = self.engine.__dict__.setdefault("_fast_windows", {}); k = (asset, self.DUR); v = c.get(k)
+        if v is None or not (0 <= ts - v[0] <= 1.0):
+            v = c[k] = (ts, [m for m in list(self.engine.mf.markets.values()) if m.asset == asset and m.kind == "updown" and m.dur == self.DUR])
+        return v[1]
+
+    def dollars(self, acct):
+        """What one bet may cost: the dashboard's share of the bank, or ORDER_USD."""
+        if acct.size_mode != "pct": return self.ORDER_USD
+        return min(acct.pct_dollars(), acct.window_pct * acct.bank())
+
+    def book(self, market, side, px, q, now): return px, q      # the fill that is booked; None = no fill (paperbot/fastpicks.py)
+
     def __init__(self, account, engine):
         super().__init__(account, seed=41); self.engine = engine
         self.ticks = {a: collections.deque(maxlen=600) for a in self.ASSETS}
@@ -46,8 +62,7 @@ class FastPick(LastCallHold):
             if t <= ts - self.LOOK: then = p
             else: break
         acct = self.acct
-        for m in list(self.engine.mf.markets.values()):
-            if m.asset != asset or m.kind != "updown" or m.dur != self.DUR: continue
+        for m in self.windows(asset, ts):
             bb, ba = m.best_bid, m.best_ask
             if bb is None or ba is None: continue
             mid = (bb + ba) / 2; hist = self.mids.setdefault(m.slug, collections.deque(maxlen=120)); hist.append((ts, mid))
@@ -68,8 +83,7 @@ class FastPick(LastCallHold):
             elif jump < 0 and 1 - bb <= self.MAX_PRICE and (1 - p) - (1 - bb) - th * bb * (1 - bb) > self.EDGE: side, lim, unit = "sell", bb, 1 - bb
             else: continue
             if not self.allow(m, side, ts): continue
-            usd = acct.pct_dollars() if acct.size_mode == "pct" else self.ORDER_USD
-            if acct.size_mode == "pct": usd = min(usd, acct.window_pct * acct.bank())
+            usd = self.dollars(acct)
             lv = [x for x in m.avail(side, acct.liq_key) if x[0] == lim]
             q = round(min(usd / max(unit, 0.01), lv[0][1] if lv else 0.0), 2)
             if q < m.min_qty: self.stats["no_size"] += 1; continue
@@ -85,6 +99,9 @@ class FastPick(LastCallHold):
             slug, side, px, q, ts, tag = self.queue.popleft(); m = self.engine.mf.markets.get(slug); a = self.acct
             if m is None: self.stats["gone"] += 1; continue
             if getattr(self, "COIN_RULE", False) and a.coin_off(m, side, q): self.stats["coin_off"] += 1; continue   # copies that obey the tryout's losing-coin rule
+            r = self.book(m, side, px, q, now)
+            if r is None: self.stats["quote_gone"] += 1; continue
+            px, q = r
             need = a.cash_needed(slug, side, px, q)
             if need > 1e-9 and need > a.buying_power() + 1e-9: a.rejected += 1; self.stats["rejected"] += 1; continue
             a._fill(m, Order(slug, side, px, q, False, tag), px, q, maker=False); self.stats["fills"] += 1

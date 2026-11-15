@@ -42,8 +42,8 @@ COIN_N = 15          # settled windows in a coin before a losing coin is switche
 PILOT_WINDOWS = 200; PILOT_DAYS = 3.0
 MONEY_WINDOWS = 300; MONEY_DAYS = 7.0; MONEY_DROP = 0.15; MONEY_TOP = 5
 COINS_FRAC = 0.75      # share of the coins a bot has traded that must be in profit
-OWN_SIZE = ("var", "new")              # builder sources whose bots size their own orders (the rest take the dashboard's share of the bank)
-OWN_MARKETS = ("rep", "var", "new")    # ... and that keep their own coins and window lengths
+OWN_SIZE = ("var", "new", "tot")              # builder sources whose bots size their own orders (the rest take the dashboard's share of the bank)
+OWN_MARKETS = ("rep", "var", "new", "fp", "tot")    # ... and that keep their own coins and window lengths
 
 
 def luck_k(n): return math.sqrt(2 * math.log(max(n, 2)))
@@ -61,7 +61,9 @@ def builders(cfg, engine=None):
     from .newbots3 import build_new3_registry
     from .newbots4 import build_new4_registry
     from .newbots5 import build_new5_registry
-    return {"main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(engine),
+    from .fastpicks import build_fp_registry
+    from .totbots import build_tot_registry
+    return {"fp": build_fp_registry(engine), "tot": build_tot_registry(engine), "main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(engine),
             "var": build_br177_registry(), "extra": build_extra_registry(cfg.get("pos_mult", 15.0)),
             "new": {**build_new_registry(engine, cfg.get("pos_mult", 15.0)), **build_new_arb_registry(engine), **build_new_rep_registry(engine), **build_new2_registry(engine), **build_new3_registry(engine), **build_new4_registry(engine), **build_new5_registry(engine)}}
 
@@ -233,6 +235,7 @@ class Tryout:
 
     # ---- running -----------------------------------------------------------------
     def fill(self, now):
+        if self.cfg.get("fill") is False: return []        # a hand-filled dashboard (TOT): nothing joins from the pool
         b = self.builders()
         recent = {d["key"] for d in self.dropped if now - d["ts"] < COOLDOWN}
         cands = pool(self.engine, {self.u.name, "champion"}, b, self.assets, self.horizons); self.board = cands[:20]
@@ -253,6 +256,7 @@ class Tryout:
         pass is earned on windows traded after the change, not by deleting past losses."""
         changed = []
         for n, spec in self.members.items():
+            if spec.get("all_coins"): continue             # a comparison copy: it must keep every coin it was built with
             s = st[n]; off = spec.setdefault("off", {}); live = [c for c in s["coins"] if c not in off]
             bad = sorted((c for c in live if s["coin_n"].get(c, 0) >= COIN_N and s["coins"][c] < 0), key=lambda c: s["coins"][c])
             for c in bad:
@@ -305,7 +309,7 @@ class Tryout:
             self.coins_off(now, self.all_stats(now)); return
         if not req or req.get("key") in self.members or req.get("base") not in self.builders().get(req.get("src"), {}):
             log.warning("[tryout] cannot add %s", req); return
-        spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"], "note": req.get("note"), "keep": int(req.get("keep", 0)), "own": bool(req.get("own")),
+        spec = {"key": req["key"], "base": req["base"], "src": req["src"], "genes": req.get("genes", {}), "where": ["added by request"], "note": req.get("note"), "keep": int(req.get("keep", 0)), "own": bool(req.get("own")), "all_coins": bool(req.get("all_coins")),
                 "joined": now, "entry_score": None, "entry_n": 0}
         self._attach(spec); log.info("[tryout] added %s by request", spec["key"])
 

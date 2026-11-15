@@ -56,7 +56,7 @@ class Champion:
         self.u.strats = [obj]
         eq = a.equity(self.engine.mf.markets)
         self.current = dict(spec, hired=now, eq_at_hire=round(eq, 4), reason=reason)
-        self.labels[NAME] = f"now trading as {spec['key']} (hired {time.strftime('%H:%MZ', time.gmtime(now))}; {reason})"
+        self.labels[NAME] = f"now trading as {spec['key']} (hired {time.strftime('%H:%MZ', time.gmtime(now))}; {reason}" + ("; kept until changed by hand" if spec.get("pinned") else "") + ")"
         self.next_review = now + REVIEW; self.paused = False; self.save()
         log.info("[champion] hired %s (%s)", spec["key"], reason)
 
@@ -136,6 +136,7 @@ class Champion:
             if spec is None and key in b["lab"]: spec = {"key": key, "base": key, "src": "lab", "genes": {}, "where": ["bonelab"]}
         if spec is None: log.warning("[champion] requested hire %s: no such bot", key); return
         if req.get("own"): spec = dict(spec, own=True)       # keep the bot's own coins as well as its own order sizes
+        if req.get("pin"): spec = dict(spec, pinned=True)    # stays until changed by hand: the hourly review does not replace it
         cur = self.current
         if cur and cur["key"] != key:
             self.history.append({"key": cur["key"], "hired": cur["hired"], "fired": now, "pnl": round(self.pnl_since_hire(), 2), "why": "replaced by request"})
@@ -153,7 +154,7 @@ class Champion:
             return
         if now < self.next_review: return
         p = self.pnl_since_hire(); cur = self.current
-        if p <= 0 and now - cur["hired"] >= REVIEW - 5:        # not making money (losing or idle): replace
+        if p <= 0 and now - cur["hired"] >= REVIEW - 5 and not cur.get("pinned"):        # not making money (losing or idle): replace
             self.history.append({"key": cur["key"], "hired": cur["hired"], "fired": now, "pnl": round(p, 2)})
             c = self.pick(now, exclude=(cur["key"],))
             if c: self.hire(c, now, f"replaced {cur['key']} ({p:+.2f}); " + (c.get("why_hired") or f"score {c['score']:+.2f}/market over {c['n']} markets")); return
