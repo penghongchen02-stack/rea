@@ -453,3 +453,24 @@ narrow bots that already earn to the part that earned, rest orders to avoid the 
 early-extreme effects, or move a rule to the cheapest market. `fast_pickoff_bitcoin_and_solana_only` is the copy of
 fast_pickoff that obeys the losing-coin rule; the original books fills on a path the rule does not reach and was
 left as it is, trading all four coins.
+
+## What the losing trades have in common (11-15 00:40Z)
+
+`research/r6_build.py` builds one row for every trade (one bot in one window) on every dashboard, 130,036 in all,
+with how it was entered and how it ended; `research/r6_report.py` prints the tables. Totals for the Up/Down
+windows: $6.89M staked, -$474,640 net, of which $163,781 is fees. The dashboards show less because a bot that
+loses its whole bank is taken off its dashboard (eight $30,000 bots on dollar1000).
+
+| What the losers share | Trades | Net | Return on money staked |
+|---|---|---|---|
+| Later fills 3c+ cheaper than the first (averaging down) | 18,685 | -$235,953 | -22.0% |
+| Same side as a big move of the previous 15 minutes | 7,557 | -$102,390 | -23.4% |
+| Against that move | 5,817 | +$20,365 | +5.8% |
+| First fill in the first quarter of the window | 46,622 | -$385,876 | -9.9% |
+| First fill in the middle half | 57,376 | -$49,335 | -2.4% |
+| Coin level with its line at the first fill (within 0.3 of its usual move) | 63,346 | -$364,283 | -9.5% |
+| Ten or more entry fills in one window | 8,378 | -$303,208 | -7.8% |
+| Sold everything before the close | 21,120 | -$126,498 | -31.3% |
+| Windows where 5+ bots of a dashboard had 90%+ of their money on the losing side | 1,731 windows | -$493,598 | -58.3% |
+
+The worst 1% of losing trades are 41% of all dollars lost; the worst 5% of windows are 66% of window losses.
