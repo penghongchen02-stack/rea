@@ -25,6 +25,9 @@ class FastPick(LastCallHold):
     name = "fast_pickoff"
     ASSETS = ("btc", "eth", "sol", "xrp"); JUMP_SD = 2.5; LOOK = 1.0; EDGE = 0.02; MAX_PRICE = 0.90; LEFT = (20, 285); STALE = 0.011
     ORDER_USD = 10.0
+    DUR = 300                # the window length it trades (seconds)
+
+    def allow(self, market, side, ts): return True      # a last veto for subclasses (paperbot/newbots4.py)
 
     def __init__(self, account, engine):
         super().__init__(account, seed=41); self.engine = engine
@@ -44,7 +47,7 @@ class FastPick(LastCallHold):
             else: break
         acct = self.acct
         for m in list(self.engine.mf.markets.values()):
-            if m.asset != asset or m.kind != "updown" or m.dur != 300: continue
+            if m.asset != asset or m.kind != "updown" or m.dur != self.DUR: continue
             bb, ba = m.best_bid, m.best_ask
             if bb is None or ba is None: continue
             mid = (bb + ba) / 2; hist = self.mids.setdefault(m.slug, collections.deque(maxlen=120)); hist.append((ts, mid))
@@ -64,6 +67,7 @@ class FastPick(LastCallHold):
             if jump > 0 and ba <= self.MAX_PRICE and p - ba - th * ba * (1 - ba) > self.EDGE: side, lim, unit = "buy", ba, ba
             elif jump < 0 and 1 - bb <= self.MAX_PRICE and (1 - p) - (1 - bb) - th * bb * (1 - bb) > self.EDGE: side, lim, unit = "sell", bb, 1 - bb
             else: continue
+            if not self.allow(m, side, ts): continue
             usd = acct.pct_dollars() if acct.size_mode == "pct" else self.ORDER_USD
             if acct.size_mode == "pct": usd = min(usd, acct.window_pct * acct.bank())
             lv = [x for x in m.avail(side, acct.liq_key) if x[0] == lim]
@@ -85,7 +89,7 @@ class FastPick(LastCallHold):
             if need > 1e-9 and need > a.buying_power() + 1e-9: a.rejected += 1; self.stats["rejected"] += 1; continue
             a._fill(m, Order(slug, side, px, q, False, tag), px, q, maker=False); self.stats["fills"] += 1
             log.info("[fast] %s %s %.2f x %.2f, decided %.0f ms before booking (%s)", slug, side, px, q, (now - ts) * 1000, tag)
-        if market.asset in self.ASSETS and market.dur == 300 and market.remaining(now) >= 3 and market.state in (None, "MARKET_STATE_OPEN"):
+        if market.asset in self.ASSETS and market.dur == self.DUR and market.remaining(now) >= 3 and market.state in (None, "MARKET_STATE_OPEN"):
             self.manage(market, ctx, now)
 
     def snapshot(self):

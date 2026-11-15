@@ -198,7 +198,8 @@ class Bandit(Picker):
     and each window follows the rule that a random draw from its record favours, so rules that have been right
     lately get used more. It starts knowing nothing; its record is lost at an engine restart."""
     def __init__(self, *a, **kw):
-        super().__init__(*a, **kw); self.score = {k: [1, 1] for k in ("model", "trend60", "fade180", "book")}; self.open = {}
+        super().__init__(*a, **kw); self.score = collections.defaultdict(lambda: [1, 1]); self.open = {}
+    def key(self, asset, rule): return rule             # one record a rule; a subclass may keep one a coin
     def votes(self, market, ctx, now, p):
         v = {"model": p >= 0.5}
         t = self.trend(ctx, market.asset, now, 60)
@@ -213,13 +214,13 @@ class Bandit(Picker):
             if now < end + 3: continue
             x = ctx["index"].value_at(asset, int(end) - 1)
             if x is not None:
-                for k, up in v.items(): self.score[k][0 if up == (x >= line) else 1] += 1
+                for k, up in v.items(): self.score[self.key(asset, k)][0 if up == (x >= line) else 1] += 1
             if x is not None or now > end + 120: del self.open[slug]
         super().on_tick(market, ctx, now)
     def signal(self, market, ctx, now, p, det):
         v = self.votes(market, ctx, now, p)
         if market.slug not in self.open and market.p2b is not None: self.open[market.slug] = (market.asset, market.end, market.p2b, dict(v))
-        pick = max(v, key=lambda k: random.betavariate(*self.score[k]))
+        pick = max(v, key=lambda k: random.betavariate(*self.score[self.key(market.asset, k)]))
         self.mem[market.slug]["rule"] = pick
         return v[pick]
     def snapshot(self): return {k: {"right": w - 1, "wrong": l - 1} for k, (w, l) in self.score.items()}
