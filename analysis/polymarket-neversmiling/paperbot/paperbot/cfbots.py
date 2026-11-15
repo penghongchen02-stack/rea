@@ -85,6 +85,7 @@ class CFEngine:
 
 
 def view(engine):
+    if isinstance(engine, CFEngine): return engine
     v = engine.__dict__.get("_cf_view")
     if v is None: v = engine.__dict__["_cf_view"] = CFEngine(engine)
     return v
@@ -109,6 +110,22 @@ def on_cf(f):
     def g(a, e, name):
         bot = f(a, e, name); tick = bot.on_tick
         bot.on_tick = lambda market, ctx, now: tick(market, {"index": ctx["index"], "spot": e.spot}, now)
+        return bot
+    return g
+
+
+def cf_only(f, e):
+    """Any builder turned into a benchmark-only one, for the cfbenchmark dashboard (user, 11-15 17:50Z). The builder
+    must have been made with the benchmark view `e` as its engine. Its bot gets the benchmark as the price on every
+    pass; a fast_pickoff kind is moved onto the benchmark's one value a second (a look of under a second becomes one
+    second, the shortest there is) and measures its jump against the benchmark's own usual change."""
+    from .fastpick import FastPick
+    def g(acct):
+        bot = f(acct); tick = bot.on_tick
+        bot.on_tick = lambda market, ctx, now: tick(market, {"index": ctx["index"], "spot": e.spot}, now)
+        if isinstance(bot, FastPick) and not isinstance(bot, CFPick):
+            n = max(1, round(bot.LOOK)); bot.LOOK = n - 0.1
+            bot.jump_unit = lambda asset: (e.spot.step(asset) or 1e9) * n
         return bot
     return g
 

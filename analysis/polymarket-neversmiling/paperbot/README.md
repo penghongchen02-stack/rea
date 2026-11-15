@@ -535,3 +535,17 @@ At the user's request the tryout got twenty bots that never read Coinbase (`pape
 - Each has its own $1,000 and own view of the book, bets its own sizes (the pickoff ones $10), keeps its coins, and is
   exempt from the hourly review for its first 100 windows.
 - Not checked: how the volatility read from the benchmark compares with the one read from Coinbase.
+
+## The cfbenchmark dashboard (11-15 17:51Z, port 8094)
+
+At the user's request: a hundred bots that read only the CF Benchmarks series, never Coinbase, to compare with the
+same bots on Coinbase. It is a tryout-style universe (`"cf": True` in `paperbot/run.py`): `tryout.builders` then builds
+every registry against the benchmark view and wraps each builder with `cfbots.cf_only`.
+
+- The hundred: the 50 best of the tryout's 59 Coinbase bots and all 50 of TOT, as they stood at 17:50Z, numbered
+  `cb001` ... `cb100`. Where each came from and its record there is in `paperbot-data/cfbenchmark/source-records.json`.
+- The benchmark has one value a second, so a pickoff bot's look of under a second becomes one second; the half- and
+  quarter-second versions are therefore the same bot here as their one-second parents.
+- Records start from zero; each bot has its own $1,000, own view of the book, keeps its coins, and is exempt from the
+  hourly review for 100 windows. Nothing joins from the pool and the champion does not hire from it.
+- The page header still describes the engine's feeds, Coinbase among them; these bots do not read it.

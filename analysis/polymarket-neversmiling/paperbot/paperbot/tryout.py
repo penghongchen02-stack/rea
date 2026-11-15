@@ -63,10 +63,13 @@ def builders(cfg, engine=None):
     from .newbots5 import build_new5_registry
     from .fastpicks import build_fp_registry
     from .totbots import build_tot_registry
-    from .cfbots import build_cf_registry
-    return {"cf": build_cf_registry(engine), "fp": build_fp_registry(engine), "tot": build_tot_registry(engine), "main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(engine),
+    from .cfbots import build_cf_registry, view, cf_only
+    if cfg.get("cf"): engine = view(engine)          # the cfbenchmark dashboard: every bot is built against the benchmark, never Coinbase
+    reg = {"cf": build_cf_registry(engine), "fp": build_fp_registry(engine), "tot": build_tot_registry(engine), "main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(engine),
             "var": build_br177_registry(), "extra": build_extra_registry(cfg.get("pos_mult", 15.0)),
             "new": {**build_new_registry(engine, cfg.get("pos_mult", 15.0)), **build_new_arb_registry(engine), **build_new_rep_registry(engine), **build_new2_registry(engine), **build_new3_registry(engine), **build_new4_registry(engine), **build_new5_registry(engine)}}
+    if cfg.get("cf"): reg = {src: (d if src == "cf" else {k: cf_only(f, engine) for k, f in d.items()}) for src, d in reg.items()}
+    return reg
 
 
 def pool(engine, skip, b, assets, horizons, min_markets=MIN_POOL, min_per_coin=0):
