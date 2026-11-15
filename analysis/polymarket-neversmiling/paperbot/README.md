@@ -549,3 +549,17 @@ every registry against the benchmark view and wraps each builder with `cfbots.cf
 - Records start from zero; each bot has its own $1,000, own view of the book, keeps its coins, and is exempt from the
   hourly review for 100 windows. Nothing joins from the pool and the champion does not hire from it.
 - The page header still describes the engine's feeds, Coinbase among them; these bots do not read it.
+
+## Twenty benchmark pickoff bots on cfbenchmark (11-15 22:39Z)
+
+At the user's request, after the converted Coinbase pickoff bots lost on the benchmark (4 of 57 ahead). `CFSettle`
+(`paperbot/cfbots.py`, names `cfp_01` ... `cfp_20`) is a pickoff built on what the benchmark does know: the published
+value one second before the close is the settlement, so late in a window it can only move a little more. On each new
+value the bot estimates where it will end and takes a quote that still prices the other outcome. The versions vary how
+late it acts (10 to 60 seconds), how sure it must be, the price cap, the edge, the coins, and two realism checks.
+
+- First closes watched (22:50Z): with 30 seconds left the quotes were already at 99c or gone, so only the 45- and
+  60-second versions found a bet (Solana at 95c). In the Ether window the benchmark was still above the line with 23
+  seconds left while the quote already priced Down at 93-98c, and Down won: the quote knew before the benchmark did.
+- Also fixed: the eight `cf_` pickoff bots of the tryout read Coinbase in their protective exit (their entries did
+  not). `cfpick` now hands them the benchmark on every pass.

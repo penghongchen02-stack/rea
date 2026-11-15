@@ -12,6 +12,7 @@ second source. The point of the group is to show what is left of each method whe
 the tryout or TOT, unchanged except for the price source.
 """
 import time, math, threading, logging
+from .fair import phi
 from .fastpicks import Pick
 from .totbots import pk, nc, N, TC, BE
 from .newbots import Picker
@@ -102,7 +103,56 @@ class CFPick(Pick):
 
 def cfpick(**attrs):
     def f(a, e, name): return type("CFPick_", (CFPick,), dict(attrs))(a, e, name)
-    return f
+    return lambda a, e, name: on_cf(f)(a, e, name)      # its protective exit must read the benchmark too
+
+
+class CFSettle(Pick):
+    """A pickoff made for the benchmark (user, 11-15 22:40Z). The benchmark cannot be first to see a move, but it is
+    the thing the window settles on: the published value is the 60-second average, and its value one second before
+    the close is the settlement. Late in a window that value can only move a little more, so on every new published
+    value this bot works out where it will end and takes a quote that still prices the other outcome.
+
+    The estimate: the published value, plus its latest one-second change carried forward and fading (if the price
+    under it stays where it is, each coming second moves the average a little less). The doubt around it is the
+    coin's volatility over the r seconds still to come, doubled for the path the average is still dropping. It
+    bets when the settlement is Z of those doubts past the window's line, the side costs no more than MAX_PRICE and
+    the edge after the fee is at least EDGE. One bet a window, held to the close."""
+    LEFT = (2, 30); Z = 3.0; MAX_PRICE = 0.95; EDGE = 0.02; TREND = True; EXIT = False
+    def __init__(self, account, engine, name): super().__init__(account, engine, name); self.prev = {}
+
+    def on_spot(self, asset, px, ts):
+        t0 = time.perf_counter()
+        if asset not in self.ticks: return
+        self.stats["ticks"] += 1; sp = self.engine.spot; its = sp.seen.get(asset); last = self.prev.get(asset); self.prev[asset] = (its, px)
+        if its is None: return
+        d = px - last[1] if last and its - last[0] == 1 else 0.0
+        sig = sp.sigma(asset) * px; acct = self.acct; th = acct.theta
+        for m in self.windows(asset, ts):
+            bb, ba, K = m.best_bid, m.best_ask, m.p2b
+            if bb is None or ba is None or K is None or m.slug in self.done: continue
+            left = m.end - ts
+            if not (self.LEFT[0] <= left <= self.LEFT[1]) or ts - m.book_ts > 3 or m.state not in (None, "MARKET_STATE_OPEN"): continue
+            r = max(0, int(m.end - 1 - its))
+            est = px + (d * (r - r * (r + 1) / 120.0) if self.TREND else 0.0)
+            sd = sig * math.sqrt(2 * r ** 3 / 10800.0) + 2 * 10 ** (-getattr(m, "decimals", 2))
+            z = (est - K) / sd; p = phi(z)
+            if z >= self.Z and ba <= self.MAX_PRICE and p - ba - th * ba * (1 - ba) > self.EDGE: side, lim, unit = "buy", ba, ba
+            elif z <= -self.Z and 1 - bb <= self.MAX_PRICE and (1 - p) - (1 - bb) - th * bb * (1 - bb) > self.EDGE: side, lim, unit = "sell", bb, 1 - bb
+            else: continue
+            if not self.allow(m, side, ts): continue
+            lv = [x for x in m.avail(side, acct.liq_key) if x[0] == lim]
+            q = round(min(self.dollars(acct) / max(unit, 0.01), lv[0][1] if lv else 0.0), 2)
+            if q < m.min_qty: self.stats["no_size"] += 1; continue
+            k = (acct.liq_key, side, lim); m.consumed[k] = m.consumed.get(k, 0.0) + q
+            ms = (time.perf_counter() - t0) * 1000.0
+            self.done.add(m.slug); self.lat.append(ms); self.stats["signals"] += 1
+            self.queue.append((m.slug, side, lim, q, ts, f"cf-settle-{'up' if side == 'buy' else 'down'} z{z:+.1f} r{r}"))
+        self.stats["us_total"] += int((time.perf_counter() - t0) * 1e6)
+
+
+def settle(**attrs):
+    def f(a, e, name): return type("CFSettle_", (CFSettle,), dict(attrs))(a, e, name)
+    return lambda a, e, name: on_cf(f)(a, e, name)
 
 
 def on_cf(f):
@@ -156,6 +206,34 @@ V = [
 ]
 assert len(V) == 20
 BOTS = {f"cf_{i:02d}_{name}": (f"CF BENCHMARK {i}: {what} (no Coinbase)", f) for i, (name, what, f) in enumerate(V, 1)}
+LABELS = {k: v[0] for k, v in BOTS.items()}
+
+
+# Twenty versions of the benchmark's own pickoff, for the cfbenchmark dashboard (user, 11-15 22:40Z): names "cfp_01" ... "cfp_20".
+P = [
+    ("settles_past_the_line", "last 30 seconds: the benchmark is set to settle 3 doubts past the line and the quote still pays 2c after the fee, at up to 95c", settle()),
+    ("last_20_seconds", "last 20 seconds only", settle(LEFT=(2, 20))),
+    ("last_10_seconds", "last 10 seconds only", settle(LEFT=(2, 10))),
+    ("last_45_seconds", "from 45 seconds out", settle(LEFT=(2, 45))),
+    ("last_60_seconds", "from 60 seconds out", settle(LEFT=(2, 60))),
+    ("less_sure", "needs only 2 doubts past the line", settle(Z=2.0)),
+    ("more_sure", "needs 4 doubts past the line", settle(Z=4.0)),
+    ("most_sure", "needs 5 doubts past the line", settle(Z=5.0)),
+    ("no_carry_forward", "takes the published value as it stands, without carrying its last change forward", settle(TREND=False)),
+    ("up_to_90c", "pays no more than 90c", settle(MAX_PRICE=0.90)),
+    ("up_to_97c", "pays up to 97c", settle(MAX_PRICE=0.97)),
+    ("up_to_98c", "pays up to 98c", settle(MAX_PRICE=0.98)),
+    ("edge_1c", "needs a 1c edge after the fee", settle(EDGE=0.01)),
+    ("edge_4c", "needs a 4c edge after the fee", settle(EDGE=0.04)),
+    ("bitcoin_only", "Bitcoin only", settle(ASSETS=("btc",))),
+    ("bitcoin_and_ether", "Bitcoin and Ether only", settle(ASSETS=("btc", "eth"))),
+    ("solana_and_xrp", "Solana and XRP only", settle(ASSETS=("sol", "xrp"))),
+    ("15_minute_windows", "15-minute windows", settle(DUR=900)),
+    ("quote_must_still_be_there", "REALISM: the bet counts only if the quote is still there up to a second later", settle(STILL=True)),
+    ("pays_1c_more", "REALISM: pays 1c more than the quote it saw", settle(SLIP=0.01)),
+]
+assert len(P) == 20
+BOTS.update({f"cfp_{i:02d}_{name}": (f"CF PICKOFF {i}: {what} (no Coinbase)", f) for i, (name, what, f) in enumerate(P, 1)})
 LABELS = {k: v[0] for k, v in BOTS.items()}
 
 
