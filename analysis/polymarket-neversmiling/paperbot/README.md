@@ -474,3 +474,21 @@ loses its whole bank is taken off its dashboard (eight $30,000 bots on dollar100
 | Windows where 5+ bots of a dashboard had 90%+ of their money on the losing side | 1,731 windows | -$493,598 | -58.3% |
 
 The worst 1% of losing trades are 41% of all dollars lost; the worst 5% of windows are 66% of window losses.
+
+### Second pass: the loss split fill by fill (11-15 01:10Z)
+
+`research/r7.py` values every entry fill as if held to the close and splits the net result (-$475,019 on $6.89M).
+
+| Kind of trade | Trades | Net | Note |
+|---|---|---|---|
+| Bought and held to the close | 96,558 | -$283,656 | fees $71,342; entries -$212,315 before fees |
+| Sold out completely before the close | 21,136 | -$126,274 | sold at 31c a side that then won 34% of the time; 81% of them in the last quarter |
+| Two-sided or flipped (sold more than it held) | 4,617 | -$149,693 | $1.46M staked |
+| Sold part | 6,056 | +$84,605 | |
+
+Entry fills valued alone, after their fee: first fill of a window -1.2% of its stake, second or third -2.0%,
+fourth to ninth -4.1%, tenth or later -4.0%. Only the first fills, held: -$18,251. Fills at 10-40c lost 8-13%;
+at 50-70c they made 0.7-1.5%. 60% of the whole loss fell on 11-11, when eight $30,000 bots on dollar1000 lost
+their banks; two of them staked 22-23% of the bank in an average window. Bonereaper there paid $32,989 in fees
+on a $30,896 loss. An earlier line in this README's first pass ("75.6% held the wrong side") counts losing trades
+only; it is not a split of the net result.
