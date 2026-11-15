@@ -43,6 +43,10 @@ class FastPick(LastCallHold):
         if acct.size_mode != "pct": return self.ORDER_USD
         return min(acct.pct_dollars(), acct.window_pct * acct.bank())
 
+    def jump_unit(self, asset):
+        """The coin's usual move over LOOK seconds, as a fraction of its price (paperbot/cfbots.py measures it differently)."""
+        return self.engine.spot.sigma(asset) * math.sqrt(self.LOOK)
+
     def book(self, market, side, px, q, now): return px, q      # the fill that is booked; None = no fill (paperbot/fastpicks.py)
 
     def __init__(self, account, engine):
@@ -69,7 +73,7 @@ class FastPick(LastCallHold):
             if then is None or m.slug in self.done: continue
             left = m.end - ts
             if not (self.LEFT[0] <= left <= self.LEFT[1]) or ts - m.book_ts > 3 or m.state not in (None, "MARKET_STATE_OPEN"): continue
-            sig = self.engine.spot.sigma(asset) * px * math.sqrt(self.LOOK); jump = (px - then) / max(sig, 1e-12)
+            sig = self.jump_unit(asset) * px; jump = (px - then) / max(sig, 1e-12)
             if abs(jump) < self.JUMP_SD: continue
             old = None
             for t, v in hist:

@@ -518,3 +518,20 @@ Asked for by the user on 11-15 09:40Z.
 - **Load.** The 65 extra tick-driven bots took the engine from about 30% to about 70% of one core. The fast bots now
   share one list of open windows a coin (`FastPick.windows`, rebuilt once a second).
 - `checkin.py` reads port 8093 as well.
+
+## Twenty CF Benchmarks bots, second tryout clean-out (11-15 17:42Z)
+
+At the user's request the tryout got twenty bots that never read Coinbase (`paperbot/cfbots.py`, source `cf`, names
+`cf_01` ... `cf_20`), and the 13 bots that were behind at 17:41Z were removed (list with windows and P/L in
+`paperbot-data/tryout/removed-1115b.json`; the tryout file before the change is `tryout.before-cf20.json`).
+
+- The only live CF Benchmarks source here is the series Polymarket US publishes: the rolling 60-second average of the
+  benchmark, one value a second. `CFSpot` serves it through the interface of the Coinbase feed, and `CFEngine` hands
+  the bots an engine whose `.spot` is that. The price model therefore runs on the benchmark alone.
+- 1-8 are fast_pickoff's rule with the benchmark as the trigger (`CFPick`; a jump is measured against the usual
+  one-second change of the published value). 9-20 are tick count, one buy mid-window, all the rules, side ahead,
+  pinned result, near-certain bid, bet by the odds, learner and against the quarter hour, unchanged but for the source.
+- `FastPick.jump_unit` is the new hook that lets a subclass measure a jump its own way; the original is unchanged.
+- Each has its own $1,000 and own view of the book, bets its own sizes (the pickoff ones $10), keeps its coins, and is
+  exempt from the hourly review for its first 100 windows.
+- Not checked: how the volatility read from the benchmark compares with the one read from Coinbase.

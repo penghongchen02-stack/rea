@@ -42,8 +42,8 @@ COIN_N = 15          # settled windows in a coin before a losing coin is switche
 PILOT_WINDOWS = 200; PILOT_DAYS = 3.0
 MONEY_WINDOWS = 300; MONEY_DAYS = 7.0; MONEY_DROP = 0.15; MONEY_TOP = 5
 COINS_FRAC = 0.75      # share of the coins a bot has traded that must be in profit
-OWN_SIZE = ("var", "new", "tot")              # builder sources whose bots size their own orders (the rest take the dashboard's share of the bank)
-OWN_MARKETS = ("rep", "var", "new", "fp", "tot")    # ... and that keep their own coins and window lengths
+OWN_SIZE = ("var", "new", "tot", "cf")              # builder sources whose bots size their own orders (the rest take the dashboard's share of the bank)
+OWN_MARKETS = ("rep", "var", "new", "fp", "tot", "cf")    # ... and that keep their own coins and window lengths
 
 
 def luck_k(n): return math.sqrt(2 * math.log(max(n, 2)))
@@ -63,7 +63,8 @@ def builders(cfg, engine=None):
     from .newbots5 import build_new5_registry
     from .fastpicks import build_fp_registry
     from .totbots import build_tot_registry
-    return {"fp": build_fp_registry(engine), "tot": build_tot_registry(engine), "main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(engine),
+    from .cfbots import build_cf_registry
+    return {"cf": build_cf_registry(engine), "fp": build_fp_registry(engine), "tot": build_tot_registry(engine), "main": build_registry(cfg.get("pos_mult", 15.0)), "lab": build_lab_registry(), "rep": build_report_registry(engine),
             "var": build_br177_registry(), "extra": build_extra_registry(cfg.get("pos_mult", 15.0)),
             "new": {**build_new_registry(engine, cfg.get("pos_mult", 15.0)), **build_new_arb_registry(engine), **build_new_rep_registry(engine), **build_new2_registry(engine), **build_new3_registry(engine), **build_new4_registry(engine), **build_new5_registry(engine)}}
 
