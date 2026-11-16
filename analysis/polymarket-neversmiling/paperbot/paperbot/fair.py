@@ -31,7 +31,7 @@ def set_resolution(per_second): _TL.res = max(1, int(per_second))
 def p_up(market, index_feed, spot_feed, now=None):
     """Return (prob_up, details), cached per (market, second): 60+ bots in 3 universes call this for the same
     market in the same loop pass."""
-    now = now or time.time(); res = getattr(_TL, "res", 1); key = (market.slug, int(now * res), res)
+    now = now or time.time(); res = getattr(_TL, "res", 1); key = (market.slug, int(now * res), res, id(spot_feed))   # per price source: the benchmark-only bots must not be handed a Coinbase answer (paperbot/cfbots.py)
     hit = _CACHE.get(key)
     if hit is not None: return hit
     if len(_CACHE) > 4000: _CACHE.clear()

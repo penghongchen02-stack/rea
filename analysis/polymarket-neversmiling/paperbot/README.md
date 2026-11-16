@@ -563,3 +563,14 @@ late it acts (10 to 60 seconds), how sure it must be, the price cap, the edge, t
   seconds left while the quote already priced Down at 93-98c, and Down won: the quote knew before the benchmark did.
 - Also fixed: the eight `cf_` pickoff bots of the tryout read Coinbase in their protective exit (their entries did
   not). `cfpick` now hands them the benchmark on every pass.
+
+## Fix: benchmark-only bots were handed Coinbase model answers (11-16 02:10Z)
+
+`fair.p_up` caches the model's answer per market and second, and the key did not include the price source. The
+benchmark-only bots (`cf_`, `cb`) ask for the model with the benchmark as the price, but within a second they were
+given whatever a Coinbase bot had already asked for. From 11-15 17:42Z to 11-16 02:10Z every benchmark-only bot that
+uses the cached model (tick count's gate, one buy mid-window, the rules, bet by the odds, pinned, near-certain,
+learner, committee, and the protective exit of the pickoff kinds) therefore traded on a Coinbase-based model. The
+pickoff entries (`CFPick`, `CFSettle`, the converted fast_pickoff kinds) call the uncached model and were not
+affected. The key now includes the price source. Records of the affected bots before 02:10Z do not show what the
+benchmark alone can do. Found because cb088 and its Coinbase twin tot_47 made the same profit hour by hour.
