@@ -6,7 +6,7 @@ A universe is a complete set of bot accounts with its own sizing rule, database,
 Every bot in strategies.build_registry() (plus drop-ins under paperbot/bots/) is created in every universe.
 """
 import os, sys, time, json, gzip, threading, logging, sqlite3, http.server, socketserver, functools, collections
-from . import feeds
+from . import feeds, recorder
 from .sim import Account
 from .strategies import build_registry, LADDER_BOTS
 from .arbs import ARB_BOTS, make_arbs
@@ -275,6 +275,7 @@ class Universe:
 
 class Engine:
     def __init__(self):
+        recorder.start(os.path.join(DATA, "tape"))
         self.mf = feeds.MarketFeed(); self.idx = feeds.IndexFeed(); self.spot = feeds.SpotFeed(); self.lf = LadderFeed(); self.ws = WSBooks(self.mf)
         self.started = time.time(); self.crosscheck = {}; self.loop_count = 0; self.errors = 0
         self.universes = [Universe(cfg, self) for cfg in UNIVERSES]

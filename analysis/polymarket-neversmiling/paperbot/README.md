@@ -574,3 +574,22 @@ learner, committee, and the protective exit of the pickoff kinds) therefore trad
 pickoff entries (`CFPick`, `CFSettle`, the converted fast_pickoff kinds) call the uncached model and were not
 affected. The key now includes the price source. Records of the affected bots before 02:04Z do not show what the
 benchmark alone can do. Found because cb088 and its Coinbase twin tot_47 made the same profit hour by hour.
+
+## Tape recorder, and what past data exists for a backtest (11-16 07:40Z)
+
+Asked for a 30-day backtest, there was nothing to replay: the engine kept its own fills and results but never the
+quotes. Two things were checked or added.
+
+What Polymarket US keeps (public `GET /v1/price-history`, checked 11-16): for a closed window, about one price a
+minute (the Up price from the best ask and the Down price from the best bid), 6 points for a 5-minute window. The
+Bitcoin 5-minute windows go back to 10-22 (found on 10-22 18:05Z, not on 10-21 or 10-22 05:05Z), so about 25 days,
+not 30. The starting line and settlement of each closed window are still served by `/v1/markets`. There are no past
+order books and no past trades on the public API. One price a minute can test a bot that buys once and holds; it
+cannot test the pickoff, the arbitrage or anything that rests an order, which all depend on quotes within a second.
+
+What is now saved (`paperbot/recorder.py`, on by default, `PAPERBOT_TAPE=0` turns it off): every order book the
+engine receives (up to 25 levels a side), every Coinbase tick, every second of the settlement index and every
+market's terms, to `paperbot-data/tape/YYYYMMDD/HH.jsonl.gz`. The format is in the module's docstring. It measured
+about 265 KB in the first 100 seconds, so roughly 230 MB a day and 7 GB for 30 days; recording pauses if the disk
+has under 5 GB free. The tape is not committed (too large) and lasts only as long as this machine does. No replay
+tool exists yet: this only makes one possible.

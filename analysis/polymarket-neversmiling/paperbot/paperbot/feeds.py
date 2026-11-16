@@ -1,5 +1,6 @@
 """Live data feeds: Polymarket US gateway (markets, books, BRTI candles) and Coinbase spot."""
 import json, os, ssl, threading, time, urllib.parse, urllib.request, collections, logging, datetime as dt, re
+from . import recorder
 
 log = logging.getLogger("feeds")
 GATEWAY = "https://gateway.polymarket.us"
@@ -136,6 +137,7 @@ class Market:
             self.shares_traded = max(self.shares_traded, traded)
         except Exception as e:
             log.debug("stats parse %s", e)
+        recorder.book(self)
 
     def avail(self, side, universe):
         """Book levels a taker in this universe can still hit: displayed size minus what its paper fills consumed."""
@@ -188,7 +190,7 @@ class MarketFeed:
     def refresh_terms(self, m):
         raw = get_json(f"{GATEWAY}/v1/markets?slug={urllib.parse.quote(m.slug)}")
         ms = (raw or {}).get("markets") or []
-        if ms: m.update(ms[0])
+        if ms: m.update(ms[0]); recorder.market(m)
 
     def poll_books(self):
         now = time.time()
@@ -209,7 +211,7 @@ class MarketFeed:
     def retire(self, slug):
         with self.lock:
             m = self.markets.pop(slug, None)
-            if m: self.closed_recent[slug] = time.time()
+            if m: self.closed_recent[slug] = time.time(); recorder.market(m); recorder.forget(slug)
             while len(self.closed_recent) > 200: self.closed_recent.popitem(last=False)
         return m
 
@@ -228,7 +230,10 @@ class IndexFeed:
             for s in d.get("series", []):
                 a = s["asset"]["symbol"]; ser = self.series.setdefault(a, collections.OrderedDict())
                 for c in s.get("candles", []):
-                    if c.get("tickCount", 0) > 0: ser[int(c["timestamp"])] = float(c["close"])
+                    if c.get("tickCount", 0) > 0:
+                        t = int(c["timestamp"])
+                        if t not in ser: recorder.index(a, t, float(c["close"]))
+                        ser[t] = float(c["close"])
                 while ser and next(iter(ser)) < now - self.keep: ser.popitem(last=False)
             self.last_ok = time.time()
 
@@ -295,6 +300,7 @@ class SpotFeed:
                                         self.price[a] = float(m["price"]); self.ts[a] = time.time(); self.msgs += 1; self.hist[a].append((self.ts[a], self.price[a]))
                                         sp = self.sec_px[a]; sp[int(self.ts[a])] = self.price[a]
                                         while len(sp) > 1800: sp.popitem(last=False)
+                                    recorder.spot(a, self.price[a], self.ts[a])
                                     for fn in self.listeners:
                                         try: fn(a, self.price[a], self.ts[a])
                                         except Exception as e: log.warning("spot listener: %s", e)
