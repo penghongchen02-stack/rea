@@ -9,6 +9,8 @@ and the price to buy Down), so each rule is rewritten here to look once a minute
   volatility   the spread of the last 30 one-minute moves, per second
   model        as paperbot/fair.py more than a minute out: the settlement is the average of the last minute, the coin
                a random walk until then; z = (price - line) / sd, chance of Up = phi(z)
+  quote        Polymarket's stored point for a minute is the quote at the END of that minute (checked against the tape,
+               see LABEL), so the point labelled t is used as the quote at t + 60
   fill         at the stored quote of that minute, any size, plus the fee (0.095 * p * (1 - p) a contract); a second
                figure pays 1c more
   stake        $10 a bet (1% of $1,000, not compounded); "bet by the odds" scales it 0.2-3 times as the live bot does
@@ -21,6 +23,8 @@ they take the offer, which is a different and worse trade.
 """
 import os, sys, json, math, pickle, sqlite3, statistics, collections, time
 
+LABEL = 60      # a stored point labelled t is the quote a minute later: against the recorded books of 11-16 08:20-08:55Z (30
+                # points) the point matched the best offer at t+59 to 2c on average, at t to 9c, and label 0 equalled the offer at 60 s
 D = os.path.join("paperbot-data", "backtest"); THETA = 0.095; STAKE = 10.0; ALL = ("btc", "eth", "sol", "xrp")
 C = pickle.load(open(os.path.join(D, "candles.pkl"), "rb"))
 phi = lambda z: 0.5 * (1 + math.erf(z / math.sqrt(2)))
@@ -53,7 +57,7 @@ def heat(a, t):
 class W:
     def __init__(self, slug, a, hz, start, dur, p2b, settle, pts):
         self.slug = slug; self.a = a; self.hz = hz; self.start = start; self.dur = dur; self.p2b = p2b; self.settle = settle
-        self.q = {t - start: (l, s) for t, l, s in pts if l is not None and s is not None}
+        self.q = {t - start + LABEL: (l, s) for t, l, s in pts if l is not None and s is not None}
         self.up = settle >= p2b
         c = C[a].get(start - 60); self.basis = ((c[0] + c[1] + c[2] + c[3]) / 4 - p2b) if c else None
         a0, b0 = close(a, start - 900), close(a, start); s = sigma(a, start)
