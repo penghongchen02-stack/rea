@@ -11,7 +11,7 @@ Settlement facts relied on (Polymarket US crypto markets):
   * One-touch markets ('reach $X before ...') pay when the index trades at or beyond X at any time in their window;
     an above-X' contract paying at T inside that window implies the touch (X' >= X).
 """
-import time, logging, collections, math
+import time, logging, collections, math, os, json
 from . import feeds
 from .ladder import XArb, LadderArb, leg_fee, ABOVE, RANGE
 
@@ -490,7 +490,40 @@ class XArbFast(ArbBase):
     never pretend the same contracts are there twice. Unequal fills are unwound at once."""
     name = "xarb_fast"; MIN_EDGE = 0.003; MAX_SETS = 200.0; PERIOD = 1.0; BUDGET = 4; WATCH = 0.03
 
+    # ---- how long a gap lasts (user, 11-16 00:50Z): measurement only, no effect on trading -------------------------
+    # When a gap first pays, the pair is noted; about 1, 2 and 5 seconds later the two books are read again and what
+    # is left of the gap is written to paperbot-data/xarb_gaps.jsonl. One dashboard logs (every dashboard sees the
+    # same books). "moved" says whether each book was refreshed since the gap was seen: an unrefreshed book that
+    # still shows the gap proves nothing.
+    GAP_LOG = "dollar30"; CHECKS = (1, 2, 5)
+    def _note(self, a, b, Ka, Kb, gap, now):
+        if getattr(self.acct, "universe", None) != self.GAP_LOG: return
+        w = self.__dict__.setdefault("_gaps", {}); k = (a.slug, b.slug)
+        if k in w: return
+        qa = a.offers[0][1] if a.offers else 0.0; qb = b.bids[0][1] if b.bids else 0.0
+        w[k] = {"ts": now, "a": a.slug, "b": b.slug, "Ka": Ka, "Kb": Kb, "ask_a": a.best_ask, "bid_b": b.best_bid, "gap": round(gap, 4), "size": round(min(qa, qb), 2),
+                "bt": (a.book_ts, b.book_ts), "left": round(min(a.end, b.end) - now, 1), "later": {}, "_a": a, "_b": b}
+
+    def _recheck(self, now):
+        w = self.__dict__.get("_gaps")
+        if not w: return
+        for k, e in list(w.items()):
+            age = now - e["ts"]; a, b = e["_a"], e["_b"]
+            for c in self.CHECKS:
+                if str(c) in e["later"] or age < c - 0.1: continue
+                if a.best_ask is None or b.best_bid is None: e["later"][str(c)] = None; continue
+                g = b.best_bid - a.best_ask - self.fee(a.best_ask) - self.fee(b.best_bid)
+                qa = a.offers[0][1] if a.offers else 0.0; qb = b.bids[0][1] if b.bids else 0.0
+                e["later"][str(c)] = {"age": round(age, 2), "gap": round(g, 4), "ask_a": a.best_ask, "bid_b": b.best_bid, "size": round(min(qa, qb), 2),
+                                      "moved": [a.book_ts > e["bt"][0], b.book_ts > e["bt"][1]]}
+            if len(e["later"]) == len(self.CHECKS) or age > 30:
+                del w[k]; [e.pop(x, None) for x in ("bt", "_a", "_b")]
+                try:
+                    with open(os.path.join(os.environ.get("PAPERBOT_DATA", "paperbot-data"), "xarb_gaps.jsonl"), "a") as f: f.write(json.dumps(e) + "\n")
+                except Exception as ex: log.warning("gap log: %s", ex)
+
     def run(self, now):
+        self._recheck(now)
         groups = XArb.contracts(self, now); uni = self.acct.liq_key
         for (asset, T), items in groups.items():
             if len(items) < 2: continue
@@ -513,7 +546,7 @@ class XArbFast(ArbBase):
                             self.budget -= 1; self.lf.fetch_book(m, max_age=1.5)
                     if now - a.book_ts > 3 or now - b.book_ts > 3: continue
                     if gap < self.MIN_EDGE: continue
-                    self.stats["candidates"] += 1
+                    self.stats["candidates"] += 1; self._note(a, b, Ka, Kb, gap, now)
                     # walk the books: pair level i of a's offers with level j of b's bids while the pair still pays
                     legs_done = 0
                     for _ in range(6):
