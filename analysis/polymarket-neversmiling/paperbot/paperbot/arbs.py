@@ -546,7 +546,7 @@ class XArbFast(ArbBase):
                             self.budget -= 1; self.lf.fetch_book(m, max_age=1.5)
                     if now - a.book_ts > 3 or now - b.book_ts > 3: continue
                     if gap < self.MIN_EDGE: continue
-                    self.stats["candidates"] += 1; self._note(a, b, Ka, Kb, gap, now)
+                    self.stats["candidates"] += 1
                     # walk the books: pair level i of a's offers with level j of b's bids while the pair still pays
                     legs_done = 0
                     for _ in range(6):
@@ -558,6 +558,7 @@ class XArbFast(ArbBase):
                         n = min(qa, qb, self.MAX_SETS, self.acct.affordable_sets([("buy", pa), ("sell", pb)]))
                         n = math.floor(n * 100) / 100
                         if n < 0.01: self.stats["unaffordable"] += 1; break
+                        self._note(a, b, Ka, Kb, edge, now)          # noted only where it trades: on both books as they stand now
                         if not self.execute([(a, "buy", pa, f"xf-buy K{Ka:.0f}"), (b, "sell", pb, f"xf-sell K{Kb:.0f}")], n, (a.slug, b.slug), "xarb-fast", edge): break
                         legs_done += 1
                     if legs_done > 1: self.stats["walked_levels"] += legs_done - 1
