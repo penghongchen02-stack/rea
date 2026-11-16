@@ -593,3 +593,12 @@ market's terms, to `paperbot-data/tape/YYYYMMDD/HH.jsonl.gz`. The format is in t
 about 265 KB in the first 100 seconds, so roughly 230 MB a day and 7 GB for 30 days; recording pauses if the disk
 has under 5 GB free. The tape is not committed (too large) and lasts only as long as this machine does. No replay
 tool exists yet: this only makes one possible.
+
+## v_mid_rest put back (11-16 09:31Z)
+
+`v_mid_rest` had stopped everywhere except dollar1000: the prune of 11-11 17:15Z deleted every bot that was below zero
+on std, dollar, dollar30 and top20 (it was -$9, -$21, -$106 and -$646), and the tryout's hourly review dropped it on
+11-12 00:10Z ("losing with a negative edge", -$186, of which XRP -$230). At the user's request it runs again on
+dollar, dollar30, top20 (restored through `roster_req.json`) and the tryout (`add.json` with `keep` 1,000,000, so
+the review leaves it in), each on a fresh account; the earlier results stay in each `paper.db`. Std now holds only
+the report replicas, so it was not put back there.
