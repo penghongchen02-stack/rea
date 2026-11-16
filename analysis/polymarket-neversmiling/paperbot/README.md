@@ -602,3 +602,10 @@ on std, dollar, dollar30 and top20 (it was -$9, -$21, -$106 and -$646), and the 
 dollar, dollar30, top20 (restored through `roster_req.json`) and the tryout (`add.json` with `keep` 1,000,000, so
 the review leaves it in), each on a fresh account; the earlier results stay in each `paper.db`. Std now holds only
 the report replicas, so it was not put back there.
+
+## v_loose_rest_n4 on a $1,000 bank (11-16 09:39Z)
+
+dollar1000's `v_loose_rest_n4` (v_loose_rest with `clip` 2.38 instead of 2.0; +$2,515 on its $30,000 bank since
+11-11 17:15Z, 250 of 272 windows won) was added at the user's request to dollar30 (a `roster.json` entry, orders up
+to $30) and to the tryout (`add.json`, `keep` 300), each on a fresh $1,000 account. The engine was restarted for
+the dollar30 entry.
