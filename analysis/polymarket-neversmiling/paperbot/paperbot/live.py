@@ -172,7 +172,7 @@ class LiveBot(Pick):
         super().__init__(acct, engine, "live_fast_pickoff")
         ls = engine.spot.listeners; ls.remove(self.on_spot); ls.insert(0, self.on_spot)       # decide before the paper bots
         self.queue = _Hook(self._signal); self.out = queue.Queue(maxsize=50)
-        self.lock = threading.RLock(); self.events = collections.deque(maxlen=60); self.lat_ms = collections.deque(maxlen=500)
+        self.lock = threading.RLock(); self.events = collections.deque(maxlen=60); self.lat_ms = collections.deque(maxlen=500); self.pick_ms = collections.deque(maxlen=500)
         self.bal = None; self.bal_ts = 0.0; self.errors = 0; self.last_exit = {}
         self.st = {"pos": {}, "shadow": {}, "day": utc_day(), "day_pnl": 0.0, "day_bets": 0, "total_pnl": 0.0, "bets": 0, "fills": 0, "fees": 0.0,
                    "shadow_stats": {"signals": 0, "previews_ok": 0, "still_there": 0, "settled": 0, "won": 0, "pnl": 0.0}, "armed_at": None}
@@ -229,6 +229,10 @@ class LiveBot(Pick):
         return usd if usd <= b else 0.0
 
     def dollars(self, acct): return self.bet_usd(self.ex.armed())      # FastPick sizes the planned fill with this
+
+    def allow(self, market, side, ts):
+        """No decision until the engine has run long enough for the price model (the paper engine's quiet start)."""
+        e = self.engine; return time.time() - getattr(e, "started", 0) >= getattr(e, "QUIET", 0)
 
     def blocked(self, armed):
         """Why no new bet may be opened now, or None."""
@@ -301,7 +305,7 @@ class LiveBot(Pick):
         slug, side, lim, q, ts, tag = sig; m = self.engine.mf.markets.get(slug); armed = self.ex.armed()
         age = (time.perf_counter() - t_sig) * 1000.0; ss = self.st["shadow_stats"]
         if m is None: return
-        q = self._qty(m, q)
+        q = self._qty(m, q); self.pick_ms.append(age)
         base = {"slug": slug, "side": side, "px": lim, "qty": q, "tag": tag, "age_ms": round(age, 1), "mode": self.mode()}
         if q < (m.min_qty or 0.01): self._event("skip", why="size below the minimum", **base); return
         if age > self.cfg["max_signal_age_ms"]: self._event("skip", why="signal too old", **base); return
@@ -417,6 +421,15 @@ class LiveBot(Pick):
             except Exception as e: log.exception("[live] keeper: %s", e)
             time.sleep(5)
 
+    def _feeds(self):
+        e = self.engine; out = {}
+        try:
+            px, ts = e.spot.last(self.ASSETS[0]); out["coinbase_age_s"] = round(time.time() - ts, 1) if ts else None
+            out["books"] = e.ws.status() if hasattr(e, "ws") else None; out["markets"] = len(e.mf.markets)
+            its, v = e.idx.last(self.ASSETS[0]); out["index_age_s"] = round(time.time() - its, 1) if its else None
+        except Exception as x: out["error"] = str(x)
+        return out
+
     def _status(self):
         lat = sorted(self.lat_ms); s = self.st; ss = s["shadow_stats"]; armed = self.ex.armed()
         out = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "mode": self.mode(), "assets": list(self.ASSETS), "exit": self.EXIT, "limits": self.cfg,
@@ -424,7 +437,9 @@ class LiveBot(Pick):
                "real": {"open": s["pos"], "bets": s["bets"], "fills": s["fills"], "fees": round(s["fees"], 2), "day": s["day"], "day_bets": s["day_bets"], "day_pnl": round(s["day_pnl"], 2), "total_pnl": round(s["total_pnl"], 2)},
                "shadow": {**ss, "pnl": round(ss["pnl"], 2), "open": s["shadow"]},
                "round_trip_ms": {"n": len(lat), "median": round(lat[len(lat) // 2], 1), "p90": round(lat[int(len(lat) * 0.9)], 1), "max": round(lat[-1], 1)} if lat else None,
-               "decisions": dict(self.stats), "events": list(self.events)[:25]}
+               "pickup_ms": {"median": round(sorted(self.pick_ms)[len(self.pick_ms) // 2], 2), "max": round(max(self.pick_ms), 2)} if self.pick_ms else None,
+               "decide_ms": {"median": round(sorted(self.lat)[len(self.lat) // 2], 3), "max": round(max(self.lat), 3)} if self.lat else None,
+               "feeds": self._feeds(), "decisions": dict(self.stats), "events": list(self.events)[:25]}
         tmp = self._path("status.json.tmp")
         with open(tmp, "w") as f: json.dump(out, f, default=str)
         os.replace(tmp, self._path("status.json"))
@@ -441,18 +456,92 @@ def load_config(dir_):
     return cfg
 
 
-def start(engine, data_dir):
-    """Called once by the engine. Returns the bot, or None when it cannot run (no key, or switched off)."""
-    if os.environ.get("PAPERBOT_LIVE", "1") == "0" or not ws.available(): return None
-    dir_ = os.path.join(data_dir, "live"); cfg = load_config(dir_)
-    bot = LiveBot(engine, dir_, cfg); log.info("[live] started in %s mode, coins %s", bot.mode(), bot.ASSETS)
-    return bot
+class Standalone:
+    """The live bot's own small engine, in its own process (user, 11-17 11:10Z: the speed must match real trading).
+    Inside the paper engine the bot shared one Python process with about 700 paper bots: its first signal waited 69 ms
+    for a turn and the round trip took 910 ms. Here nothing else runs: its own Coinbase stream, its own order-book
+    stream for the windows it trades, its own index polling."""
+    QUIET = 90.0            # no decision in the first seconds: the price model needs about a minute of Coinbase ticks
+
+    def __init__(self, data_dir):
+        self.dir = os.path.join(data_dir, "live"); self.cfg = load_config(self.dir); self.started = time.time()
+        self.mf = feeds.MarketFeed(assets=list(self.cfg["assets"]), horizons={"5m": 300}); self.idx = feeds.IndexFeed(); self.spot = feeds.SpotFeed()
+        self.ws = ws.WSBooks(self.mf); self.errors = 0
+        self.bot = LiveBot(self, self.dir, self.cfg); self.bot.engine_ref = self
+
+    def _loop(self, fn, gap, what):
+        while True:
+            try: fn()
+            except Exception as e: log.warning("%s: %s", what, e)
+            time.sleep(gap)
+
+    def _index(self):
+        if time.time() - getattr(self, "_full", 0) > 30: self.idx.poll(); self._full = time.time()
+        else: self.idx.poll(lookback=8)
+
+    def settle(self, m):
+        """The paper engine's rule (paperbot/run.py settle_market): the exchange's settlement price, else the index series."""
+        self.mf.refresh_terms(m); up = None; sp = m.settle_px
+        if sp is not None: up = m.yes_wins(sp)
+        elif time.time() - m.end < 45: return False
+        else:
+            v = self.idx.value_at(m.asset, m.end - 1)
+            if v is not None: sp = round(v, m.decimals); up = m.yes_wins(sp)
+        if up is None:
+            if time.time() - m.end < 240: return False
+            log.warning("could not settle %s; using last price", m.slug); up = (m.last_px or 0.5) >= 0.5
+        self.bot.on_settle(m, up); log.info("settled %s up=%s p2b=%s settle=%s", m.slug, up, m.p2b, sp); return True
+
+    def run(self):
+        for fn, gap, what in ((self._index, 0.5, "index poll"), (self.mf.discover, 5, "discover")):
+            threading.Thread(target=self._loop, args=(fn, gap, what), daemon=True).start()
+        for fn in (self.spot.run, self.ws.run, self._http): threading.Thread(target=fn, daemon=True).start()
+        log.info("[live] own engine started in %s mode, coins %s, dashboard on port %d", self.bot.mode(), self.bot.ASSETS, PORT)
+        ctx = {"index": self.idx, "spot": self.spot}
+        while True:
+            t0 = time.time()
+            try:
+                self.mf.poll_books(); now = time.time()
+                for m in list(self.mf.markets.values()):
+                    if m.p2b is None and now - m.start > 5 and int(now) % 5 == 0: self.mf.refresh_terms(m)
+                    if now >= m.end + 2:
+                        if self.settle(m): self.mf.retire(m.slug)
+                        continue
+                    if m.book_ts < now - 10 or now - self.started < self.QUIET: continue
+                    self.bot.on_tick(m, ctx, now)
+            except Exception as e: self.errors += 1; log.exception("[live] loop: %s", e)
+            time.sleep(max(0.05, 0.25 - (time.time() - t0)))
+
+    def _http(self):
+        import http.server, socketserver
+        d = self.dir; page = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web", "live.html")
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_GET(self):
+                try:
+                    if self.path.startswith("/status.json"): body = open(os.path.join(d, "status.json"), "rb").read(); ct = "application/json"
+                    elif self.path in ("/", "/index.html"): body = open(page, "rb").read(); ct = "text/html; charset=utf-8"
+                    else: self.send_error(404); return
+                    self.send_response(200); self.send_header("Content-Type", ct); self.send_header("Cache-Control", "no-store"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+                except OSError: self.send_error(503)
+        socketserver.TCPServer.allow_reuse_address = True
+        with socketserver.ThreadingTCPServer(("0.0.0.0", PORT), H) as httpd: httpd.serve_forever()
 
 
-if __name__ == "__main__":      # python3 -m paperbot.live : read-only check of the account and of the order format
+PORT = int(os.environ.get("PAPERBOT_PORT_LIVE", "8095"))
+
+
+if __name__ == "__main__":
     import sys
     data = os.environ.get("PAPERBOT_DATA", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot-data"))
-    d = os.path.join(data, "live"); cfg = load_config(d); ex = Exchange(d)
+    d = os.path.join(data, "live")
+    if len(sys.argv) > 1 and sys.argv[1] == "run":          # python3 -u -m paperbot.live run : the live bot's own process
+        os.makedirs(d, exist_ok=True)
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s", handlers=[logging.FileHandler(os.path.join(d, "live.log")), logging.StreamHandler()])
+        if not ws.available(): log.error("no API key: the live bot cannot run"); sys.exit(1)
+        Standalone(data).run()
+    # python3 -m paperbot.live : read-only check of the account and of the order format
+    cfg = load_config(d); ex = Exchange(d)
     print("key set:", ws.available(), "| armed:", ex.armed(), "| limits:", cfg)
     print("balance:", ex.balance()); print("positions:", ex.positions())
     try: print("status:", json.dumps({k: v for k, v in json.load(open(os.path.join(d, "status.json"))).items() if k not in ("events", "limits")}, indent=1))

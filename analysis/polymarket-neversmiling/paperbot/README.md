@@ -622,7 +622,7 @@ joining two changes, 32-35 the realism tests. All 35 joined the tryout through `
 ## Real-money fast_pickoff, built and switched off (11-17 11:00Z)
 
 Asked for by the user on 11-17 10:50Z: build it, check it, and wait for the word before it trades.
-`paperbot/live.py` is the only code that can send a real order. It runs inside the engine and makes fast_pickoff's
+`paperbot/live.py` is the only code that can send a real order. It makes fast_pickoff's
 decision, Bitcoin only by default.
 
 - **Shadow mode (now):** no order is sent. Each signal goes to the exchange's preview endpoint (it checks the order
@@ -633,6 +633,9 @@ decision, Bitcoin only by default.
   when something does not add up and must be removed by hand.
 - **Limits** (`paperbot-data/live/live.json`): 1% of the balance a bet, between $1 and $5; no new bets after losing
   $10 in a UTC day; halt after losing $30 since arming; 150 bets a day; signals older than 400 ms dropped.
+- **Own process (11:10Z):** `python3 -u -m paperbot.live run`, kept alive by `supervisor.sh`, with its own Coinbase
+  stream, order-book stream and index polling, so it does not wait behind the paper bots. Dashboard on port 8095
+  (`web/live.html`); log in `paperbot-data/live/live.log`. The paper engine has no hook into it.
 - **Checks:** `python3 test_live.py` (34 checks against a stand-in exchange) and `python3 -m paperbot.live`
   (read-only: key, balance, positions, status; `preview <slug>` validates the four order forms). The answer to a
   real fill has not been seen, so after every order the bot reads the position back from the exchange.

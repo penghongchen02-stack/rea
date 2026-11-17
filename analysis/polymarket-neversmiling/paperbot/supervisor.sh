@@ -7,6 +7,11 @@ while [ "$(date +%s)" -lt "$end" ]; do
     echo "$(date -u +%FT%TZ) starting engine"
     (cd "$D" && PAPERBOT_DATA="$D/paperbot-data" PAPERBOT_PORT=8080 PAPERBOT_ACTIVE=all nohup python3 -u -m paperbot.run >> "$D/paperbot-data-stdout.log" 2>&1 &)
   fi
+  # the real-money bot's own process (paperbot/live.py): shadow mode unless armed by hand
+  if ! pgrep -f "python3 -u -m paperbot.live run" >/dev/null; then
+    echo "$(date -u +%FT%TZ) starting live bot"
+    (cd "$D" && PAPERBOT_DATA="$D/paperbot-data" nohup python3 -u -m paperbot.live run >> "$D/paperbot-data-live-stdout.log" 2>&1 &)
+  fi
   sleep 30
 done
 echo "$(date -u +%FT%TZ) supervisor window ended"

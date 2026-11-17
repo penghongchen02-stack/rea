@@ -1,0 +1,44 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live fast_pickoff</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5b6472;--line:#dfe3ea;--good:#0a7a43;--bad:#b3261e;--warn:#9a6700;--live:#b3261e;--shadow:#3b5bdb}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1216;--card:#181c22;--ink:#e8ebf0;--mute:#9aa3b2;--line:#2a303a;--good:#4ccf8a;--bad:#ff7b72;--warn:#e3b341;--live:#ff7b72;--shadow:#8da2fb}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:22px 0 8px}
+.sub{color:var(--mute);font-size:13px}.banner{border-radius:10px;padding:12px 14px;margin:12px 0;font-weight:600;color:#fff}
+.SHADOW{background:var(--shadow)}.ARMED{background:var(--live)}.STOPPED,.HALTED{background:var(--warn)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}.k{color:var(--mute);font-size:12px}.v{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}
+.pos{color:var(--good)}.neg{color:var(--bad)}.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--mute);font-weight:600}tr:last-child td{border-bottom:0}
+</style></head><body>
+<h1>Live fast_pickoff</h1><div class="sub" id="ts">loading</div>
+<div id="banner" class="banner SHADOW">…</div>
+<h2>Money</h2><div class="grid" id="money"></div>
+<h2>Speed</h2><div class="grid" id="speed"></div>
+<h2>Shadow results (no real orders)</h2><div class="grid" id="shadow"></div>
+<h2>Real results</h2><div class="grid" id="real"></div>
+<h2>Limits</h2><div class="grid" id="limits"></div>
+<h2>Open positions</h2><div class="wrap"><table id="open"></table></div>
+<h2>Latest events</h2><div class="wrap"><table id="events"></table></div>
+<script>
+const $=id=>document.getElementById(id),usd=x=>x==null?'n/a':(x<0?'-':'')+'$'+Math.abs(x).toFixed(2),esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const card=(k,v,c)=>`<div class="card"><div class="k">${esc(k)}</div><div class="v ${c||''}">${esc(v)}</div></div>`,sign=x=>x>0?'pos':x<0?'neg':'';
+const MODE={SHADOW:'SHADOW MODE: no real orders are being sent',ARMED:'ARMED: trading real money',STOPPED:'STOPPED by the off switch: no orders',HALTED:'HALTED by a safety check: no orders until a person clears it'};
+async function load(){
+ let s;try{s=await(await fetch('status.json?'+Date.now())).json()}catch(e){$('ts').textContent='no status yet';return}
+ $('ts').textContent='Updated '+s.ts+' · coins: '+s.assets.join(', ')+' · protective exit '+(s.exit?'on':'off');
+ $('banner').className='banner '+s.mode;$('banner').textContent=MODE[s.mode]||s.mode;
+ const b=s.balance||{},L=s.limits,r=s.real,h=s.shadow,rt=s.round_trip_ms,pk=s.pickup_ms,dc=s.decide_ms,f=s.feeds||{};
+ $('money').innerHTML=card('Account cash',usd(b.cash))+card('Buying power',usd(b.buying_power))+card('Next bet',usd(s.next_bet_usd))+card('Balance read',s.balance_age_s==null?'n/a':s.balance_age_s+' s ago');
+ $('speed').innerHTML=card('Decide (median)',dc?dc.median+' ms':'no signal yet')+card('Hand to sender (median)',pk?pk.median+' ms':'no signal yet')+card('Exchange round trip (median)',rt?rt.median+' ms':'no signal yet')+card('Round trip, slowest 10%',rt?rt.p90+' ms':'n/a')+card('Coinbase price age',f.coinbase_age_s==null?'n/a':f.coinbase_age_s+' s')+card('Order-book stream',f.books&&f.books.connected?'connected':'not connected',f.books&&f.books.connected?'pos':'neg');
+ const pct=h.previews_ok?Math.round(100*h.still_there/h.previews_ok)+'%':'n/a';
+ $('shadow').innerHTML=card('Signals',h.signals)+card('Quote still there',h.still_there+' ('+pct+')')+card('Settled',h.settled)+card('Won',h.won)+card('Shadow P/L',usd(h.pnl),sign(h.pnl));
+ $('real').innerHTML=card('Orders sent',r.bets)+card('Fills',r.fills)+card('Fees paid',usd(r.fees))+card('Today ('+r.day+')',usd(r.day_pnl),sign(r.day_pnl))+card('Since armed',usd(r.total_pnl),sign(r.total_pnl))+card('Bets today',r.day_bets+' of '+L.max_bets_day);
+ $('limits').innerHTML=card('Bet size',(L.bet_pct*100)+'% of balance')+card('Bet range',usd(L.bet_min_usd)+' to '+usd(L.bet_max_usd))+card('Daily loss stop',usd(L.day_loss_usd))+card('Total loss stop',usd(L.total_loss_usd))+card('Signal age cap',L.max_signal_age_ms+' ms');
+ const op=Object.entries(s.mode==='ARMED'?r.open:h.open);
+ $('open').innerHTML='<tr><th>Market</th><th>Side</th><th>Contracts</th><th>Price paid</th></tr>'+(op.length?op.map(([k,p])=>`<tr><td>${esc(k)}</td><td>${p.qty>=0?'Up':'Down'}</td><td>${Math.abs(p.qty)}</td><td>${(p.qty>=0?p.avg:1-p.avg).toFixed(2)}</td></tr>`).join(''):'<tr><td colspan="4">none</td></tr>');
+ $('events').innerHTML='<tr><th>Time (UTC)</th><th>Event</th><th>Market</th><th>Side</th><th>Price</th><th>Contracts</th><th>Round trip</th><th>Detail</th></tr>'+((s.events||[]).map(e=>`<tr><td>${new Date(e.ts*1000).toISOString().slice(11,19)}</td><td>${esc(e.kind)}</td><td>${esc((e.slug||'').replace('cpc-','').replace('-updown-5m-',' '))}</td><td>${e.side?(e.side==='buy'?'Up':'Down'):''}</td><td>${e.px??''}</td><td>${e.qty??''}</td><td>${e.ms!=null?e.ms+' ms':''}</td><td>${esc(e.why||(e.still_there===false?'quote gone':e.still_there?'quote still there':'')||(e.pnl!=null?'P/L '+usd(e.pnl):''))}</td></tr>`).join('')||'<tr><td colspan="8">none yet</td></tr>');
+}
+load();setInterval(load,3000);
+</script></body></html>
