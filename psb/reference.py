@@ -6,13 +6,14 @@ OddsJam). It is a price from a related venue, not an independent forecast.
 from __future__ import annotations
 
 import json
+import re
 import urllib.parse
 from datetime import datetime, timedelta
 
 from .polydata import GAMMA_API, FetchError, get_json
 from .usmarket import UsMarket
 
-MAX_START_GAP = timedelta(hours=6)
+MAX_START_GAP = timedelta(hours=3)
 # A midpoint is only a usable fair value when the book is tight; an empty book
 # (bid 0.01 / ask 0.99) has a meaningless 0.50 midpoint.
 MAX_SPREAD = 0.04
@@ -27,25 +28,46 @@ def _names_match(a: str, b: str) -> bool:
     return bool(a) and bool(b) and (a in b or b in a)
 
 
+def _intl_names(event: dict) -> list[str]:
+    names = [x.strip() for x in re.split(r"\s+vs\.?\s+", event.get("title") or "", flags=re.I)]
+    for im in event.get("markets") or []:
+        if im.get("sportsMarketType") == "moneyline":
+            try:
+                names += [o for o in json.loads(im["outcomes"]) if o not in ("Yes", "No")]
+            except (KeyError, TypeError, ValueError):
+                pass
+            names.append(im.get("groupItemTitle") or "")
+    return [n for n in names if n]
+
+
+def same_game(m: UsMarket, event: dict) -> bool:
+    """Both US participants must appear in the international event, and start
+    times must agree. Unconfirmed matches are rejected rather than guessed."""
+    slug = event.get("slug") or ""
+    if not slug.startswith(m.league + "-") or not event.get("startTime"):
+        return False
+    start = datetime.fromisoformat(event["startTime"].replace("Z", "+00:00"))
+    if abs(start - m.start) > MAX_START_GAP:
+        return False
+    names = _intl_names(event)
+    return len(m.participants) == 2 and all(
+        any(_names_match(p, n) for n in names) for p in m.participants)
+
+
 def find_event(m: UsMarket) -> dict | None:
-    """International event for the same game: same league prefix, close start time."""
-    teams = [t for t in m.team_names if t] or [m.long_name]
-    q = " ".join(teams)
+    """International event for the same game, or None when it cannot be confirmed."""
+    q = " ".join(m.participants or m.team_names or (m.long_name,))
     try:
         found = get_json(f"{GAMMA_API}/public-search",
                          [("q", q), ("limit_per_type", "8"), ("events_status", "active")])
+        for e in found.get("events") or []:
+            if not (e.get("slug") or "").startswith(m.league + "-"):
+                continue
+            full = get_json(f"{GAMMA_API}/events", [("slug", e["slug"])])
+            if full and same_game(m, full[0]):
+                return full[0]
     except FetchError:
         return None
-    for e in found.get("events") or []:
-        slug = e.get("slug") or ""
-        if not slug.startswith(m.league + "-") or not e.get("startTime"):
-            continue
-        start = datetime.fromisoformat(e["startTime"].replace("Z", "+00:00"))
-        if abs(start - m.start) > MAX_START_GAP:
-            continue
-        full = get_json(f"{GAMMA_API}/events", [("slug", slug)])
-        if full:
-            return full[0]
     return None
 
 

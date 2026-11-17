@@ -4,6 +4,7 @@ Only unauthenticated GET endpoints are used. This module has no order path.
 """
 from __future__ import annotations
 
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -34,10 +35,16 @@ class UsMarket:
     event_slug: str      # e.g. "nba-ny-tor-2026-11-17"
     league: str
     long_name: str       # what a long position wins on, e.g. "Knicks" or "Manchester City"
-    team_names: tuple[str, ...]  # every team named in the event
+    team_names: tuple[str, ...]  # team objects on the event's market sides (may be partial)
+    participants: tuple[str, ...]  # both sides from the event title, e.g. ("NY Knicks", "TOR Raptors")
     is_draw: bool
     start: datetime
     tick: float
+
+
+def participants_of(title: str) -> tuple[str, ...]:
+    parts = [p.strip() for p in re.split(r"\s+vs\.?\s+", title or "", flags=re.I)]
+    return tuple(p for p in parts if p) if len(parts) == 2 else ()
 
 
 def _parse_time(s: str) -> datetime:
@@ -73,7 +80,8 @@ def game_markets(league: str, limit: int = 100) -> list[UsMarket]:
             name = team or ("Draw" if is_draw else long_side.get("description"))
             if not name:
                 continue
-            out.append(UsMarket(m["slug"], e["slug"], league, name, tuple(teams), is_draw,
+            out.append(UsMarket(m["slug"], e["slug"], league, name, tuple(teams),
+                                participants_of(e.get("title", "")), is_draw,
                                 _parse_time(start), float(m.get("orderPriceMinTickSize") or 0.01)))
     return out
 

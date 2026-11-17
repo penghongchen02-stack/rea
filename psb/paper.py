@@ -191,7 +191,7 @@ def decide(strategy: str, m: usmarket.UsMarket, top: usmarket.Top, fair: float,
 
 def cycle(leagues: list[str], ledger: Ledger, cfg: Config, log) -> dict:
     stats = {"markets": 0, "matched": 0, "taker_fills": 0, "maker_fills": 0, "quotes": 0,
-             "no_cash": 0}
+             "no_cash": 0, "in_play_skipped": 0}
     markets: list[usmarket.UsMarket] = []
     for lg in leagues:
         try:
@@ -208,6 +208,11 @@ def cycle(leagues: list[str], ledger: Ledger, cfg: Config, log) -> dict:
             log(f"book {m.slug}: {e}")
             continue
         if top.state not in (None, "MARKET_STATE_OPEN"):
+            continue
+        if m.start <= datetime.now(timezone.utc):
+            # In-play: the two venues are read seconds apart while prices move, so
+            # the comparison is unreliable. Resting quotes are dropped below.
+            stats["in_play_skipped"] += 1
             continue
         live_slugs.add(m.slug)
         # Resting quotes from earlier cycles: fill only if the book traded through them.

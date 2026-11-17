@@ -101,6 +101,12 @@ cash as on Polymarket US. Defaults: 10 contracts per order, 100 per strategy per
 market, 2¢ minimum edge after fees. Positions use a signed contract count, netted as on Polymarket US.
 The ledger is `paper/ledger.json`; the log is `paper/paper.log`.
 
+Only pre-game markets are traded: once a game starts, the two venues are read
+seconds apart while prices move, so in-play comparisons are unreliable with
+polling. SINENOONEEI's live in-game style is therefore not exercised. Fair value
+also requires both teams to match by name and an international spread ≤ 4¢;
+unconfirmed markets are skipped.
+
 Known limits: polling REST, not WebSocket; no latency or queue model; only
 game-winner markets (no spreads or totals yet, so SINENOONEEI's MLB totals rule and
 kch123's spread trades are not exercised). On 2026-11-17 Polymarket US listed

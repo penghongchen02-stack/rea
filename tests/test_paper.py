@@ -10,7 +10,8 @@ START = datetime(2026, 11, 21, 12, 30, tzinfo=timezone.utc)
 
 def _us(name, is_draw=False, league="epl", slug="atc-epl-mnc-ful-2026-11-21-x"):
     return UsMarket(slug, "epl-mnc-ful-2026-11-21", league, name,
-                    ("Manchester City", "Fulham"), is_draw, START, 0.01)
+                    ("Manchester City", "Fulham"), ("Manchester City FC", "Fulham FC"),
+                    is_draw, START, 0.01)
 
 
 def _intl(title, bid, ask):
@@ -39,7 +40,7 @@ def test_two_way_fair_value_uses_outcome_index():
     event = {"markets": [{"outcomes": '["Knicks", "Raptors"]', "sportsMarketType": "moneyline",
                           "bestBid": 0.57, "bestAsk": 0.58}]}
     m = UsMarket("aec-nba-ny-tor-2026-11-17", "nba-ny-tor-2026-11-17", "nba", "Raptors",
-                 ("Knicks", "Raptors"), False, START, 0.01)
+                 ("Knicks", "Raptors"), ("NY Knicks", "TOR Raptors"), False, START, 0.01)
     assert reference.fair_value(m, event) == pytest.approx(0.425)
 
 
@@ -105,3 +106,33 @@ def test_wide_international_book_gives_no_fair_value():
     assert reference.fair_value(_us("Fulham"), event) is None
     event = {"markets": [_intl("Fulham FC", 0.10, 0.14)]}
     assert reference.fair_value(_us("Fulham"), event) == pytest.approx(0.12)
+
+
+def _cs2(us_title, intl_title, intl_outcomes, intl_start):
+    from psb.usmarket import participants_of
+    m = UsMarket("aec-cs2-ht-tlr-2026-11-17", "cs2-ht-tlr-2026-11-17", "cs2", "Hype Tech",
+                 ("Hype Tech",), participants_of(us_title), False,
+                 datetime(2026, 11, 17, 15, tzinfo=timezone.utc), 0.01)
+    ev = {"slug": "cs2-x-2026-11-17", "title": intl_title, "startTime": intl_start,
+          "markets": [{"sportsMarketType": "moneyline", "outcomes": intl_outcomes}]}
+    return m, ev
+
+
+def test_same_team_different_opponent_is_not_the_same_game():
+    # Observed 2026-11-17: US Hype Tech vs. The Last Resort (15:00) was matched to
+    # international Hype Tech vs. ex-INOX Division (12:00).
+    m, ev = _cs2("Hype Tech vs. The Last Resort", "Hype Tech vs. ex-INOX Division",
+                 '["Hype Tech", "ex-INOX Division"]', "2026-11-17T14:00:00Z")
+    assert not reference.same_game(m, ev)
+
+
+def test_same_game_with_abbreviated_city_prefix():
+    m = UsMarket("aec-nba-ny-tor-2026-11-17", "nba-ny-tor-2026-11-17", "nba", "Knicks",
+                 ("Knicks", "Raptors"), ("NY Knicks", "TOR Raptors"), False,
+                 datetime(2026, 11, 18, 0, 30, tzinfo=timezone.utc), 0.01)
+    ev = {"slug": "nba-nyk-tor-2026-11-17", "title": "Knicks vs. Raptors",
+          "startTime": "2026-11-18T00:30:00Z",
+          "markets": [{"sportsMarketType": "moneyline", "outcomes": '["Knicks", "Raptors"]'}]}
+    assert reference.same_game(m, ev)
+    ev["startTime"] = "2026-11-18T05:00:00Z"
+    assert not reference.same_game(m, ev)
