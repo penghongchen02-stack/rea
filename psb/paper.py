@@ -1,61 +1,51 @@
-"""Paper trading on live Polymarket US order books. No orders are ever sent.
+"""Paper trading of the seven report bots on live Polymarket US books.
 
-Each cycle, for every open US game-winner market in the chosen leagues:
-  1. read the US top of book (public API),
-  2. take a fair value from the matching international Polymarket game,
-  3. let each strategy decide, using its report rules plus the fair-value edge,
-  4. simulate fills conservatively and record them in a JSON ledger.
+No order is ever sent: the only network calls are public GETs to Polymarket US
+and public reads of international Polymarket.
+
+Loop:
+  * every `--discover` seconds, list open full-game markets (winners, main
+    spread, main total) in the chosen leagues and link each to the same
+    international outcome;
+  * every `--fast` seconds, poll markets whose game has started (live bots);
+    every `--slow` seconds, poll markets starting within `--horizon` hours;
+  * per poll: read fresh international midpoints in one batch, read the US
+    book, settle resting paper orders against real US trades, let each bot act.
 
 Fill model:
-  taker  fills at the current best price, up to the displayed size, and pays the
-         US taker fee at the configured tier.
-  maker  rests a limit at a price better than the current book; it fills only if
-         a later cycle shows the opposite best price trading through it (strictly
-         better than our limit), which ignores queue position and is therefore
-         optimistic about price but pessimistic about frequency. No fee, no rebate.
+  Take  walks the US book up to the bot's limit price, pays the US taker fee.
+  Rest  a paper bid that fills only when real US trades print at or through its
+        price after it was placed (capped at the traded volume), or when the book
+        crosses it. Queue position is ignored, so this is optimistic about which
+        trades we would have received. Every bot is simulated independently.
 
-Positions use one signed contract count per market, as on Polymarket US: buying
-the other side reduces or flips the held side and cashes out the difference.
+Positions use one signed contract count per market, as on Polymarket US:
+buying the other side reduces or flips the held side and cashes out the difference.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import math
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import fees, reference, usmarket
-from .markets import category_of
-from .strategies import STRATEGIES, Candidate
+from .bots import BOTS, Fill, Rest, Take, View
 
 STATE = Path(__file__).resolve().parent.parent / "paper"
 DEFAULT_LEAGUES = ["nba", "nfl", "nhl", "cbb", "epl", "lal", "bun", "sea", "ucl", "mls",
-                   "ufc", "cs2", "dota2", "valorant", "lol"]
-BOTH_SIDES = {"ferrarichampions2026", "gamblingisallyourneed", "randomgamebet"}
-TAKER_ONLY = {"sinenooneei"}  # live directional entries in the report are taker fills
+                   "ufc", "cs2", "dota2", "valorant", "lol", "mlb", "itfm", "atpcq"]
+LIVE_WINDOW = timedelta(hours=8)
 
 
-@dataclass
-class Config:
-    min_edge: float = 0.02          # required edge after fees, in price units
-    order_contracts: float = 10.0   # per simulated order
-    max_contracts: float = 100.0    # per strategy per market
-    bankroll: float = 1000.0        # paper dollars per strategy
-    taker_theta: float = fees.WORST_TAKER_THETA  # a new account starts at tier 1
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
-@dataclass
-class Quote:
-    strategy: str
-    slug: str
-    side: str        # "long" buys the long instrument, "short" buys the other side
-    price: float     # price paid per contract of the chosen side
-    contracts: float
-    placed_at: str
-    fair: float      # fair value of the chosen side when placed
+def _iso(t: datetime) -> str:
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @dataclass
@@ -66,65 +56,15 @@ class Position:
 
 
 @dataclass
-class Ledger:
-    quotes: list[Quote] = field(default_factory=list)
-    positions: dict[str, dict[str, Position]] = field(default_factory=dict)  # strategy -> slug
-    fills: list[dict] = field(default_factory=list)
-    settled: dict[str, float] = field(default_factory=dict)
-
-    @classmethod
-    def load(cls, path: Path) -> "Ledger":
-        if not path.exists():
-            return cls()
-        d = json.loads(path.read_text())
-        return cls(
-            quotes=[Quote(**q) for q in d["quotes"]],
-            positions={s: {m: Position(**p) for m, p in ms.items()} for s, ms in d["positions"].items()},
-            fills=d["fills"],
-            settled=d["settled"],
-        )
-
-    def save(self, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({
-            "quotes": [asdict(q) for q in self.quotes],
-            "positions": {s: {m: asdict(p) for m, p in ms.items()} for s, ms in self.positions.items()},
-            "fills": self.fills,
-            "settled": self.settled,
-        }, indent=1))
-        tmp.replace(path)
-
-    def available_cash(self, strategy: str, bankroll: float) -> float:
-        """Bankroll plus settled P&L, minus worst-case loss of open positions and
-        the cost of resting quotes."""
-        free = bankroll
-        for slug, p in self.positions.get(strategy, {}).items():
-            if slug in self.settled:
-                free += p.cash + p.contracts * self.settled[slug]
-            else:
-                free += worst_case(p.cash, p.contracts)
-        free -= sum(q.price * q.contracts for q in self.quotes if q.strategy == strategy)
-        return free
-
-    def position(self, strategy: str, slug: str) -> Position:
-        return self.positions.setdefault(strategy, {}).setdefault(slug, Position())
-
-    def fill(self, strategy: str, slug: str, side: str, price: float, contracts: float,
-             fee: float, kind: str, fair: float) -> None:
-        """Buy `contracts` of `side` at `price` (price of that side)."""
-        pos = self.position(strategy, slug)
-        signed = contracts if side == "long" else -contracts
-        # Buying long at p costs p; buying short at q receives (1-q) on the long instrument.
-        long_px = price if side == "long" else 1 - price
-        pos.cash -= signed * long_px
-        pos.contracts += signed
-        pos.fees += fee
-        pos.cash -= fee
-        self.fills.append({"t": _now(), "strategy": strategy, "slug": slug, "side": side,
-                           "price": round(price, 4), "contracts": contracts,
-                           "fee": round(fee, 4), "kind": kind,
-                           "fair": round(fair, 4)})
+class Order:
+    bot: str
+    slug: str
+    side: str
+    price: float
+    contracts: float
+    tag: str
+    placed_at: str
+    traded_at_place: float | None   # US sharesTraded when placed
 
 
 def worst_case(cash: float, contracts: float) -> float:
@@ -140,198 +80,324 @@ def cash_needed(pos: Position, side: str, price: float, contracts: float, fee: f
     return worst_case(pos.cash, pos.contracts) - after
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+@dataclass
+class Ledger:
+    bankroll: float = 1000.0
+    positions: dict[str, dict[str, Position]] = field(default_factory=dict)
+    states: dict[str, dict[str, dict]] = field(default_factory=dict)
+    orders: list[Order] = field(default_factory=list)
+    fills: list[dict] = field(default_factory=list)
+    settled: dict[str, float] = field(default_factory=dict)
+    marks: dict[str, float] = field(default_factory=dict)   # last US mid per slug
+    started_at: str = ""
+
+    @classmethod
+    def load(cls, path: Path, bankroll: float) -> "Ledger":
+        if not path.exists():
+            return cls(bankroll=bankroll, started_at=_iso(_now()))
+        d = json.loads(path.read_text())
+        return cls(
+            bankroll=d["bankroll"],
+            positions={b: {m: Position(**p) for m, p in ms.items()} for b, ms in d["positions"].items()},
+            states=d["states"], orders=[Order(**o) for o in d["orders"]], fills=d["fills"],
+            settled=d["settled"], marks=d["marks"], started_at=d["started_at"])
+
+    def save(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(asdict(self)))
+        tmp.replace(path)
+
+    def position(self, bot: str, slug: str) -> Position:
+        return self.positions.setdefault(bot, {}).setdefault(slug, Position())
+
+    def state(self, bot: str, slug: str) -> dict:
+        return self.states.setdefault(bot, {}).setdefault(slug, {})
+
+    def available_cash(self, bot: str) -> float:
+        """Bankroll plus settled P&L, minus worst-case loss of open positions and
+        the cost of resting orders."""
+        free = self.bankroll
+        for slug, p in self.positions.get(bot, {}).items():
+            if slug in self.settled:
+                free += p.cash + p.contracts * self.settled[slug]
+            else:
+                free += worst_case(p.cash, p.contracts)
+        free -= sum(o.price * o.contracts for o in self.orders if o.bot == bot)
+        return free
+
+    def record(self, bot: str, slug: str, side: str, price: float, contracts: float,
+               fee: float, kind: str, tag: str, fair: float | None, now: datetime) -> Fill:
+        pos = self.position(bot, slug)
+        signed = contracts if side == "long" else -contracts
+        long_px = price if side == "long" else 1 - price
+        pos.cash -= signed * long_px + fee
+        pos.contracts += signed
+        pos.fees += fee
+        self.fills.append({"t": _iso(now), "bot": bot, "slug": slug, "side": side,
+                           "price": round(price, 4), "contracts": round(contracts, 4),
+                           "fee": round(fee, 4), "kind": kind, "tag": tag,
+                           "fair": None if fair is None else round(fair, 4)})
+        return Fill(side, price, contracts, tag)
 
 
-def _round_to_tick(p: float, tick: float, down: bool) -> float:
-    n = p / tick
-    n = math.floor(n + 1e-9) if down else math.ceil(n - 1e-9)
-    return round(n * tick, 6)
+@dataclass
+class Tracked:
+    m: usmarket.UsMarket
+    link: reference.Link | None
+    last_poll: float = -1e18
+    prev_fair_long: float | None = None
 
 
-def decide(strategy: str, m: usmarket.UsMarket, top: usmarket.Top, fair: float,
-           cfg: Config, held: float) -> list[tuple[str, str, float]]:
-    """Return (kind, side, price) actions for one strategy on one market."""
-    accept = STRATEGIES[strategy].accept
-    hour = datetime.now(timezone.utc).hour
-    category = category_of(m.event_slug)
-    actions: list[tuple[str, str, float]] = []
-    room_long = cfg.max_contracts - held
-    room_short = cfg.max_contracts + held
-    sides = []
-    if top.ask is not None:
-        sides.append(("long", top.ask, fair, room_long))
-    if top.bid is not None:
-        sides.append(("short", 1 - top.bid, 1 - fair, room_short))
-    for side, take_px, fv, room in sides:
-        if room < cfg.order_contracts or not 0 < take_px < 1:
-            continue
-        if not accept(Candidate(category, "moneyline", "BUY", take_px, hour)):
-            continue
-        fee = fees.taker_fee(1, take_px, cfg.taker_theta)
-        if fv - take_px - fee >= cfg.min_edge:
-            actions.append(("taker", side, take_px))
-            continue
-        if strategy in TAKER_ONLY:
-            continue
-        # Rest a bid at most min_edge below fair value: one tick above the current
-        # best bid for this side when that is still cheap enough, else at the limit.
-        limit = _round_to_tick(fv - cfg.min_edge, m.tick, down=True)
-        best_same = top.bid if side == "long" else (1 - top.ask if top.ask is not None else None)
-        price = limit if best_same is None else min(limit, round(best_same + m.tick, 6))
-        if 0 < price < take_px:
-            actions.append(("maker", side, price))
-    if strategy not in BOTH_SIDES:
-        # Directional strategies keep only the side with the larger edge.
-        actions.sort(key=lambda a: -((fair if a[1] == "long" else 1 - fair) - a[2]))
-        actions = actions[:1]
-    return actions
+class Engine:
+    def __init__(self, ledger: Ledger, leagues: list[str], taker_theta: float, log,
+                 horizon_h: float):
+        self.ledger, self.leagues, self.theta, self.log = ledger, leagues, taker_theta, log
+        self.horizon = timedelta(hours=horizon_h)
+        self.markets: dict[str, Tracked] = {}
+        self.events: dict[str, dict | None] = {}
+        self.stats = {"polls": 0, "takes": 0, "maker_fills": 0, "no_cash": 0}
 
-
-def cycle(leagues: list[str], ledger: Ledger, cfg: Config, log) -> dict:
-    stats = {"markets": 0, "matched": 0, "taker_fills": 0, "maker_fills": 0, "quotes": 0,
-             "no_cash": 0, "in_play_skipped": 0}
-    markets: list[usmarket.UsMarket] = []
-    for lg in leagues:
-        try:
-            markets += usmarket.game_markets(lg)
-        except Exception as e:  # a league outage must not stop the others
-            log(f"league {lg}: {e}")
-    events: dict[str, dict | None] = {}
-    live_slugs = set()
-    for m in markets:
-        stats["markets"] += 1
-        try:
-            top = usmarket.top_of_book(m.slug)
-        except Exception as e:
-            log(f"book {m.slug}: {e}")
-            continue
-        if top.state not in (None, "MARKET_STATE_OPEN"):
-            continue
-        if m.start <= datetime.now(timezone.utc):
-            # In-play: the two venues are read seconds apart while prices move, so
-            # the comparison is unreliable. Resting quotes are dropped below.
-            stats["in_play_skipped"] += 1
-            continue
-        live_slugs.add(m.slug)
-        # Resting quotes from earlier cycles: fill only if the book traded through them.
-        keep = []
-        for q in ledger.quotes:
-            if q.slug != m.slug:
-                keep.append(q)
+    # -- discovery ---------------------------------------------------------
+    def discover(self) -> None:
+        now = _now()
+        seen = set()
+        with_lines = any(set(b.kinds) - {"moneyline"} for b in BOTS.values())
+        for lg in self.leagues:
+            try:
+                found = usmarket.discover(lg, with_lines)
+            except Exception as e:  # one league's outage must not stop the rest
+                self.log(f"discover {lg}: {e}")
                 continue
-            opp = top.ask if q.side == "long" else (1 - top.bid if top.bid is not None else None)
-            if opp is not None and opp < q.price:
-                ledger.fill(q.strategy, q.slug, q.side, q.price, q.contracts, 0.0, "maker", q.fair)
-                stats["maker_fills"] += 1
-            # Every quote lives one cycle; it is re-placed below if still wanted.
-        ledger.quotes = keep
-        if m.event_slug not in events:
-            events[m.event_slug] = reference.find_event(m)
-        ev = events[m.event_slug]
-        fair = reference.fair_value(m, ev) if ev else None
-        if fair is None:
-            continue
-        stats["matched"] += 1
-        for strategy in STRATEGIES:
-            held = ledger.position(strategy, m.slug).contracts
-            for kind, side, px in decide(strategy, m, top, fair, cfg, held):
-                pos = ledger.position(strategy, m.slug)
-                if kind == "taker":
-                    shown = top.ask_qty if side == "long" else top.bid_qty
-                    n = min(cfg.order_contracts, shown)
-                    if n <= 0:
-                        continue
-                    fee = fees.taker_fee(n, px, cfg.taker_theta)
-                    if cash_needed(pos, side, px, n, fee) > ledger.available_cash(strategy, cfg.bankroll):
-                        stats["no_cash"] += 1
-                        continue
-                    fv = fair if side == "long" else 1 - fair
-                    ledger.fill(strategy, m.slug, side, px, n, fee, "taker", fv)
-                    stats["taker_fills"] += 1
-                else:
-                    if cash_needed(pos, side, px, cfg.order_contracts, 0.0) > \
-                            ledger.available_cash(strategy, cfg.bankroll):
-                        stats["no_cash"] += 1
-                        continue
-                    fv = fair if side == "long" else 1 - fair
-                    ledger.quotes.append(Quote(strategy, m.slug, side, px, cfg.order_contracts,
-                                               _now(), fv))
-                    stats["quotes"] += 1
-    # Quotes on markets that are no longer open are cancelled.
-    ledger.quotes = [q for q in ledger.quotes if q.slug in live_slugs]
-    return stats
+            for m in found:
+                if m.start > now + self.horizon or m.start < now - LIVE_WINDOW:
+                    continue
+                if not any(b.wants(m, True) or b.wants(m, False) for b in BOTS.values()):
+                    continue
+                seen.add(m.slug)
+                if m.slug in self.markets:
+                    continue
+                if m.event_slug not in self.events:
+                    self.events[m.event_slug] = reference.find_event(m)
+                ev = self.events[m.event_slug]
+                self.markets[m.slug] = Tracked(m, reference.link(m, ev) if ev else None)
+        for slug in list(self.markets):
+            if slug not in seen:
+                del self.markets[slug]
+        linked = sum(t.link is not None for t in self.markets.values())
+        live = sum(t.m.start <= now for t in self.markets.values() if t.link)
+        self.log(f"discovered {len(self.markets)} markets, {linked} linked, {live} linked and live")
+
+    # -- one poll ------------------------------------------------------------
+    def poll(self, fast: float, slow: float) -> None:
+        now, mono = _now(), time.monotonic()
+        due = []
+        for t in self.markets.values():
+            live = t.m.start <= now
+            if t.link is None or not any(b.wants(t.m, live) for b in BOTS.values()):
+                continue
+            if mono - t.last_poll >= (fast if live else slow):
+                due.append(t)
+        if not due:
+            return
+        mids = reference.live_mids([t.link for t in due])
+        for t in due:
+            t.last_poll = mono
+            fair = reference.live_fair(t.link, mids)
+            try:
+                bk = usmarket.book(t.m.slug)
+            except Exception as e:
+                self.log(f"book {t.m.slug}: {e}")
+                continue
+            self.stats["polls"] += 1
+            if bk.bid is not None and bk.ask is not None:
+                self.ledger.marks[t.m.slug] = (bk.bid + bk.ask) / 2
+            else:
+                self.ledger.marks.pop(t.m.slug, None)   # no two-sided book: no mark
+            now = _now()
+            self._settle_orders(t, bk, now)
+            if bk.state not in (None, "MARKET_STATE_OPEN") or fair is None:
+                self._cancel(t.m.slug)
+                t.prev_fair_long = fair
+                continue
+            live = t.m.start <= now
+            for key, bot in BOTS.items():
+                if not bot.wants(t.m, live):
+                    continue
+                pos = self.ledger.position(key, t.m.slug)
+                st = self.ledger.state(key, t.m.slug)
+                v = View(t.m, bk, fair, t.prev_fair_long, live, now, self.ledger.bankroll,
+                         self.ledger.available_cash(key), pos.contracts, self.theta)
+                self._apply(key, bot, t, bk, fair, bot.step(v, st), now)
+            t.prev_fair_long = fair
+
+    def _cancel(self, slug: str, bot: str | None = None) -> None:
+        self.ledger.orders = [o for o in self.ledger.orders
+                              if not (o.slug == slug and (bot is None or o.bot == bot))]
+
+    def _settle_orders(self, t: Tracked, bk: usmarket.Book, now: datetime) -> None:
+        keep = []
+        for o in self.ledger.orders:
+            if o.slug != t.m.slug:
+                keep.append(o)
+                continue
+            filled = 0.0
+            asks = bk.side_asks(o.side)
+            if asks and asks[0][0] <= o.price + 1e-9:     # the book crossed our bid
+                filled = min(o.contracts, asks[0][1])
+            elif (bk.shares_traded is not None and o.traded_at_place is not None
+                  and bk.shares_traded > o.traded_at_place and bk.last_trade is not None):
+                # A long bid at p fills on trades at <= p; a short bid at q is an
+                # offer on the long at 1-q and fills on trades at >= 1-q.
+                through = (bk.last_trade <= o.price + 1e-9 if o.side == "long"
+                           else bk.last_trade >= 1 - o.price - 1e-9)
+                if through:
+                    filled = min(o.contracts, bk.shares_traded - o.traded_at_place)
+            if filled > 1e-9:
+                f = self.ledger.record(o.bot, o.slug, o.side, o.price, filled, 0.0, "maker",
+                                       o.tag, None, now)
+                BOTS[o.bot].on_fill(self.ledger.state(o.bot, o.slug), f, now)
+                self.stats["maker_fills"] += 1
+                o.contracts -= filled
+            o.traded_at_place = bk.shares_traded
+            if o.contracts > 1e-6:
+                keep.append(o)
+        self.ledger.orders = keep
+
+    def _apply(self, key, bot, t: Tracked, bk, fair_long, acts, now) -> None:
+        self._cancel(t.m.slug, key)   # resting orders live one poll unless re-issued
+        st = self.ledger.state(key, t.m.slug)
+        for a in acts:
+            fair = fair_long if a.side == "long" else 1 - fair_long
+            if isinstance(a, Take):
+                budget = a.dollars
+                for px, qty in bk.side_asks(a.side):
+                    if px > a.limit + 1e-9 or budget < 0.01:
+                        break
+                    n = min(qty, budget / px)
+                    fee = fees.taker_fee(n, px, self.theta)
+                    pos = self.ledger.position(key, t.m.slug)
+                    if cash_needed(pos, a.side, px, n, fee) > self.ledger.available_cash(key) + 1e-9:
+                        self.stats["no_cash"] += 1
+                        break
+                    f = self.ledger.record(key, t.m.slug, a.side, px, n, fee, "taker", a.tag,
+                                           fair, now)
+                    bot.on_fill(st, f, now)
+                    self.stats["takes"] += 1
+                    budget -= n * px
+            elif isinstance(a, Rest):
+                if not 0 < a.price < 1 or a.dollars < 0.5:
+                    continue
+                n = a.dollars / a.price
+                pos = self.ledger.position(key, t.m.slug)
+                if cash_needed(pos, a.side, a.price, n, 0.0) > self.ledger.available_cash(key) + 1e-9:
+                    self.stats["no_cash"] += 1
+                    continue
+                self.ledger.orders.append(Order(key, t.m.slug, a.side, round(a.price, 4), n,
+                                                a.tag, _iso(now), bk.shares_traded))
+
+    # -- settlement ----------------------------------------------------------
+    def settle(self) -> int:
+        n = 0
+        slugs = {s for ms in self.ledger.positions.values() for s, p in ms.items()
+                 if s not in self.ledger.settled and abs(p.contracts) > 1e-9}
+        for slug in sorted(slugs):
+            px = usmarket.settlement(slug)
+            if px is not None:
+                self.ledger.settled[slug] = px
+                n += 1
+        return n
 
 
-def settle(ledger: Ledger) -> int:
-    n = 0
-    open_slugs = {slug for ms in ledger.positions.values() for slug, p in ms.items()
-                  if slug not in ledger.settled and abs(p.contracts) > 1e-9}
-    for slug in sorted(open_slugs):
-        px = usmarket.settlement(slug)
-        if px is not None:
-            ledger.settled[slug] = px
-            n += 1
-    return n
+def paired_cost(st: dict) -> float | None:
+    legs = st.get("legs") or {}
+    lg, sh = legs.get("long"), legs.get("short")
+    if not lg or not sh or not lg["contracts"] or not sh["contracts"]:
+        return None
+    return lg["cost"] / lg["contracts"] + sh["cost"] / sh["contracts"]
 
 
-def report(ledger: Ledger, bankroll: float) -> str:
-    lines = [f"Paper bankroll ${bankroll:,.0f} per strategy. No real orders.", "",
-             "| Strategy | Fills (taker/maker) | Open markets | Settled P&L | Fees paid "
-             "| At risk in open positions | Cash available |",
-             "|---|---|---|---|---|---|---|"]
-    for s in STRATEGIES:
-        fills = [f for f in ledger.fills if f["strategy"] == s]
+def report(led: Ledger) -> str:
+    lines = [f"Paper bankroll ${led.bankroll:,.0f} per bot since {led.started_at}. No real orders.", "",
+             "| Bot | Fills taker/maker | Markets traded | Open | Settled P&L | Fees "
+             "| Equity (open at US mid, else cost) | Cash free | Both-sides markets (avg paired cost) |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    for key in BOTS:
+        fills = [f for f in led.fills if f["bot"] == key]
         taker = sum(f["kind"] == "taker" for f in fills)
-        settled_pnl = fee_total = at_risk = 0.0
-        open_n = 0
-        for slug, p in ledger.positions.get(s, {}).items():
+        settled_pnl = fee_total = 0.0
+        equity = led.bankroll
+        open_n = traded = 0
+        for slug, p in led.positions.get(key, {}).items():
+            if abs(p.cash) < 1e-9 and abs(p.contracts) < 1e-9:
+                continue
+            traded += 1
             fee_total += p.fees
-            if slug in ledger.settled:
-                settled_pnl += p.cash + p.contracts * ledger.settled[slug]
-            elif abs(p.contracts) > 1e-9 or abs(p.cash) > 1e-9:
+            if slug in led.settled:
+                v = p.cash + p.contracts * led.settled[slug]
+                settled_pnl += v
+                equity += v
+            else:
                 open_n += abs(p.contracts) > 1e-9
-                at_risk -= worst_case(p.cash, p.contracts)
-        lines.append(f"| {s} | {taker}/{len(fills) - taker} | {open_n} | ${settled_pnl:,.2f} "
-                     f"| ${fee_total:,.2f} | ${at_risk:,.2f} "
-                     f"| ${ledger.available_cash(s, bankroll):,.2f} |")
+                if slug in led.marks:
+                    equity += p.cash + p.contracts * led.marks[slug]
+                else:
+                    equity -= p.fees   # unmarked: carried at cost
+        pcs = [pc for pc in (paired_cost(st) for st in led.states.get(key, {}).values()) if pc]
+        both = f"{len(pcs)} (${sum(pcs) / len(pcs):.3f})" if pcs else "0"
+        lines.append(f"| {key} | {taker}/{len(fills) - taker} | {traded} | {open_n} "
+                     f"| ${settled_pnl:,.2f} | ${fee_total:,.2f} | ${equity:,.2f} "
+                     f"| ${led.available_cash(key):,.2f} | {both} |")
     return "\n".join(lines)
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="Paper-trade the seven strategies. Sends no orders.")
-    p.add_argument("--cycles", type=int, default=1)
-    p.add_argument("--interval", type=float, default=60.0, help="seconds between cycles")
+    p = argparse.ArgumentParser(description="Paper-trade the seven report bots. Sends no orders.")
+    p.add_argument("--minutes", type=float, default=60.0, help="how long to run")
+    p.add_argument("--fast", type=float, default=15.0, help="seconds between polls of live games")
+    p.add_argument("--slow", type=float, default=180.0, help="seconds between polls of upcoming games")
+    p.add_argument("--discover", type=float, default=900.0, help="seconds between market discovery")
+    p.add_argument("--horizon", type=float, default=24.0, help="hours ahead to trade upcoming games")
     p.add_argument("--leagues", nargs="*", default=DEFAULT_LEAGUES)
+    p.add_argument("--bankroll", type=float, default=1000.0, help="paper dollars per bot")
+    p.add_argument("--taker-theta", type=float, default=fees.WORST_TAKER_THETA)
     p.add_argument("--ledger", default=str(STATE / "ledger.json"))
-    p.add_argument("--min-edge", type=float, default=Config.min_edge)
-    p.add_argument("--bankroll", type=float, default=Config.bankroll,
-                   help="paper dollars per strategy")
     p.add_argument("--report", action="store_true", help="only settle and print the report")
     a = p.parse_args(argv)
-    cfg = Config(min_edge=a.min_edge, bankroll=a.bankroll)
     path = Path(a.ledger)
-    ledger = Ledger.load(path)
-    log_path = path.with_name("paper.log")
+    led = Ledger.load(path, a.bankroll)
+    log_path = path.with_name(path.stem + ".log")
 
     def log(msg: str) -> None:
-        line = f"{_now()} {msg}"
+        line = f"{_iso(_now())} {msg}"
         print(line, flush=True)
         with log_path.open("a") as f:
             f.write(line + "\n")
 
+    eng = Engine(led, a.leagues, a.taker_theta, log, a.horizon)
     if not a.report:
-        for i in range(a.cycles):
-            started = time.monotonic()
-            stats = cycle(a.leagues, ledger, cfg, log)
-            ledger.save(path)
-            log(f"cycle {i + 1}/{a.cycles} {json.dumps(stats)}")
-            if i + 1 < a.cycles:
-                time.sleep(max(0.0, a.interval - (time.monotonic() - started)))
-    log(f"settled {settle(ledger)} markets")
-    ledger.save(path)
-    print(report(ledger, cfg.bankroll))
+        end = time.monotonic() + a.minutes * 60
+        next_discover = next_settle = next_save = 0.0
+        while time.monotonic() < end:
+            mono = time.monotonic()
+            if mono >= next_discover:
+                eng.discover()
+                next_discover = mono + a.discover
+            eng.poll(a.fast, a.slow)
+            if mono >= next_settle:
+                n = eng.settle()
+                if n:
+                    log(f"settled {n} markets")
+                next_settle = mono + 600
+            if mono >= next_save:
+                led.save(path)
+                log(f"stats {json.dumps(eng.stats)} resting={len(led.orders)}")
+                next_save = mono + 120
+            time.sleep(1.0)
+    n = eng.settle()
+    led.save(path)
+    log(f"final settle {n}; stats {json.dumps(eng.stats)}")
+    print(report(led))
 
 
 if __name__ == "__main__":

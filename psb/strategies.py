@@ -35,8 +35,9 @@ def _band(c: Candidate, lo: float, hi: float) -> bool:
 
 
 def _ferrari(c: Candidate) -> bool:
-    # Tennis, MLB, soccer, UFC; NHL excluded; NBA only at 3x dominance (not knowable) -> excluded.
-    return c.category in {"tennis", "mlb", "soccer", "ufc"}
+    # Tennis, MLB, soccer, UFC, plus NBA in the regular season (the report limits
+    # only the NBA post-season); NHL excluded. Regular season: October to mid-April.
+    return c.category in {"tennis", "mlb", "soccer", "ufc", "nba"}
 
 
 def _swisstony(c: Candidate) -> bool:
@@ -52,7 +53,7 @@ def _gambling(c: Candidate) -> bool:
 def _sinenooneei(c: Candidate) -> bool:
     eligible = (c.category == "tennis"
                 or (c.category == "mlb" and c.market_type == "totals")
-                or c.category in ESPORTS)
+                or (c.category in ESPORTS and c.market_type in (None, "moneyline")))
     return (eligible and c.side == "BUY" and _band(c, 0.10, 0.80)
             and 8 <= c.hour_utc < 22 and c.hour_utc != 16)
 
@@ -74,10 +75,10 @@ def _randomgamebet(c: Candidate) -> bool:
 STRATEGIES: dict[str, Strategy] = {
     s.key: s
     for s in [
-        Strategy("ferrarichampions2026", "tennis/MLB/soccer/UFC only; no NHL, no NBA", _ferrari),
+        Strategy("ferrarichampions2026", "tennis/MLB/soccer/UFC/NBA regular season; no NHL", _ferrari),
         Strategy("swisstony", "BUY; no NBA; skip $0.40-0.50; skip 18,20,21 UTC", _swisstony),
         Strategy("gamblingisallyourneed", "soccer/MLB/NFL/CBB; skip $0.40-0.50; skip 10,12,13 UTC", _gambling),
-        Strategy("sinenooneei", "tennis, MLB totals, esports; BUY $0.10-0.80; 08-22 UTC except 16", _sinenooneei),
+        Strategy("sinenooneei", "tennis, MLB totals, esports winners; BUY $0.10-0.80; 08-22 UTC except 16", _sinenooneei),
         Strategy("kch123", "BUY NFL/CFB/CBB at $0.20-0.70; skip 16-18,20,22 UTC", _kch123),
         Strategy("geiyecapixie", "League of Legends only", _geiyecapixie),
         Strategy("randomgamebet", "CS/LoL/Dota/Valorant; skip 06-07 UTC", _randomgamebet),
