@@ -282,7 +282,7 @@ class LiveBot(Pick):
     # ---- sender thread --------------------------------------------------------------------
     def _sender(self):
         while True:
-            try: kind, sig, t_sig = self.out.get(timeout=20)
+            try: kind, sig, t_sig = self.out.get(timeout=4)
             except queue.Empty:
                 self.ex.call("GET", "/v1/account/balances", timeout=4.0)       # keeps the connection open, so an order does not pay for a new one
                 continue
