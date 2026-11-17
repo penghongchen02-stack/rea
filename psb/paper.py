@@ -162,6 +162,11 @@ class Engine:
         self.markets: dict[str, Tracked] = {}
         self.events: dict[str, dict | None] = {}
         self.stats = {"polls": 0, "takes": 0, "maker_fills": 0, "no_cash": 0}
+        # Resting orders live one poll unless re-issued. Orders saved by an earlier
+        # run were not watched in between, so they must not fill on that gap's trades.
+        if ledger.orders:
+            log(f"dropped {len(ledger.orders)} resting orders from the previous run")
+            ledger.orders = []
 
     # -- discovery ---------------------------------------------------------
     def discover(self) -> None:
@@ -187,8 +192,9 @@ class Engine:
                 ev = self.events[m.event_slug]
                 self.markets[m.slug] = Tracked(m, reference.link(m, ev) if ev else None)
         for slug in list(self.markets):
-            if slug not in seen:
+            if slug not in seen:   # finished, closed, or no longer the main line
                 del self.markets[slug]
+                self._cancel(slug)
         linked = sum(t.link is not None for t in self.markets.values())
         live = sum(t.m.start <= now for t in self.markets.values() if t.link)
         self.log(f"discovered {len(self.markets)} markets, {linked} linked, {live} linked and live")
@@ -228,6 +234,7 @@ class Engine:
             live = t.m.start <= now
             for key, bot in BOTS.items():
                 if not bot.wants(t.m, live):
+                    self._cancel(t.m.slug, key)
                     continue
                 pos = self.ledger.position(key, t.m.slug)
                 st = self.ledger.state(key, t.m.slug)
@@ -304,8 +311,11 @@ class Engine:
     # -- settlement ----------------------------------------------------------
     def settle(self) -> int:
         n = 0
+        # Netted positions (both sides bought) settle too, so their locked-in
+        # result is reported as settled rather than left open forever.
         slugs = {s for ms in self.ledger.positions.values() for s, p in ms.items()
-                 if s not in self.ledger.settled and abs(p.contracts) > 1e-9}
+                 if s not in self.ledger.settled
+                 and (abs(p.contracts) > 1e-9 or abs(p.cash) > 1e-9)}
         for slug in sorted(slugs):
             px = usmarket.settlement(slug)
             if px is not None:
@@ -320,6 +330,20 @@ def paired_cost(st: dict) -> float | None:
     if not lg or not sh or not lg["contracts"] or not sh["contracts"]:
         return None
     return lg["cost"] / lg["contracts"] + sh["cost"] / sh["contracts"]
+
+
+def _entry_long_px(led: Ledger, bot: str, slug: str, contracts: float) -> float:
+    """Average entry price of the held side, as a long-side price."""
+    side = "long" if contracts > 0 else "short"
+    n = cost = 0.0
+    for f in led.fills:
+        if f["bot"] == bot and f["slug"] == slug and f["side"] == side:
+            n += f["contracts"]
+            cost += f["contracts"] * f["price"]
+    if n <= 0:
+        return 0.0
+    avg = cost / n
+    return avg if side == "long" else 1 - avg
 
 
 def report(led: Ledger) -> str:
@@ -346,8 +370,8 @@ def report(led: Ledger) -> str:
                 open_n += abs(p.contracts) > 1e-9
                 if slug in led.marks:
                     equity += p.cash + p.contracts * led.marks[slug]
-                else:
-                    equity -= p.fees   # unmarked: carried at cost
+                else:   # unmarked: the held contracts are carried at their entry price
+                    equity += p.cash + p.contracts * _entry_long_px(led, key, slug, p.contracts)
         pcs = [pc for pc in (paired_cost(st) for st in led.states.get(key, {}).values()) if pc]
         both = f"{len(pcs)} (${sum(pcs) / len(pcs):.3f})" if pcs else "0"
         lines.append(f"| {key} | {taker}/{len(fills) - taker} | {traded} | {open_n} "

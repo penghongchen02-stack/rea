@@ -80,11 +80,15 @@ ratios at a smaller scale.
   fee. *Rest* is a paper bid that fills only when real US trades print at or
   through its price after it was placed, up to the traded volume, or when the
   book crosses it. Queue position is ignored, so this is optimistic. Every bot is
-  simulated independently against the same book.
+  simulated independently against the same book. A resting order lives one
+  poll unless the bot re-issues it, and is cancelled when its market stops being
+  tracked or a new run starts.
 * **Cash:** each bot can only use bankroll + settled P&L − worst-case loss of
-  open positions − cost of resting orders.
-* **Valuation:** open positions are marked at the US mid, or carried at cost when
-  there is no two-sided book.
+  open positions − the cash its resting orders would lock (an order that sells
+  off a held position locks nothing).
+* **Valuation:** open positions are marked at the US mid, or carried at their
+  entry price when there is no two-sided book. Both-sides (netted) positions
+  count their locked-in result and settle with the game.
 
 On 2026-11-17 Polymarket US listed no MLB (off-season), no tennis events and no
 League of Legends games. That leaves GEIYECAPIXIE idle, and SINENOONEEI and

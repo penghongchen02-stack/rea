@@ -311,3 +311,41 @@ def test_unmarked_open_position_is_carried_at_cost():
 def test_swisstony_skips_esports():
     m = _m(league="cs2", name="ICE", event="cs2-ice-bca-2026-11-17", title="ICE vs. BCA")
     assert bots.BOTS["swisstony"].step(_view(m, _book(0.60, 0.61), 0.70), {}) == []
+
+
+def test_orders_from_a_previous_run_do_not_survive_restart():
+    # Observed 2026-11-17: an order placed at 14:34 was still resting at 23:34 and
+    # could have filled on nine hours of trades nobody watched.
+    led = paper.Ledger()
+    led.orders.append(paper.Order("b", "m", "long", 0.40, 10, "x", "t", 0))
+    paper.Engine(led, [], fees.WORST_TAKER_THETA, _Log(), 24)
+    assert led.orders == [] and led.available_cash("b") == pytest.approx(1000)
+
+
+def test_orders_are_cancelled_when_their_market_is_dropped(monkeypatch):
+    eng, led = _engine()
+    m = _m()
+    eng.markets[m.slug] = paper.Tracked(m, None)
+    led.orders.append(paper.Order("ferrarichampions2026", m.slug, "long", 0.40, 10, "x", "t", 0))
+    monkeypatch.setattr(paper.usmarket, "discover", lambda lg, lines: [])
+    eng.leagues = ["epl"]
+    eng.discover()
+    assert m.slug not in eng.markets and led.orders == []
+
+
+def test_netted_position_is_settled_and_valued_at_its_locked_cash(monkeypatch):
+    led = paper.Ledger()
+    led.record("b", "m", "long", 0.02, 500, 0.0, "maker", "quote", None, NOW)
+    led.record("b", "m", "short", 0.96, 500, 0.0, "maker", "quote", None, NOW)   # pair $0.98
+    eng = paper.Engine(led, [], fees.WORST_TAKER_THETA, _Log(), 24)
+    monkeypatch.setattr(paper.usmarket, "settlement", lambda slug: 0.0)
+    assert eng.settle() == 1 and led.settled == {"m": 0.0}
+
+
+def test_unmarked_partly_closed_position_keeps_its_realized_cash():
+    led = paper.Ledger()
+    led.record("swisstony", "m", "long", 0.50, 20, 0.0, "taker", "x", None, NOW)
+    led.record("swisstony", "m", "short", 0.40, 10, 0.0, "taker", "x", None, NOW)   # 10 pairs at $0.90
+    # 10 longs left, carried at their 0.50 entry, plus $1.00 locked in on the pairs.
+    row = [r for r in paper.report(led).splitlines() if r.startswith("| swisstony")][0]
+    assert "$1,001.00" in row
