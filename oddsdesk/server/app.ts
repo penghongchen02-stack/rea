@@ -12,9 +12,14 @@ import {
 } from "./auth.js";
 import type { SampleFeed } from "./sample-data.js";
 import { readRoutes } from "./service.js";
+import { findPmArbs } from "./pm/arbs.js";
+import { PmService, TIE_LEAGUES } from "./pm/service.js";
 import {
   FREE_LIMITS,
   betStats,
+  gate,
+  pmArbQuerySchema,
+  pmLeagueSchema,
   betUpdateSchema,
   credentialsSchema,
   newBetSchema,
@@ -28,11 +33,13 @@ export { FREE_LIMITS };
 
 export interface AppDeps {
   feed: SampleFeed;
+  /** Live prediction-market data; tests pass one with stub fetchers. */
+  pm?: PmService;
   store: JsonStore;
   secureCookies?: boolean;
 }
 
-export function createApp({ feed, store, secureCookies = false }: AppDeps): express.Express {
+export function createApp({ feed, store, pm = new PmService(), secureCookies = false }: AppDeps): express.Express {
   const app = express();
   const sessions = new Sessions();
 
@@ -53,6 +60,25 @@ export function createApp({ feed, store, secureCookies = false }: AppDeps): expr
       res.json(handler(req.query, req.user));
     });
   }
+
+  // --- Prediction markets (live public data) ---------------------------------
+
+  app.get("/api/pm/leagues", (_req, res) => {
+    res.json({ leagues: pm.leagues() });
+  });
+
+  app.get("/api/pm/games", async (req, res) => {
+    const { league } = pmLeagueSchema.parse(req.query);
+    res.json(await pm.snapshot(league));
+  });
+
+  app.get("/api/pm/arbs", async (req, res) => {
+    const q = pmArbQuerySchema.parse(req.query);
+    const snapshot = await pm.snapshot(q.league);
+    const fees = { rate: { kalshi: q.kalshiFee, polymarket: q.polymarketFee } };
+    const arbs = findPmArbs(snapshot.games, fees, q.minEdge, TIE_LEAGUES);
+    res.json({ fetchedAt: snapshot.fetchedAt, sources: snapshot.sources, fees, ...gate(arbs, req.user, FREE_LIMITS.pmArbs) });
+  });
 
   // --- Accounts -------------------------------------------------------------
 
@@ -145,6 +171,10 @@ export function createApp({ feed, store, secureCookies = false }: AppDeps): expr
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: error.issues[0]?.message ?? "Invalid request", issues: error.issues });
+      return;
+    }
+    if (error instanceof RangeError) {
+      res.status(400).json({ error: error.message });
       return;
     }
     if (error instanceof SyntaxError && "body" in error) {

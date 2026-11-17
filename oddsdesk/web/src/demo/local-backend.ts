@@ -102,6 +102,10 @@ async function route(method: string, path: string, body: unknown): Promise<Reply
   const user = data.users.find((u) => u.id === data.sessionUserId);
   const key = `${method} ${url.pathname}`;
 
+  if (url.pathname.startsWith("/api/pm/")) {
+    return fail(503, "Live Kalshi and Polymarket prices need the server version of LineScout (npm run dev). A hosted page can't call outside sites.");
+  }
+
   const read = method === "GET" ? getRoutes()[url.pathname] : undefined;
   if (read) return ok(read(query, user));
 

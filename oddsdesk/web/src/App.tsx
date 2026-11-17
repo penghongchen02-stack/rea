@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { DEMO } from "./api";
 import { SessionProvider, useSession } from "./session";
 import { OddsPage } from "./pages/Odds";
@@ -8,6 +8,7 @@ import { ArbsPage, LowHoldPage } from "./pages/Arbs";
 import { FuturesPage } from "./pages/Futures";
 import { MiddlesPage } from "./pages/Middles";
 import { MovesPage } from "./pages/Moves";
+import { PmArbsPage, PmOddsPage } from "./pages/Pm";
 import { PropsPage } from "./pages/Props";
 import { PrefsProvider } from "./prefs";
 import { CalculatorsPage } from "./pages/Calculators";
@@ -33,6 +34,13 @@ const NAV = [
       { to: "/low-hold", label: "Low Hold", icon: "≈" },
       { to: "/middles", label: "Middles", icon: "⊟" },
       { to: "/moves", label: "Moving Lines", icon: "⤳" },
+    ],
+  },
+  {
+    section: "Prediction markets",
+    items: [
+      { to: "/pm-odds", label: "Kalshi vs Polymarket", icon: "⚖" },
+      { to: "/pm-arbs", label: "PM Arbitrage", icon: "⇆" },
     ],
   },
   {
@@ -77,8 +85,8 @@ function Shell() {
           ))}
         </nav>
         <p className="sidebar-note">
-          All odds, teams and sportsbooks on this site are simulated sample data.
-          {DEMO && " This demo runs entirely in your browser: accounts and bets are saved on this device only, and billing is a demo switch."}
+          Sportsbook pages use simulated sample data: the teams, books and prices are fictional. Prediction-market pages show live Kalshi and Polymarket prices.
+          {DEMO && " This copy runs in your browser, so live prices need the server version; accounts and bets are saved on this device only."}
         </p>
       </aside>
       <div className="main">
@@ -86,7 +94,7 @@ function Shell() {
           <button className="menu-btn" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
             ☰
           </button>
-          <span className="badge badge-warn">Sample data</span>
+          <DataBadge />
           <div className="spacer" />
           <Account />
         </header>
@@ -102,6 +110,8 @@ function Shell() {
             <Route path="/low-hold" element={<LowHoldPage />} />
             <Route path="/middles" element={<MiddlesPage />} />
             <Route path="/moves" element={<MovesPage />} />
+            <Route path="/pm-odds" element={<PmOddsPage />} />
+            <Route path="/pm-arbs" element={<PmArbsPage />} />
             <Route path="/calculators" element={<CalculatorsPage />} />
             <Route path="/bets" element={<BetsPage />} />
             <Route path="/pricing" element={<PricingPage />} />
@@ -133,4 +143,10 @@ function Account() {
       <button className="btn btn-ghost" onClick={() => void logout()}>Log out</button>
     </div>
   );
+}
+
+/** Live pages read real Kalshi and Polymarket prices; everything else is simulated. */
+function DataBadge() {
+  const live = useLocation().pathname.startsWith("/pm-");
+  return live ? <span className="badge badge-live">Live prices</span> : <span className="badge badge-warn">Sample data</span>;
 }

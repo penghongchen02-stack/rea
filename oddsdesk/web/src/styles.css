@@ -166,3 +166,10 @@ td.alt-line .line-tag { color: var(--amber); }
 .leg { display: grid; grid-template-columns: minmax(140px, auto) minmax(90px, auto) 56px; gap: 12px; align-items: baseline; }
 .leg .price { text-align: right; }
 .pill-muted { background: var(--panel-2); color: var(--text); }
+
+/* --- Prediction markets ------------------------------------------------------ */
+.sources { display: flex; gap: 8px; flex-wrap: wrap; align-self: center; }
+.badge-error { color: var(--red); border-color: rgba(248, 113, 113, 0.4); background: rgba(248, 113, 113, 0.1); }
+.tag.warn { color: var(--amber); margin-left: 6px; }
+.note { margin: -6px 0 14px; max-width: 80ch; line-height: 1.5; }
+.badge-live { color: var(--green); border-color: rgba(34, 197, 94, 0.4); background: var(--green-bg); }

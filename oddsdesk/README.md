@@ -3,14 +3,17 @@
 An odds-analysis web app: an odds screen across sportsbooks, a +EV finder, an
 arbitrage finder, betting calculators, a bet tracker, and free/pro accounts.
 
-**Everything runs on simulated sample data.** Teams, sportsbooks and prices are
-fictional. Billing is a demo that switches plans without taking payment.
+Sportsbook pages run on **simulated sample data**: teams, sportsbooks and prices
+are fictional. The prediction-market pages read **live public prices from Kalshi
+and Polymarket** (server version only). Billing is a demo that switches plans
+without taking payment.
 
 ## Run it
 
 ```sh
 npm install
 npm run dev        # API on :8787 + Vite on :5173 (open http://localhost:5173)
+                   # live prices need outbound access to api.elections.kalshi.com and gamma-api.polymarket.com
 ```
 
 Production-style single server:
@@ -41,6 +44,8 @@ Checks: `npm run typecheck` and `npm test`.
 - **Arbitrage** and **Low Hold**: best prices per line ranked by combined margin, with equal-payout stakes; negative hold is an arbitrage.
 - **Middles**: opposite sides at different lines from two books, with the gap, result if the middle hits or misses, and the break-even hit rate.
 - **Moving Lines**: each book's largest price change on its line since opening, with the best price still available.
+- **Kalshi vs Polymarket** (live): game-winner bid/ask on both platforms for NFL, NBA, NHL and college football, matched on date and team codes with explicit per-league aliases (no fuzzy matching).
+- **PM Arbitrage** (live): buy each team on a different platform so one contract pays $1; edge after a configurable fee model (coefficient × price × (1 − price); defaults Kalshi 7%, Polymarket 0%). Top-of-book only; depth is not checked. NFL rows carry a tie-risk flag.
 - **Calculators** (odds converter, no-vig/EV, Kelly, arbitrage, parlay, hedge) and a **Bet Tracker** (profit, win rate, ROI).
 - **Shared filters**: sport, market, period, a saved sportsbook selection and an auto-refresh switch.
 - **Accounts and plans**: email/password sign-up (scrypt hashes, HTTP-only session cookie). Free accounts preview the top results of each edge tool; Pro sees every result (up to 200 rows per request).
@@ -55,6 +60,7 @@ server/service.ts     read-only tool routes shared by the API and the demo
 server/rules.ts       validation, plan gating, bet stats
 server/app.ts         Express API (auth, plans, bets, tools)
 server/store.ts       atomic JSON-file persistence
+server/pm/            Kalshi and Polymarket adapters, matching, arbitrage, cached service
 web/                  React + Vite frontend (web/src/demo: in-browser backend)
 tests/                math and API workflow tests
 ```
@@ -69,6 +75,8 @@ tests/                math and API workflow tests
 | GET | `/api/arbs?…`, `/api/low-hold?…` | gated by plan |
 | GET | `/api/middles?…` | gated by plan |
 | GET | `/api/moves?…&minMove=` | `minMove` in percentage points; gated by plan |
+| GET | `/api/pm/games?league=nba\|nfl\|nhl\|cfb` | live matched games, with per-platform fetch status (30 s cache) |
+| GET | `/api/pm/arbs?league=&kalshiFee=&polymarketFee=&minEdge=` | percentages; gated by plan |
 | POST | `/api/auth/signup`, `/api/auth/login`, `/api/auth/logout` | `{ email, password }` |
 | GET | `/api/auth/me` | current user or `null` |
 | POST | `/api/billing/checkout`, `/api/billing/cancel` | demo plan switch |

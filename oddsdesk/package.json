@@ -6,10 +6,10 @@
   "description": "Odds comparison, +EV, arbitrage, calculators and bet tracking on simulated sample data.",
   "scripts": {
     "dev": "concurrently -k -n api,web \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "tsx watch server/index.ts",
+    "dev:api": "NODE_USE_ENV_PROXY=1 tsx watch server/index.ts",
     "dev:web": "vite",
     "build": "vite build",
-    "start": "NODE_ENV=production tsx server/index.ts",
+    "start": "NODE_ENV=production NODE_USE_ENV_PROXY=1 tsx server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build:demo": "vite build --mode demo && node scripts/build-artifact.mjs"
