@@ -7,11 +7,14 @@ while [ "$(date +%s)" -lt "$end" ]; do
     echo "$(date -u +%FT%TZ) starting engine"
     (cd "$D" && PAPERBOT_DATA="$D/paperbot-data" PAPERBOT_PORT=8080 PAPERBOT_ACTIVE=all nohup python3 -u -m paperbot.run >> "$D/paperbot-data-stdout.log" 2>&1 &)
   fi
-  # the real-money bot's own process (paperbot/live.py): shadow mode unless armed by hand
-  if ! pgrep -f "python3 -u -m paperbot.live run" >/dev/null; then
-    echo "$(date -u +%FT%TZ) starting live bot"
-    (cd "$D" && PAPERBOT_DATA="$D/paperbot-data" nohup python3 -u -m paperbot.live run >> "$D/paperbot-data-live-stdout.log" 2>&1 &)
-  fi
+  # the real-money bots' own processes (paperbot/live.py): shadow mode unless armed by hand. "live" is Bitcoin only
+  # on port 8095; "live4" is all four coins on port 8096, for comparison.
+  for spec in "live 8095" "live4 8096"; do
+    if ! pgrep -f "python3 -u -m paperbot.live run $spec" >/dev/null; then
+      echo "$(date -u +%FT%TZ) starting live bot $spec"
+      (cd "$D" && PAPERBOT_DATA="$D/paperbot-data" nohup python3 -u -m paperbot.live run $spec >> "$D/paperbot-data-live-stdout.log" 2>&1 &)
+    fi
+  done
   sleep 30
 done
 echo "$(date -u +%FT%TZ) supervisor window ended"

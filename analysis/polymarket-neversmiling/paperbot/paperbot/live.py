@@ -25,6 +25,10 @@ endpoint. The shape of a real fill's answer is taken from the documentation and 
 order has been sent. So the bot never trusts that answer alone: after every order it reads the position back from the
 exchange and uses that as the truth; a difference halts it.
 
+A second copy can run beside the first under another name and port (`run live4 8096`: all four coins, for comparison;
+user, 11-17 11:50Z). Each copy has its own directory, limits, ARMED file and dashboard. Arm one copy only: two armed
+copies would both bet on the same Bitcoin signal.
+
 Files in <dir> (paperbot-data/live): live.json (limits), state.json (positions and totals), status.json (a summary,
 rewritten every few seconds), events.jsonl (every signal, request and answer; never the key).
 """
@@ -441,7 +445,7 @@ class LiveBot(Pick):
 
     def _status(self):
         lat = sorted(self.lat_ms); s = self.st; ss = s["shadow_stats"]; armed = self.ex.armed()
-        out = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "mode": self.mode(), "assets": list(self.ASSETS), "exit": self.EXIT, "limits": self.cfg,
+        out = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "name": getattr(self, "label", "live"), "mode": self.mode(), "assets": list(self.ASSETS), "exit": self.EXIT, "limits": self.cfg,
                "balance": self.bal, "balance_age_s": round(time.time() - self.bal_ts) if self.bal_ts else None, "next_bet_usd": round(self.bet_usd(armed), 2),
                "real": {"open": s["pos"], "bets": s["bets"], "fills": s["fills"], "fees": round(s["fees"], 2), "day": s["day"], "day_bets": s["day_bets"], "day_pnl": round(s["day_pnl"], 2), "total_pnl": round(s["total_pnl"], 2)},
                "shadow": {**ss, "pnl": round(ss["pnl"], 2), "open": s["shadow"]},
@@ -472,11 +476,12 @@ class Standalone:
     stream for the windows it trades, its own index polling."""
     QUIET = 90.0            # no decision in the first seconds: the price model needs about a minute of Coinbase ticks
 
-    def __init__(self, data_dir):
-        self.dir = os.path.join(data_dir, "live"); self.cfg = load_config(self.dir); self.started = time.time()
+    def __init__(self, data_dir, name="live", port=None):
+        self.name = name; self.port = port or PORT
+        self.dir = os.path.join(data_dir, name); self.cfg = load_config(self.dir); self.started = time.time()
         self.mf = feeds.MarketFeed(assets=list(self.cfg["assets"]), horizons={"5m": 300}); self.idx = feeds.IndexFeed(); self.spot = feeds.SpotFeed()
         self.ws = ws.WSBooks(self.mf); self.errors = 0
-        self.bot = LiveBot(self, self.dir, self.cfg); self.bot.engine_ref = self
+        self.bot = LiveBot(self, self.dir, self.cfg); self.bot.label = name
 
     def _loop(self, fn, gap, what):
         while True:
@@ -505,7 +510,7 @@ class Standalone:
         for fn, gap, what in ((self._index, 0.5, "index poll"), (self.mf.discover, 5, "discover")):
             threading.Thread(target=self._loop, args=(fn, gap, what), daemon=True).start()
         for fn in (self.spot.run, self.ws.run, self._http): threading.Thread(target=fn, daemon=True).start()
-        log.info("[live] own engine started in %s mode, coins %s, dashboard on port %d", self.bot.mode(), self.bot.ASSETS, PORT)
+        log.info("[live] own engine started in %s mode, coins %s, dashboard on port %d", self.bot.mode(), self.bot.ASSETS, self.port)
         ctx = {"index": self.idx, "spot": self.spot}
         while True:
             t0 = time.time()
@@ -534,7 +539,7 @@ class Standalone:
                     self.send_response(200); self.send_header("Content-Type", ct); self.send_header("Cache-Control", "no-store"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
                 except OSError: self.send_error(503)
         socketserver.TCPServer.allow_reuse_address = True
-        with socketserver.ThreadingTCPServer(("0.0.0.0", PORT), H) as httpd: httpd.serve_forever()
+        with socketserver.ThreadingTCPServer(("0.0.0.0", self.port), H) as httpd: httpd.serve_forever()
 
 
 PORT = int(os.environ.get("PAPERBOT_PORT_LIVE", "8095"))
@@ -544,11 +549,12 @@ if __name__ == "__main__":
     import sys
     data = os.environ.get("PAPERBOT_DATA", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "paperbot-data"))
     d = os.path.join(data, "live")
-    if len(sys.argv) > 1 and sys.argv[1] == "run":          # python3 -u -m paperbot.live run : the live bot's own process
-        os.makedirs(d, exist_ok=True)
+    if len(sys.argv) > 1 and sys.argv[1] == "run":          # python3 -u -m paperbot.live run [name port] : one live bot's own process
+        name = sys.argv[2] if len(sys.argv) > 2 else "live"; port = int(sys.argv[3]) if len(sys.argv) > 3 else PORT
+        d = os.path.join(data, name); os.makedirs(d, exist_ok=True)
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s", handlers=[logging.FileHandler(os.path.join(d, "live.log")), logging.StreamHandler()])
         if not ws.available(): log.error("no API key: the live bot cannot run"); sys.exit(1)
-        Standalone(data).run()
+        Standalone(data, name, port).run()
     # python3 -m paperbot.live : read-only check of the account and of the order format
     cfg = load_config(d); ex = Exchange(d)
     print("key set:", ws.available(), "| armed:", ex.armed(), "| limits:", cfg)

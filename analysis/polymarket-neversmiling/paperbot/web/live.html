@@ -27,7 +27,7 @@ const card=(k,v,c)=>`<div class="card"><div class="k">${esc(k)}</div><div class=
 const MODE={SHADOW:'SHADOW MODE: no real orders are being sent',ARMED:'ARMED: trading real money',STOPPED:'STOPPED by the off switch: no orders',HALTED:'HALTED by a safety check: no orders until a person clears it'};
 async function load(){
  let s;try{s=await(await fetch('status.json?'+Date.now())).json()}catch(e){$('ts').textContent='no status yet';return}
- $('ts').textContent='Updated '+s.ts+' · coins: '+s.assets.join(', ')+' · protective exit '+(s.exit?'on':'off');
+ document.querySelector('h1').textContent='Live fast_pickoff · '+(s.assets.length>1?'all four coins':'Bitcoin only');$('ts').textContent='Updated '+s.ts+' · coins: '+s.assets.join(', ')+' · protective exit '+(s.exit?'on':'off');
  $('banner').className='banner '+s.mode;$('banner').textContent=MODE[s.mode]||s.mode;
  const b=s.balance||{},L=s.limits,r=s.real,h=s.shadow,rt=s.round_trip_ms,pk=s.pickup_ms,dc=s.decide_ms,f=s.feeds||{};
  $('money').innerHTML=card('Account cash',usd(b.cash))+card('Buying power',usd(b.buying_power))+card('Next bet',usd(s.next_bet_usd))+card('Balance read',s.balance_age_s==null?'n/a':s.balance_age_s+' s ago');
