@@ -295,3 +295,8 @@ def test_unmarked_open_position_is_carried_at_cost():
     out = paper.report(led)
     row = [r for r in out.splitlines() if r.startswith("| swisstony")][0]
     assert "$999.70" in row        # bankroll minus the fee, no phantom mark at 0.50
+
+
+def test_swisstony_skips_esports():
+    m = _m(league="cs2", name="ICE", event="cs2-ice-bca-2026-11-17", title="ICE vs. BCA")
+    assert bots.BOTS["swisstony"].step(_view(m, _book(0.60, 0.61), 0.70), {}) == []

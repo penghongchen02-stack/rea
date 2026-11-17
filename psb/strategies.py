@@ -41,7 +41,9 @@ def _ferrari(c: Candidate) -> bool:
 
 
 def _swisstony(c: Candidate) -> bool:
-    return (c.side == "BUY" and c.category not in {"nba", "other"}
+    # Report coverage: soccer, ATP/WTA, NBA, NHL, MLB, CFB, CBB (NBA filtered as its
+    # weakest category). No esports.
+    return (c.side == "BUY" and c.category not in {"nba", "other"} | ESPORTS
             and not _band(c, 0.40, 0.50) and c.hour_utc not in {18, 20, 21})
 
 
@@ -76,7 +78,7 @@ STRATEGIES: dict[str, Strategy] = {
     s.key: s
     for s in [
         Strategy("ferrarichampions2026", "tennis/MLB/soccer/UFC/NBA regular season; no NHL", _ferrari),
-        Strategy("swisstony", "BUY; no NBA; skip $0.40-0.50; skip 18,20,21 UTC", _swisstony),
+        Strategy("swisstony", "BUY; no NBA, no esports; skip $0.40-0.50; skip 18,20,21 UTC", _swisstony),
         Strategy("gamblingisallyourneed", "soccer/MLB/NFL/CBB; skip $0.40-0.50; skip 10,12,13 UTC", _gambling),
         Strategy("sinenooneei", "tennis, MLB totals, esports winners; BUY $0.10-0.80; 08-22 UTC except 16", _sinenooneei),
         Strategy("kch123", "BUY NFL/CFB/CBB at $0.20-0.70; skip 16-18,20,22 UTC", _kch123),
