@@ -280,6 +280,11 @@ class Engine:
         self.started = time.time(); self.crosscheck = {}; self.loop_count = 0; self.errors = 0
         self.universes = [Universe(cfg, self) for cfg in UNIVERSES]
         self.index_store = self.universes[0].store
+        self.live = None                         # the real-money bot (paperbot/live.py): shadow mode unless armed by hand
+        try:
+            from . import live
+            self.live = live.start(self, DATA)
+        except Exception as e: log.exception("live bot did not start: %s", e)
 
     def all_accounts(self):
         for u in self.universes:
@@ -338,6 +343,9 @@ class Engine:
                 for a in u.accounts.values():
                     rec = a.settle(m, up, sp)
                     if rec: u.store.insert("settlements", {k: v for k, v in rec.items() if k != "ts"} | {"ts": rec["ts"], "up": int(up)})
+        if self.live is not None:
+            try: self.live.on_settle(m, up)
+            except Exception as e: self.errors += 1; log.exception("live settle %s: %s", m.slug, e)
         log.info("settled %s up=%s p2b=%s settle=%s (%s)", m.slug, up, m.p2b, sp, src); return True
 
     def settle_orphans(self):
@@ -398,6 +406,9 @@ class Engine:
                         for s in (u.strats if warm else ()):
                             try: s.on_tick(m, ctx, now)
                             except Exception as e: self.errors += 1; log.exception("[%s] strategy %s on %s: %s", u.name, s.name, m.slug, e)
+                    if self.live is not None and warm:
+                        try: self.live.on_tick(m, ctx, now)
+                        except Exception as e: self.errors += 1; log.exception("live %s: %s", m.slug, e)
                     for u, a in self.all_accounts():
                         if not u.fast: a.on_book(m)
                 for u in self.universes:

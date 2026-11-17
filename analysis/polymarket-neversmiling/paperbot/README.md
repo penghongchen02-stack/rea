@@ -618,3 +618,21 @@ Bitcoin windows of the realism versions were still ahead (`fp_43` +$34, `fp_44` 
 `fp`): the Bitcoin-only bot (`fp_29`) with one thing changed each, number 1 unchanged as the yardstick, 30 and 31
 joining two changes, 32-35 the realism tests. All 35 joined the tryout through `add.json` with `"keep": 150` and
 `"all_coins": true`, each on its own $1,000. The state before is `paperbot-data/tryout/tryout.before-fpb35.json`.
+
+## Real-money fast_pickoff, built and switched off (11-17 11:00Z)
+
+Asked for by the user on 11-17 10:50Z: build it, check it, and wait for the word before it trades.
+`paperbot/live.py` is the only code that can send a real order. It runs inside the engine and makes fast_pickoff's
+decision, Bitcoin only by default.
+
+- **Shadow mode (now):** no order is sent. Each signal goes to the exchange's preview endpoint (it checks the order
+  and places nothing), and counts as a shadow fill only if the quote is still there when the answer is back. Shadow
+  fills settle like real ones, so `paperbot-data/live/status.json` shows a paper result at the real delay.
+- **Armed:** needs the file `paperbot-data/live/ARMED` holding exactly `REAL MONEY ON`. Orders are limit,
+  immediate-or-cancel, at the quote seen. A `STOP` file switches it off; a `HALT` file is written by the bot itself
+  when something does not add up and must be removed by hand.
+- **Limits** (`paperbot-data/live/live.json`): 1% of the balance a bet, between $1 and $5; no new bets after losing
+  $10 in a UTC day; halt after losing $30 since arming; 150 bets a day; signals older than 400 ms dropped.
+- **Checks:** `python3 test_live.py` (34 checks against a stand-in exchange) and `python3 -m paperbot.live`
+  (read-only: key, balance, positions, status; `preview <slug>` validates the four order forms). The answer to a
+  real fill has not been seen, so after every order the bot reads the position back from the exchange.
