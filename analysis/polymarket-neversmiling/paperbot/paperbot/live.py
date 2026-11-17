@@ -332,7 +332,7 @@ class LiveBot(Pick):
                 ss["still_there"] += 1; fee = round(self.cfg["theta"] * q * lim * (1 - lim), 2)
                 with self.lock: self.st["shadow"][slug] = {"qty": q if side == "buy" else -q, "avg": lim, "fee": fee, "ts": time.time()}; self.st["day_bets"] += 1; self._save()
             self._event("shadow", code=code, ms=round(ms, 1), still_there=still, answer=None if ok else str(js)[:300], **base)
-            return
+            self._save(); return
         # ---- a real order ----
         key = uuid.uuid4().hex
         with self.lock: self.st["day_bets"] += 1; self.st["bets"] += 1; self._save()
