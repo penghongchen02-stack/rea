@@ -178,7 +178,9 @@ class LiveBot(Pick):
                    "shadow_stats": {"signals": 0, "previews_ok": 0, "still_there": 0, "settled": 0, "won": 0, "pnl": 0.0}, "armed_at": None}
         self._load()
         threading.Thread(target=self._sender, daemon=True, name="live-sender").start()
-        if keeper: threading.Thread(target=self._keeper, daemon=True, name="live-keeper").start()
+        if keeper:
+            for i in range(2): threading.Thread(target=self._warm, args=(i * 2.0,), daemon=True, name=f"live-warm-{i}").start()
+            threading.Thread(target=self._keeper, daemon=True, name="live-keeper").start()
 
     # ---- state ---------------------------------------------------------------------
     def _path(self, n): return os.path.join(self.dir, n)
@@ -286,16 +288,23 @@ class LiveBot(Pick):
     # ---- sender thread --------------------------------------------------------------------
     def _sender(self):
         while True:
-            try: kind, sig, t_sig = self.out.get(timeout=4)
-            except queue.Empty:
-                self.ex.call("GET", "/v1/account/balances", timeout=4.0)       # keeps the connection open, so an order does not pay for a new one
-                continue
+            kind, sig, t_sig = self.out.get()          # never busy with anything else: a signal is sent the moment it arrives
             try:
                 if kind == "entry": self._entry(sig, t_sig)
                 else: self._exit(sig, t_sig)
             except Exception as e:
                 log.exception("[live] sender: %s", e); self._event("error", where=kind, error=f"{type(e).__name__}: {e}")
                 if self.ex.armed(): self._halt(f"error while handling an {kind}: {type(e).__name__}: {e}")
+
+    def _warm(self, offset):
+        """Keeps two connections to the exchange open on the sender's session, two seconds apart, so an order never
+        waits for a ping to finish (the first version pinged from the sender itself: a signal that arrived during a
+        ping waited 37 ms) and never pays for a new connection."""
+        time.sleep(offset)
+        while True:
+            try: self.ex.call("GET", "/v1/account/balances", timeout=4.0)
+            except Exception as e: log.debug("[live] warm: %s", e)
+            time.sleep(4.0)
 
     def _qty(self, m, q):
         step = m.min_qty or 0.01
