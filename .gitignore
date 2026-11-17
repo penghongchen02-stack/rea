@@ -4,3 +4,5 @@ __pycache__/
 .pytest_cache/
 *.tmp
 .env
+paper-results/.lock
+paper-results/*.tmp

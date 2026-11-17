@@ -17,6 +17,7 @@ separate, deliberate change.
 | Replay the wallets: as traded, after their real fees, under Polymarket US fees, and under each report's filters | `python3 -m psb.replay` | `data/` |
 | Paper-trade the seven bots, $1,000 each | `python3 -m psb.paper --minutes 120` | `gateway.polymarket.us`, `gamma-api`, `clob.polymarket.com` |
 | Settle and report paper positions | `python3 -m psb.paper --report` | `paper/ledger.json` |
+| One scheduled run: resume, trade, commit and push results | `scripts/run_paper.sh 110` | `paper-results/` |
 | Tests | `python3 -m pytest` | |
 
 Python 3.10+, no runtime dependencies.
@@ -121,3 +122,11 @@ For these windows only:
   SWISSTONY. They roughly preserved FERRARICHAMPIONS2026.
 * These are short windows, one wallet each: none of this is evidence of a
   durable edge.
+
+## Scheduled paper runs
+
+`scripts/run_paper.sh` resumes from `paper-results/ledger.json`, paper-trades for
+the given minutes, writes `paper-results/report.md`, and commits and pushes both,
+so a run in a fresh container picks up where the last one stopped. A lock file
+prevents overlapping runs. A Claude Code scheduled task starts it every 2 hours;
+between runs nothing is polled, so resting paper orders and live games are missed.
