@@ -44,6 +44,9 @@ ok(abs(b.st["tot"]["pnl"] - (10 * 0.10 - fee)) < 1e-9, "neither pays: still the 
 # the size limit
 b = bot(max_usd_per_arb=9.0); b.execute(legs(A, B, 0.40, 0.50), 50, ("a", "b"), "t", 0.05)
 ok(b.st["tot"]["sets"] == 10.0, "one arbitrage ties up at most the limit ($9 at 90c a set is 10 sets)")
+b = bot(); A9 = M("a", [(0.39, 500)], [(0.40, 500)]); B9 = M("b", [(0.50, 500)], [(0.51, 500)])
+for i in range(4): b.execute(legs(A9, B9, 0.40, 0.50), 50, ("a", "b"), "t", 0.05)
+ok(abs(b.open_cost() - 20.0) < 0.5 and b.open_cost() <= 20.0, "repeated passes at one pair still tie up at most the limit")
 b = bot(shadow_bank_usd=30.0)
 for i in range(3): b.execute(legs(M("a%d" % i, [(0.39, 50)], [(0.40, 50)]), M("b%d" % i, [(0.50, 50)], [(0.51, 50)]), 0.40, 0.50), 50, (i,), "t", 0.05)
 ok(b.open_cost() <= 30.0 + 1e-9 and b.st["tot"]["sets"] < 34, "open shadow lots never tie up more than the bank")

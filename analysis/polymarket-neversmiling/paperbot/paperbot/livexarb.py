@@ -106,7 +106,8 @@ class ShadowXArb(XArbFast):
     def execute(self, legs, n, key, label, edge):
         (a, sa, pa, ta), (b, sb, pb, tb) = legs          # buy a at pa, sell b at pb
         set_cost = pa + (1 - pb); room = self.cfg["shadow_bank_usd"] - self.open_cost()
-        n = min(n, self.cfg["max_usd_per_arb"] / max(set_cost, 0.01), room / max(set_cost, 0.01))
+        in_pair = sum(abs(q) * (px if q > 0 else 1 - px) for slug in (a.slug, b.slug) for q, px, fee in self.st["lots"].get(slug, []))
+        n = min(n, (self.cfg["max_usd_per_arb"] - in_pair) / max(set_cost, 0.01), room / max(set_cost, 0.01))      # the limit is for the pair, however many passes take it
         n = math.floor(n * 100) / 100
         if n < max(a.min_qty or 0.01, b.min_qty or 0.01): self.stats["unaffordable"] += 1; return False
         res = [None, None]
