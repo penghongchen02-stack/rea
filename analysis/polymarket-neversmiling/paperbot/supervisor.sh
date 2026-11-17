@@ -1,6 +1,6 @@
 #!/bin/bash
 # Keeps the paper-trading engine alive for ~7000 s; restarts it if the process is gone.
-D=/home/user/rea/analysis/polymarket-neversmiling/paperbot
+D="$(cd "$(dirname "$0")" && pwd)"      # wherever this copy lives (the cloud session or a laptop)
 end=$(( $(date +%s) + 7000 ))
 while [ "$(date +%s)" -lt "$end" ]; do
   if ! pgrep -f "python3 -u -m paperbot.run" >/dev/null; then
