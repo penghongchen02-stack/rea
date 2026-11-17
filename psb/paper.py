@@ -43,6 +43,7 @@ class Config:
     min_edge: float = 0.02          # required edge after fees, in price units
     order_contracts: float = 10.0   # per simulated order
     max_contracts: float = 100.0    # per strategy per market
+    bankroll: float = 1000.0        # paper dollars per strategy
     taker_theta: float = fees.WORST_TAKER_THETA  # a new account starts at tier 1
 
 
@@ -94,6 +95,18 @@ class Ledger:
         }, indent=1))
         tmp.replace(path)
 
+    def available_cash(self, strategy: str, bankroll: float) -> float:
+        """Bankroll plus settled P&L, minus worst-case loss of open positions and
+        the cost of resting quotes."""
+        free = bankroll
+        for slug, p in self.positions.get(strategy, {}).items():
+            if slug in self.settled:
+                free += p.cash + p.contracts * self.settled[slug]
+            else:
+                free += worst_case(p.cash, p.contracts)
+        free -= sum(q.price * q.contracts for q in self.quotes if q.strategy == strategy)
+        return free
+
     def position(self, strategy: str, slug: str) -> Position:
         return self.positions.setdefault(strategy, {}).setdefault(slug, Position())
 
@@ -112,6 +125,19 @@ class Ledger:
                            "price": round(price, 4), "contracts": contracts,
                            "fee": round(fee, 4), "kind": kind,
                            "fair": round(fair, 4)})
+
+
+def worst_case(cash: float, contracts: float) -> float:
+    """Value of a position if it settles against us (long at 0, short at 1)."""
+    return cash + min(0.0, contracts)
+
+
+def cash_needed(pos: Position, side: str, price: float, contracts: float, fee: float) -> float:
+    """Extra cash an order locks; negative when it cashes out an opposite position."""
+    signed = contracts if side == "long" else -contracts
+    long_px = price if side == "long" else 1 - price
+    after = worst_case(pos.cash - signed * long_px - fee, pos.contracts + signed)
+    return worst_case(pos.cash, pos.contracts) - after
 
 
 def _now() -> str:
@@ -164,7 +190,8 @@ def decide(strategy: str, m: usmarket.UsMarket, top: usmarket.Top, fair: float,
 
 
 def cycle(leagues: list[str], ledger: Ledger, cfg: Config, log) -> dict:
-    stats = {"markets": 0, "matched": 0, "taker_fills": 0, "maker_fills": 0, "quotes": 0}
+    stats = {"markets": 0, "matched": 0, "taker_fills": 0, "maker_fills": 0, "quotes": 0,
+             "no_cash": 0}
     markets: list[usmarket.UsMarket] = []
     for lg in leagues:
         try:
@@ -205,16 +232,24 @@ def cycle(leagues: list[str], ledger: Ledger, cfg: Config, log) -> dict:
         for strategy in STRATEGIES:
             held = ledger.position(strategy, m.slug).contracts
             for kind, side, px in decide(strategy, m, top, fair, cfg, held):
+                pos = ledger.position(strategy, m.slug)
                 if kind == "taker":
                     shown = top.ask_qty if side == "long" else top.bid_qty
                     n = min(cfg.order_contracts, shown)
                     if n <= 0:
                         continue
                     fee = fees.taker_fee(n, px, cfg.taker_theta)
+                    if cash_needed(pos, side, px, n, fee) > ledger.available_cash(strategy, cfg.bankroll):
+                        stats["no_cash"] += 1
+                        continue
                     fv = fair if side == "long" else 1 - fair
                     ledger.fill(strategy, m.slug, side, px, n, fee, "taker", fv)
                     stats["taker_fills"] += 1
                 else:
+                    if cash_needed(pos, side, px, cfg.order_contracts, 0.0) > \
+                            ledger.available_cash(strategy, cfg.bankroll):
+                        stats["no_cash"] += 1
+                        continue
                     fv = fair if side == "long" else 1 - fair
                     ledger.quotes.append(Quote(strategy, m.slug, side, px, cfg.order_contracts,
                                                _now(), fv))
@@ -236,23 +271,26 @@ def settle(ledger: Ledger) -> int:
     return n
 
 
-def report(ledger: Ledger) -> str:
-    lines = ["| Strategy | Fills (taker/maker) | Open markets | Settled P&L | Fees | Open exposure |",
-             "|---|---|---|---|---|---|"]
+def report(ledger: Ledger, bankroll: float) -> str:
+    lines = [f"Paper bankroll ${bankroll:,.0f} per strategy. No real orders.", "",
+             "| Strategy | Fills (taker/maker) | Open markets | Settled P&L | Fees paid "
+             "| At risk in open positions | Cash available |",
+             "|---|---|---|---|---|---|---|"]
     for s in STRATEGIES:
         fills = [f for f in ledger.fills if f["strategy"] == s]
         taker = sum(f["kind"] == "taker" for f in fills)
-        settled_pnl = fee_total = exposure = 0.0
+        settled_pnl = fee_total = at_risk = 0.0
         open_n = 0
         for slug, p in ledger.positions.get(s, {}).items():
             fee_total += p.fees
             if slug in ledger.settled:
                 settled_pnl += p.cash + p.contracts * ledger.settled[slug]
-            elif abs(p.contracts) > 1e-9:
-                open_n += 1
-                exposure += abs(p.contracts)
+            elif abs(p.contracts) > 1e-9 or abs(p.cash) > 1e-9:
+                open_n += abs(p.contracts) > 1e-9
+                at_risk -= worst_case(p.cash, p.contracts)
         lines.append(f"| {s} | {taker}/{len(fills) - taker} | {open_n} | ${settled_pnl:,.2f} "
-                     f"| ${fee_total:,.2f} | {exposure:,.0f} contracts |")
+                     f"| ${fee_total:,.2f} | ${at_risk:,.2f} "
+                     f"| ${ledger.available_cash(s, bankroll):,.2f} |")
     return "\n".join(lines)
 
 
@@ -263,9 +301,11 @@ def main(argv=None):
     p.add_argument("--leagues", nargs="*", default=DEFAULT_LEAGUES)
     p.add_argument("--ledger", default=str(STATE / "ledger.json"))
     p.add_argument("--min-edge", type=float, default=Config.min_edge)
+    p.add_argument("--bankroll", type=float, default=Config.bankroll,
+                   help="paper dollars per strategy")
     p.add_argument("--report", action="store_true", help="only settle and print the report")
     a = p.parse_args(argv)
-    cfg = Config(min_edge=a.min_edge)
+    cfg = Config(min_edge=a.min_edge, bankroll=a.bankroll)
     path = Path(a.ledger)
     ledger = Ledger.load(path)
     log_path = path.with_name("paper.log")
@@ -286,7 +326,7 @@ def main(argv=None):
                 time.sleep(max(0.0, a.interval - (time.monotonic() - started)))
     log(f"settled {settle(ledger)} markets")
     ledger.save(path)
-    print(report(ledger))
+    print(report(ledger, cfg.bankroll))
 
 
 if __name__ == "__main__":

@@ -94,8 +94,11 @@ and lets each strategy act. Fill model:
 * **Maker:** a one-cycle resting bid that fills only if a later cycle shows the
   opposite price strictly through it. This ignores queue position.
 
-Defaults: 10 contracts per order, 100 per strategy per market, 2¢ minimum edge
-after fees. Positions use a signed contract count, netted as on Polymarket US.
+Each strategy gets its own **$1,000 paper bankroll** (`--bankroll`). An order is
+skipped unless it fits in available cash = bankroll + settled P&L − worst-case
+loss of open positions − cost of resting quotes; buying the opposite side frees
+cash as on Polymarket US. Defaults: 10 contracts per order, 100 per strategy per
+market, 2¢ minimum edge after fees. Positions use a signed contract count, netted as on Polymarket US.
 The ledger is `paper/ledger.json`; the log is `paper/paper.log`.
 
 Known limits: polling REST, not WebSocket; no latency or queue model; only

@@ -76,3 +76,25 @@ def test_position_cap_blocks_more_buys():
     top = Top(bid=0.12, bid_qty=100, ask=0.13, ask_qty=100, state="MARKET_STATE_OPEN")
     acts = paper.decide("ferrarichampions2026", m, top, 0.30, cfg, held=100)
     assert all(side == "short" for _, side, _ in acts)
+
+
+def test_bankroll_locks_worst_case_and_netting_frees_it():
+    led = paper.Ledger()
+    assert led.available_cash("s", 1000) == pytest.approx(1000)
+    led.fill("s", "m", "long", 0.60, 10, 0.0, "taker", 0.6)      # locks $6.00
+    assert led.available_cash("s", 1000) == pytest.approx(994)
+    led.fill("s", "m2", "short", 0.25, 10, 0.0, "taker", 0.25)   # buying No @0.25 locks $2.50
+    assert led.available_cash("s", 1000) == pytest.approx(991.5)
+    pos = led.position("s", "m")
+    assert paper.cash_needed(pos, "short", 0.25, 10, 0.0) == pytest.approx(-7.5)  # cash-out
+    led.fill("s", "m", "short", 0.25, 10, 0.0, "taker", 0.25)
+    assert led.available_cash("s", 1000) == pytest.approx(999.0)  # +1.50 realized, 2.50 still at risk
+    led.settled["m2"] = 0.0                                        # the No side won
+    assert led.available_cash("s", 1000) == pytest.approx(1009.0)
+
+
+def test_quotes_reserve_cash():
+    led = paper.Ledger()
+    led.quotes.append(paper.Quote("s", "m", "long", 0.40, 10, "t", 0.45))
+    assert led.available_cash("s", 1000) == pytest.approx(996)
+    assert led.available_cash("other", 1000) == pytest.approx(1000)
