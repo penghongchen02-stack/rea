@@ -11,7 +11,8 @@
     "build": "vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:demo": "vite build --mode demo && node scripts/build-artifact.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

@@ -60,11 +60,6 @@ export function setSessionCookie(res: Response, token: string, secure: boolean):
   res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure, maxAge: SESSION_TTL_MS, path: "/" });
 }
 
-export function publicUser(user: User): Omit<User, "passwordHash"> {
-  const { passwordHash: _omit, ...rest } = user;
-  return rest;
-}
-
 declare module "express-serve-static-core" {
   interface Request {
     user?: User;

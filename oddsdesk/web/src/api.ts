@@ -43,7 +43,16 @@ export class ApiError extends Error {
   }
 }
 
+/** True in the standalone demo build, where the backend runs in the browser. */
+export const DEMO = import.meta.env.MODE === "demo";
+
 export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  if (DEMO) {
+    const { localApi } = await import("./demo/local-backend");
+    const { status, json } = await localApi(init.method ?? "GET", path, init.body);
+    if (status >= 400) throw new ApiError(status, (json as { error?: string }).error ?? "Request failed");
+    return json as T;
+  }
   const res = await fetch(path, {
     method: init.method ?? "GET",
     headers: init.body === undefined ? undefined : { "content-type": "application/json" },

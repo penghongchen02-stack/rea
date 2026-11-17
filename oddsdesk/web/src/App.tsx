@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { DEMO } from "./api";
 import { SessionProvider, useSession } from "./session";
 import { OddsPage } from "./pages/Odds";
 import { EvPage } from "./pages/Ev";
@@ -42,7 +43,10 @@ function Shell() {
             </NavLink>
           ))}
         </nav>
-        <p className="sidebar-note">All odds, teams and sportsbooks on this site are simulated sample data.</p>
+        <p className="sidebar-note">
+          All odds, teams and sportsbooks on this site are simulated sample data.
+          {DEMO && " This demo runs entirely in your browser: accounts and bets are saved on this device only, and billing is a demo switch."}
+        </p>
       </aside>
       <div className="main">
         <header className="topbar">

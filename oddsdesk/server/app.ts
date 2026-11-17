@@ -1,54 +1,39 @@
 import { randomUUID } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
-import { americanToDecimal } from "../shared/odds-math.js";
-import { buildBoard, findArbs, findEv, type MarketFilter } from "./analysis.js";
+import { buildBoard, findArbs, findEv } from "./analysis.js";
 import {
   SESSION_COOKIE,
   Sessions,
   hashPassword,
-  publicUser,
   readCookie,
   requireUser,
   setSessionCookie,
   verifyPassword,
 } from "./auth.js";
 import { BOOKS, SPORTS, type SampleFeed } from "./sample-data.js";
+import {
+  FREE_LIMITS,
+  betStats,
+  betUpdateSchema,
+  credentialsSchema,
+  gate,
+  marketFilterSchema,
+  minEvSchema,
+  newBetSchema,
+  publicUser,
+  sortBets,
+} from "./rules.js";
 import type { JsonStore } from "./store.js";
 import type { Bet, User } from "./types.js";
 
-/** What a free account sees before upgrading. */
-export const FREE_LIMITS = { ev: 3, arbs: 1 } as const;
+export { FREE_LIMITS };
 
 export interface AppDeps {
   feed: SampleFeed;
   store: JsonStore;
   secureCookies?: boolean;
 }
-
-const marketFilterSchema = z.object({
-  sport: z.string().optional(),
-  market: z.enum(["moneyline", "spread", "total"]).optional(),
-});
-
-const credentialsSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
-  password: z.string().min(8, "Password must be at least 8 characters").max(200),
-});
-
-const americanSchema = z
-  .number()
-  .int()
-  .refine((n) => Math.abs(n) >= 100, "American odds must be <= -100 or >= +100");
-
-const newBetSchema = z.object({
-  description: z.string().trim().min(1).max(200),
-  book: z.string().trim().min(1).max(60),
-  americanOdds: americanSchema,
-  stake: z.number().positive().max(1_000_000),
-});
-
-const betUpdateSchema = z.object({ status: z.enum(["open", "won", "lost", "push"]) });
 
 export function createApp({ feed, store, secureCookies = false }: AppDeps): express.Express {
   const app = express();
@@ -78,19 +63,19 @@ export function createApp({ feed, store, secureCookies = false }: AppDeps): expr
   });
 
   app.get("/api/odds", (req, res) => {
-    const filter = parseFilter(req);
+    const filter = marketFilterSchema.parse(req.query);
     res.json({ updatedAt: feed.updatedAt, version: feed.version, rows: buildBoard(feed.listEvents(), feed.listMarkets(), filter) });
   });
 
   app.get("/api/ev", (req, res) => {
-    const filter = parseFilter(req);
-    const minEvPercent = z.coerce.number().min(-100).max(100).default(0).parse(req.query.minEv);
-    const all = findEv(feed.listEvents(), feed.listMarkets(), BOOKS, { ...filter, minEv: minEvPercent / 100 });
+    const filter = marketFilterSchema.parse(req.query);
+    const minEv = minEvSchema.parse(req.query.minEv);
+    const all = findEv(feed.listEvents(), feed.listMarkets(), BOOKS, { ...filter, minEv });
     res.json({ updatedAt: feed.updatedAt, version: feed.version, ...gate(all, req.user, FREE_LIMITS.ev) });
   });
 
   app.get("/api/arbs", (req, res) => {
-    const filter = parseFilter(req);
+    const filter = marketFilterSchema.parse(req.query);
     const all = findArbs(feed.listEvents(), feed.listMarkets(), filter);
     res.json({ updatedAt: feed.updatedAt, version: feed.version, ...gate(all, req.user, FREE_LIMITS.arbs) });
   });
@@ -147,7 +132,7 @@ export function createApp({ feed, store, secureCookies = false }: AppDeps): expr
   // --- Bet tracker ----------------------------------------------------------
 
   app.get("/api/bets", requireUser, (req, res) => {
-    const bets = store.bets.filter((b) => b.userId === req.user!.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const bets = sortBets(store.bets.filter((b) => b.userId === req.user!.id));
     res.json({ bets, stats: betStats(bets) });
   });
 
@@ -199,47 +184,6 @@ export function createApp({ feed, store, secureCookies = false }: AppDeps): expr
   return app;
 }
 
-function parseFilter(req: Request): MarketFilter {
-  const { sport, market } = marketFilterSchema.parse(req.query);
-  return { sportId: sport || undefined, kind: market };
-}
-
-function gate<T>(items: T[], user: User | undefined, freeLimit: number): { items: T[]; total: number; locked: number } {
-  const visible = user?.plan === "pro" ? items : items.slice(0, freeLimit);
-  return { items: visible, total: items.length, locked: items.length - visible.length };
-}
-
 function ownBet(store: JsonStore, req: Request): Bet | undefined {
   return store.bets.find((b) => b.id === req.params.id && b.userId === req.user!.id) as Bet | undefined;
-}
-
-export function betStats(bets: readonly Bet[]) {
-  let staked = 0;
-  let profit = 0;
-  let settled = 0;
-  let won = 0;
-  for (const bet of bets) {
-    if (bet.status === "open") continue;
-    settled++;
-    staked += bet.stake;
-    if (bet.status === "won") {
-      won++;
-      profit += bet.stake * (americanToDecimal(bet.americanOdds) - 1);
-    } else if (bet.status === "lost") {
-      profit -= bet.stake;
-    }
-  }
-  return {
-    total: bets.length,
-    open: bets.length - settled,
-    settled,
-    won,
-    staked: round2(staked),
-    profit: round2(profit),
-    roi: staked > 0 ? profit / staked : 0,
-  };
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
 }
