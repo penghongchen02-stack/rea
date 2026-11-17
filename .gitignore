@@ -1,0 +1,6 @@
+data/
+paper/
+__pycache__/
+.pytest_cache/
+*.tmp
+.env
