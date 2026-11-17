@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shadow xarb_fast</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5b6472;--line:#dfe3ea;--good:#0a7a43;--bad:#b3261e;--shadow:#3b5bdb}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1216;--card:#181c22;--ink:#e8ebf0;--mute:#9aa3b2;--line:#2a303a;--good:#4ccf8a;--bad:#ff7b72;--shadow:#8da2fb}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:22px 0 8px}
+.sub{color:var(--mute);font-size:13px}.banner{border-radius:10px;padding:12px 14px;margin:12px 0;font-weight:600;color:#fff;background:var(--shadow)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}.k{color:var(--mute);font-size:12px}.v{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}
+.pos{color:var(--good)}.neg{color:var(--bad)}.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--mute);font-weight:600}tr:last-child td{border-bottom:0}
+</style></head><body>
+<h1>Shadow xarb_fast</h1><div class="sub" id="ts">loading</div>
+<div class="banner">SHADOW ONLY: this bot cannot send orders. It checks each gap with the exchange and counts what was still there.</div>
+<h2>Gaps found</h2><div class="grid" id="gaps"></div>
+<h2>Shadow results</h2><div class="grid" id="res"></div>
+<h2>Speed and search</h2><div class="grid" id="speed"></div>
+<h2>Open shadow positions</h2><div class="wrap"><table id="open"></table></div>
+<h2>Latest events</h2><div class="wrap"><table id="events"></table></div>
+<script>
+const $=id=>document.getElementById(id),usd=x=>x==null?'n/a':(x<0?'-':'')+'$'+Math.abs(x).toFixed(2),esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const card=(k,v,c)=>`<div class="card"><div class="k">${esc(k)}</div><div class="v ${c||''}">${esc(v)}</div></div>`,sign=x=>x>0?'pos':x<0?'neg':'',short=s=>esc((s||'').replace(/^cpc[a-z]*-/,'').replace('-updown-',' ').replace(/2026-\d\d-\d\d-/,''));
+async function load(){
+ let s;try{s=await(await fetch('status.json?'+Date.now())).json()}catch(e){$('ts').textContent='no status yet';return}
+ const t=s.totals,rt=s.round_trip_ms,f=s.feeds||{},sc=s.scan||{},L=s.limits;
+ document.querySelector('h1').textContent='Shadow xarb_fast · '+(s.assets.length>1?'all four coins':'Bitcoin only');
+ $('ts').textContent='Updated '+s.ts+' · coins: '+s.assets.join(', ')+' · sized against '+usd(L.shadow_bank_usd)+', at most '+usd(L.max_usd_per_arb)+' an arbitrage';
+ const pct=t.gaps?Math.round(100*t.both/t.gaps)+'%':'n/a';
+ $('gaps').innerHTML=card('Gaps found',t.gaps)+card('Both quotes still there',t.both+' ('+pct+')')+card('Only one quote left',t.one_leg)+card('Both gone',t.neither)+card('Best gap seen',sc.best_gap_c==null?'n/a':sc.best_gap_c+'c');
+ $('res').innerHTML=card('Shadow sets',t.sets)+card('Locked profit',usd(t.locked),sign(t.locked))+card('Cost of one-legged fills',usd(-t.leg_cost),sign(-t.leg_cost))+card('Settled P/L',usd(t.pnl),sign(t.pnl))+card('Fees',usd(t.fees))+card('Tied up now',usd(s.open_cost));
+ $('speed').innerHTML=card('Both previews (median)',rt?rt.median+' ms':'no gap yet')+card('Both previews, slowest',rt?rt.max+' ms':'n/a')+card('Scans',sc.scans||0)+card('Pairs being watched',sc.watching||0)+card('Windows / strikes',(f.windows||0)+' / '+(f.strikes||0))+card('Order-book stream',f.books&&f.books.connected?'connected':'not connected',f.books&&f.books.connected?'pos':'neg');
+ const op=Object.entries(s.open||{});
+ $('open').innerHTML='<tr><th>Market</th><th>Net contracts</th><th>Lots</th></tr>'+(op.length?op.map(([k,v])=>`<tr><td>${short(k)}</td><td>${v[0]}</td><td>${v[1]}</td></tr>`).join(''):'<tr><td colspan="3">none</td></tr>');
+ $('events').innerHTML='<tr><th>Time (UTC)</th><th>Event</th><th>Buy</th><th>Sell</th><th>Ask / bid</th><th>Wanted</th><th>Still there (buy / sell)</th><th>Sets</th><th>Round trip</th><th>Detail</th></tr>'+((s.events||[]).map(e=>e.kind==='gap'?`<tr><td>${new Date(e.ts*1000).toISOString().slice(11,19)}</td><td>gap</td><td>${short(e.buy)}</td><td>${short(e.sell)}</td><td>${e.ask} / ${e.bid}</td><td>${e.wanted}</td><td>${e.buy_left} / ${e.sell_left}</td><td>${e.sets}</td><td>${e.ms} ms</td><td>${e.one_legged?'one-legged '+e.one_legged+', cost '+usd(e.leg_cost):''}</td></tr>`:`<tr><td>${new Date(e.ts*1000).toISOString().slice(11,19)}</td><td>${esc(e.kind)}</td><td colspan="7">${short(e.slug)} ${e.up==null?'':(e.up?'paid':'did not pay')}</td><td>${e.pnl!=null?'P/L '+usd(e.pnl):''}</td></tr>`).join('')||'<tr><td colspan="10">none yet</td></tr>');
+}
+load();setInterval(load,3000);
+</script></body></html>

@@ -15,6 +15,13 @@ while [ "$(date +%s)" -lt "$end" ]; do
       (cd "$D" && PAPERBOT_DATA="$D/paperbot-data" nohup python3 -u -m paperbot.live run $spec >> "$D/paperbot-data-live-stdout.log" 2>&1 &)
     fi
   done
+  # shadow xarb_fast (paperbot/livexarb.py; it cannot send orders): "xarb" is Bitcoin only on port 8097, "xarb4" all four coins on 8098
+  for spec in "xarb 8097" "xarb4 8098"; do
+    if ! pgrep -f "python3 -u -m paperbot.livexarb run $spec" >/dev/null; then
+      echo "$(date -u +%FT%TZ) starting shadow xarb $spec"
+      (cd "$D" && PAPERBOT_DATA="$D/paperbot-data" nohup python3 -u -m paperbot.livexarb run $spec >> "$D/paperbot-data-live-stdout.log" 2>&1 &)
+    fi
+  done
   sleep 30
 done
 echo "$(date -u +%FT%TZ) supervisor window ended"

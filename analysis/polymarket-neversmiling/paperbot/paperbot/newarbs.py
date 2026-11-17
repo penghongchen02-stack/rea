@@ -150,7 +150,7 @@ class Solver(ArbBase):
             ms = sorted(ms, key=lambda m: abs((line(m) or v) - v))[:self.MAX_LEGS]
         self.stats["groups"] += 1
         edge, chosen = self.best(ms, now)
-        if edge > self.stats.get("best_gap_c", -99): self.stats["best_gap_c"] = round(edge * 100, 2)
+        if edge * 100 > self.stats.get("best_gap_c", -99): self.stats["best_gap_c"] = round(edge * 100, 2)
         if edge < self.MIN_EDGE or not chosen: return
         self.stats["candidates"] += 1
         if not all(self.live(m, now) for m, _, _ in chosen): return

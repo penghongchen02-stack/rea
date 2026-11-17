@@ -536,7 +536,7 @@ class XArbFast(ArbBase):
                     bid_b = b.best_bid if sb == "live" else (b.best_bid if now - b.book_ts < 60 else b.list_bid)
                     if ask_a is None or bid_b is None: continue
                     gap = bid_b - ask_a - self.fee(ask_a) - self.fee(bid_b)
-                    if gap > self.stats.get("best_gap_c", -99): self.stats["best_gap_c"] = round(gap * 100, 2)
+                    if gap * 100 > self.stats.get("best_gap_c", -99): self.stats["best_gap_c"] = round(gap * 100, 2)
                     if gap < -self.WATCH: continue
                     # near a violation: watch both books every second
                     a.hot_until = b.hot_until = now + 10; self.stats["watching"] += 1

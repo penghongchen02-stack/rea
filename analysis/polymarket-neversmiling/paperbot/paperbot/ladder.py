@@ -336,7 +336,7 @@ class XArb:
                     bid_a, ask_a, _, _ = self.quotes(a, sa); bid_b, ask_b, _, _ = self.quotes(b, sb)
                     if ask_a is None or bid_b is None: continue
                     prem = bid_b - ask_a - theta * ask_a * (1 - ask_a) - theta * bid_b * (1 - bid_b)
-                    if prem > self.stats.get("best_gap_c", -99): self.stats["best_gap_c"] = round(prem * 100, 2)
+                    if prem * 100 > self.stats.get("best_gap_c", -99): self.stats["best_gap_c"] = round(prem * 100, 2)
                     if prem < self.MIN_EDGE: continue
                     key = (a.slug, b.slug)
                     if self.repeats[key] >= self.MAX_REPEATS: continue

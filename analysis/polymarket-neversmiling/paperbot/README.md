@@ -639,3 +639,15 @@ decision, Bitcoin only by default.
 - **Checks:** `python3 test_live.py` (34 checks against a stand-in exchange) and `python3 -m paperbot.live`
   (read-only: key, balance, positions, status; `preview <slug>` validates the four order forms). The answer to a
   real fill has not been seen, so after every order the bot reads the position back from the exchange.
+
+## Shadow xarb_fast, and a four-coin copy of each shadow bot (11-17 12:25Z)
+
+Asked for by the user on 11-17. `paperbot/livexarb.py` runs xarb_fast's search in its own process and, for every gap,
+sends both legs to the exchange's preview endpoint at once, then counts what both books still show. Contracts both
+legs still show become a shadow set, held to settlement; contracts only one leg shows are unwound in the shadow and
+their cost recorded. The module has no code that sends an order. `xarb` (Bitcoin, port 8097) and `xarb4` (four
+coins, port 8098) size against $100 with at most $20 an arbitrage; page `web/livexarb.html`; checks
+`python3 test_livexarb.py` (14). `live4` (port 8096) is the four-coin copy of the fast_pickoff shadow. Both
+fast_pickoff shadows run with the protective exit off since 12:14Z (`"exit": false` in their `live.json`).
+The "best gap" figure of the arbitrage scanners compared dollars with cents and showed the last pair's gap, not the
+best; fixed (display only).
