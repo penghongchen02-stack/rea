@@ -609,3 +609,12 @@ dollar1000's `v_loose_rest_n4` (v_loose_rest with `clip` 2.38 instead of 2.0; +$
 11-11 17:15Z, 250 of 272 windows won) was added at the user's request to dollar30 (a `roster.json` entry, orders up
 to $30) and to the tryout (`add.json`, `keep` 300), each on a fresh $1,000 account. The engine was restarted for
 the dollar30 entry.
+
+## Thirty-five Bitcoin-only pickoff versions (11-17 09:40Z)
+
+Asked for by the user on 11-17 09:20Z. On the tryout, Bitcoin made about two thirds of fast_pickoff's profit, and the
+Bitcoin windows of the realism versions were still ahead (`fp_43` +$34, `fp_44` +$116) while their other coins lost.
+`paperbot/fastpicks.py` now also builds `fpb_01_exact_copy` to `fpb_35_still_there_and_1c_more` (builder source
+`fp`): the Bitcoin-only bot (`fp_29`) with one thing changed each, number 1 unchanged as the yardstick, 30 and 31
+joining two changes, 32-35 the realism tests. All 35 joined the tryout through `add.json` with `"keep": 150` and
+`"all_coins": true`, each on its own $1,000. The state before is `paperbot-data/tryout/tryout.before-fpb35.json`.

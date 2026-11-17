@@ -1,5 +1,5 @@
 """Fifty numbered versions of fast_pickoff (user, 11-15 09:40Z), to see which part of it is the profit. Builder
-source "fp"; names start with "fp_01" ... "fp_50".
+source "fp"; names start with "fp_01" ... "fp_50". Thirty-five Bitcoin-only versions ("fpb_01" ... "fpb_35", 11-17) follow them.
 
 fast_pickoff (paperbot/fastpick.py) was +$665 after 1,429 windows, but its copies with one setting changed have gone
 both ways (half-second look +$179, cheap side only -$16, 15-minute -$56). Each version here is fast_pickoff with one
@@ -133,12 +133,58 @@ V = [
 ]
 assert len(V) == 50
 BOTS = {f"fp_{i:02d}_{name}": (f"FAST PICKOFF {i}: {what}", attrs) for i, (name, what, attrs) in enumerate(V, 1)}
+
+
+# Thirty-five Bitcoin-only versions (user, 11-17 09:20Z): names "fpb_01" ... "fpb_35". On the tryout Bitcoin made
+# two thirds of fast_pickoff's profit (51% of windows won against 23-29% on the other coins), and the Bitcoin part of
+# the realism versions was still ahead. Each version here is the Bitcoin-only bot (fp_29) with one thing changed;
+# number 1 changes nothing and is the yardstick. 30 and 31 join the changes that were furthest ahead; 32-35 are the
+# realism tests.
+B = [
+    ("exact_copy", "nothing changed: the yardstick for the other 34", {}),
+    ("jump_2_0", "acts on jumps of 2 times the usual move instead of 2.5", {"JUMP_SD": 2.0}),
+    ("jump_3_0", "only jumps of 3 times the usual move", {"JUMP_SD": 3.0}),
+    ("jump_3_5", "only jumps of 3.5 times the usual move", {"JUMP_SD": 3.5}),
+    ("jump_4_5", "only jumps of 4.5 times the usual move", {"JUMP_SD": 4.5}),
+    ("look_half_second", "measures the jump over half a second instead of one", {"LOOK": 0.5}),
+    ("look_2_seconds", "measures the jump over 2 seconds", {"LOOK": 2.0}),
+    ("edge_1c", "needs a 1c edge after the fee instead of 2c", {"EDGE": 0.01}),
+    ("edge_3c", "needs a 3c edge after the fee", {"EDGE": 0.03}),
+    ("edge_5c", "needs a 5c edge after the fee", {"EDGE": 0.05}),
+    ("edge_8c", "needs an 8c edge after the fee", {"EDGE": 0.08}),
+    ("price_up_to_40c", "only buys a side that costs 40c or less", {"MAX_PRICE": 0.40}),
+    ("price_40_to_60c", "only buys a side at 40-60c", {"MIN_PRICE": 0.40, "MAX_PRICE": 0.60}),
+    ("price_60_to_90c", "only buys a side at 60-90c", {"MIN_PRICE": 0.60}),
+    ("price_up_to_97c", "may pay up to 97c instead of 90c", {"MAX_PRICE": 0.97}),
+    ("skip_first_minute", "no bets in a window's first minute", {"LEFT": (20, 240)}),
+    ("skip_last_minute", "no bets in a window's last minute", {"LEFT": (60, 285)}),
+    ("first_half_only", "bets only in the first half of a window", {"LEFT": (150, 285)}),
+    ("second_half_only", "bets only in the second half of a window", {"LEFT": (20, 150)}),
+    ("last_minute_only", "bets only in the last minute", {"LEFT": (5, 60)}),
+    ("quote_not_moved_at_all", "the quote must not have moved at all since before the jump (the original allows 1c)", {"STALE": 0.001}),
+    ("quote_moved_up_to_3c", "the quote may already have moved 3c", {"STALE": 0.03}),
+    ("15_minute_windows", "15-minute windows instead of 5-minute", {"DUR": 900, "LEFT": (60, 855)}),
+    ("up_only", "only Up bets (after an upward jump)", {"SIDES": ("buy",)}),
+    ("down_only", "only Down bets (after a downward jump)", {"SIDES": ("sell",)}),
+    ("double_size", "twice the bet size", {"MULT": 2.0}),
+    ("no_exit", "never sells out early: every bet is held to the close", {"EXIT": False}),
+    ("exit_later", "sells out later (confidence under 0.5 instead of 1)", {"EXIT_Z": 0.5}),
+    ("two_bets_a_window", "up to two bets a window, 30 seconds apart, instead of one", {"SHOTS": 2}),
+    ("no_exit_quote_not_moved", "never sells out early, and the quote must not have moved at all", {"EXIT": False, "STALE": 0.001}),
+    ("no_exit_half_second", "never sells out early, and measures the jump over half a second", {"EXIT": False, "LOOK": 0.5}),
+    ("quote_must_still_be_there", "REALISM: the bet counts only if the quote is still there up to a second later", {"STILL": True}),
+    ("pays_1c_more", "REALISM: pays 1c more than the quote it saw", {"SLIP": 0.01}),
+    ("pays_2c_more", "REALISM: pays 2c more than the quote it saw", {"SLIP": 0.02}),
+    ("still_there_and_1c_more", "REALISM: the quote must still be there and it pays 1c more", {"STILL": True, "SLIP": 0.01}),
+]
+assert len(B) == 35
+BOTS.update({f"fpb_{i:02d}_{name}": (f"BITCOIN PICKOFF {i}: {what}", {"ASSETS": ("btc",), **attrs}) for i, (name, what, attrs) in enumerate(B, 1)})
 LABELS = {k: v[0] for k, v in BOTS.items()}
 KEEPS_COINS = {k: not v[1].get("COIN_RULE") for k, v in BOTS.items()}
 
 
 def build_fp_registry(engine=None):
     def make(k, attrs):
-        cls = type("Pick_" + k[:5], (Pick,), dict(attrs))
+        cls = type("Pick_" + k.rsplit("_", k.count("_") - 1)[0], (Pick,), dict(attrs))
         return lambda acct: cls(acct, engine, k)
     return {k: make(k, attrs) for k, (_, attrs) in BOTS.items()}
