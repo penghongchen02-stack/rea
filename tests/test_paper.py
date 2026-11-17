@@ -98,3 +98,10 @@ def test_quotes_reserve_cash():
     led.quotes.append(paper.Quote("s", "m", "long", 0.40, 10, "t", 0.45))
     assert led.available_cash("s", 1000) == pytest.approx(996)
     assert led.available_cash("other", 1000) == pytest.approx(1000)
+
+
+def test_wide_international_book_gives_no_fair_value():
+    event = {"markets": [_intl("Fulham FC", 0.01, 0.99)]}
+    assert reference.fair_value(_us("Fulham"), event) is None
+    event = {"markets": [_intl("Fulham FC", 0.10, 0.14)]}
+    assert reference.fair_value(_us("Fulham"), event) == pytest.approx(0.12)

@@ -13,6 +13,9 @@ from .polydata import GAMMA_API, FetchError, get_json
 from .usmarket import UsMarket
 
 MAX_START_GAP = timedelta(hours=6)
+# A midpoint is only a usable fair value when the book is tight; an empty book
+# (bid 0.01 / ask 0.99) has a meaningless 0.50 midpoint.
+MAX_SPREAD = 0.04
 
 
 def _norm(s: str) -> str:
@@ -53,6 +56,8 @@ def fair_value(m: UsMarket, event: dict) -> float | None:
             continue
         bid, ask = im.get("bestBid"), im.get("bestAsk")
         if bid is None or ask is None or not 0 < float(bid) <= float(ask) < 1:
+            continue
+        if float(ask) - float(bid) > MAX_SPREAD + 1e-9:
             continue
         mid0 = (float(bid) + float(ask)) / 2   # midpoint for outcome index 0
         try:
