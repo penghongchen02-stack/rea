@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ArbOpportunity, BoardRow, EvOpportunity } from "../../server/analysis";
-import type { Bet, Book, Plan } from "../../server/types";
+import type { BoardRow, EvMethod, EvOpportunity, HoldRow, LineMove, MiddleRow } from "../../server/analysis";
+import type { Bet, Book, Period, Plan } from "../../server/types";
 
-export type { ArbOpportunity, Bet, BoardRow, Book, EvOpportunity, Plan };
+export type { Bet, BoardRow, Book, EvMethod, EvOpportunity, HoldRow, LineMove, MiddleRow, Plan };
 
 export interface PublicUser {
   id: string;
@@ -13,11 +13,12 @@ export interface PublicUser {
 
 export interface Meta {
   sampleData: boolean;
-  sports: { id: string; name: string }[];
+  sports: { id: string; name: string; periods: { id: Period; name: string }[]; propTypes: string[] }[];
+  events: { id: string; sportId: string; title: string; startTime: string }[];
   books: Book[];
   version: number;
   updatedAt: string;
-  freeLimits: { ev: number; arbs: number };
+  freeLimits: Record<"ev" | "arbs" | "lowHold" | "middles" | "moves", number>;
 }
 
 export interface Gated<T> {

@@ -7,18 +7,38 @@ import { americanToDecimal } from "../shared/odds-math.js";
 import type { MarketFilter } from "./analysis.js";
 import type { Bet, User } from "./types.js";
 
-/** What a free account sees before upgrading. */
-export const FREE_LIMITS = { ev: 3, arbs: 1 } as const;
+/** Rows a free or signed-out visitor sees per tool before upgrading. */
+export const FREE_LIMITS = { ev: 3, arbs: 1, lowHold: 5, middles: 2, moves: 5 } as const;
+
+const KINDS = ["moneyline", "spread", "total", "team_total", "player_prop", "future"] as const;
+const PERIODS = ["full", "h1", "q1", "p1", "f5"] as const;
 
 export const marketFilterSchema = z
   .object({
-    sport: z.string().optional(),
-    market: z.enum(["moneyline", "spread", "total"]).optional(),
+    sport: z.string().max(40).optional(),
+    market: z.enum(KINDS).optional(),
+    period: z.enum(PERIODS).optional(),
+    event: z.string().max(80).optional(),
+    prop: z.string().max(60).optional(),
+    /** Comma-separated book ids; omitted means every book. */
+    books: z.string().max(400).optional(),
   })
-  .transform(({ sport, market }): MarketFilter => ({ sportId: sport || undefined, kind: market }));
+  .transform(({ sport, market, period, event, prop, books }): MarketFilter => ({
+    sportId: sport || undefined,
+    kind: market,
+    period,
+    eventId: event || undefined,
+    propType: prop || undefined,
+    books: books ? books.split(",").filter(Boolean) : undefined,
+  }));
 
 /** Minimum EV in percent; converted to a fraction. */
 export const minEvSchema = z.coerce.number().min(-100).max(100).default(0).transform((n) => n / 100);
+
+export const evMethodSchema = z.enum(["market", "sharp"]).default("market");
+
+/** Minimum implied-probability change in percentage points; converted to a fraction. */
+export const minMoveSchema = z.coerce.number().min(0).max(100).default(1).transform((n) => n / 100);
 
 export const credentialsSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
@@ -39,9 +59,14 @@ export const newBetSchema = z.object({
 
 export const betUpdateSchema = z.object({ status: z.enum(["open", "won", "lost", "push"]) });
 
+/** Most rows any tool returns in one response; `total` still counts every match. */
+export const MAX_ROWS = 200;
+
 export function gate<T>(items: T[], user: User | undefined, freeLimit: number): { items: T[]; total: number; locked: number } {
-  const visible = user?.plan === "pro" ? items : items.slice(0, freeLimit);
-  return { items: visible, total: items.length, locked: items.length - visible.length };
+  const pro = user?.plan === "pro";
+  const visible = items.slice(0, pro ? MAX_ROWS : freeLimit);
+  // Locked counts rows hidden by the plan, not rows past the response cap.
+  return { items: visible, total: items.length, locked: pro ? 0 : items.length - visible.length };
 }
 
 export function publicUser(user: User): Omit<User, "passwordHash"> {

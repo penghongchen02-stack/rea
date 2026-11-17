@@ -32,11 +32,11 @@ export function PricingPage() {
           <h2>Free</h2>
           <div className="price">$0</div>
           <ul>
-            <li>Full odds screen across all books</li>
-            <li>All calculators</li>
-            <li>Bet tracker</li>
-            <li>Top {limits?.ev ?? 3} +EV bets</li>
-            <li>Top {limits?.arbs ?? 1} arbitrage</li>
+            <li>Compare odds, player props and futures</li>
+            <li>All calculators and the bet tracker</li>
+            <li>Top {limits?.ev ?? 3} +EV bets per search</li>
+            <li>Top {limits?.arbs ?? 1} arbitrage, {limits?.middles ?? 2} middles</li>
+            <li>Top {limits?.lowHold ?? 5} low-hold markets and {limits?.moves ?? 5} line moves</li>
           </ul>
           {user?.plan === "pro" ? (
             <button className="btn btn-ghost" disabled={busy} onClick={() => void change("cancel")}>Downgrade</button>
@@ -49,9 +49,9 @@ export function PricingPage() {
           <div className="price">$29<span className="muted">/mo</span></div>
           <ul>
             <li>Everything in Free</li>
-            <li>Every +EV bet, all filters</li>
-            <li>Every arbitrage opportunity</li>
-            <li>Kelly stake sizing</li>
+            <li>Every +EV bet, by market average or sharp line</li>
+            <li>Every arbitrage, middle and low-hold market</li>
+            <li>Full line-movement feed</li>
           </ul>
           {user?.plan === "pro" ? (
             <button className="btn btn-primary" disabled>Current plan</button>

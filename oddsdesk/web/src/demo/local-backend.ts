@@ -4,20 +4,9 @@
  * and rules modules; accounts and bets live in this browser's localStorage.
  */
 import { z } from "zod";
-import { buildBoard, findArbs, findEv } from "../../../server/analysis";
-import {
-  FREE_LIMITS,
-  betStats,
-  betUpdateSchema,
-  credentialsSchema,
-  gate,
-  marketFilterSchema,
-  minEvSchema,
-  newBetSchema,
-  publicUser,
-  sortBets,
-} from "../../../server/rules";
-import { BOOKS, SPORTS, SampleFeed } from "../../../server/sample-data";
+import { betStats, betUpdateSchema, credentialsSchema, newBetSchema, publicUser, sortBets } from "../../../server/rules";
+import { SampleFeed } from "../../../server/sample-data";
+import { readRoutes, type ReadRoute } from "../../../server/service";
 import type { Bet, User } from "../../../server/types";
 
 interface Data {
@@ -30,7 +19,13 @@ const STORAGE_KEY = "linescout-demo-v1";
 const TICK_MS = 15_000;
 
 let feed: SampleFeed | null = null;
+let routes: Record<string, ReadRoute> | null = null;
 let memory: Data = { users: [], bets: [], sessionUserId: null };
+
+function getRoutes(): Record<string, ReadRoute> {
+  routes ??= readRoutes(getFeed());
+  return routes;
+}
 
 function getFeed(): SampleFeed {
   if (!feed) {
@@ -105,30 +100,12 @@ async function route(method: string, path: string, body: unknown): Promise<Reply
   const query = Object.fromEntries(url.searchParams);
   const data = load();
   const user = data.users.find((u) => u.id === data.sessionUserId);
-  const f = getFeed();
   const key = `${method} ${url.pathname}`;
 
+  const read = method === "GET" ? getRoutes()[url.pathname] : undefined;
+  if (read) return ok(read(query, user));
+
   switch (key) {
-    case "GET /api/meta":
-      return ok({
-        sampleData: true,
-        sports: SPORTS.map(({ id, name }) => ({ id, name })),
-        books: BOOKS,
-        version: f.version,
-        updatedAt: f.updatedAt,
-        freeLimits: FREE_LIMITS,
-      });
-    case "GET /api/odds":
-      return ok({ updatedAt: f.updatedAt, version: f.version, rows: buildBoard(f.listEvents(), f.listMarkets(), marketFilterSchema.parse(query)) });
-    case "GET /api/ev": {
-      const filter = marketFilterSchema.parse(query);
-      const all = findEv(f.listEvents(), f.listMarkets(), BOOKS, { ...filter, minEv: minEvSchema.parse(query.minEv) });
-      return ok({ updatedAt: f.updatedAt, version: f.version, ...gate(all, user, FREE_LIMITS.ev) });
-    }
-    case "GET /api/arbs": {
-      const all = findArbs(f.listEvents(), f.listMarkets(), marketFilterSchema.parse(query));
-      return ok({ updatedAt: f.updatedAt, version: f.version, ...gate(all, user, FREE_LIMITS.arbs) });
-    }
     case "POST /api/auth/signup": {
       const { email, password } = credentialsSchema.parse(body);
       if (data.users.some((u) => u.email === email)) return fail(409, "An account with that email already exists");

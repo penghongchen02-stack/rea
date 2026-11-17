@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
-import { buildBoard, findArbs, findEv } from "./analysis.js";
 import {
   SESSION_COOKIE,
   Sessions,
@@ -11,15 +10,13 @@ import {
   setSessionCookie,
   verifyPassword,
 } from "./auth.js";
-import { BOOKS, SPORTS, type SampleFeed } from "./sample-data.js";
+import type { SampleFeed } from "./sample-data.js";
+import { readRoutes } from "./service.js";
 import {
   FREE_LIMITS,
   betStats,
   betUpdateSchema,
   credentialsSchema,
-  gate,
-  marketFilterSchema,
-  minEvSchema,
   newBetSchema,
   publicUser,
   sortBets,
@@ -51,34 +48,11 @@ export function createApp({ feed, store, secureCookies = false }: AppDeps): expr
     res.json({ ok: true });
   });
 
-  app.get("/api/meta", (_req, res) => {
-    res.json({
-      sampleData: true,
-      sports: SPORTS.map(({ id, name }) => ({ id, name })),
-      books: BOOKS,
-      version: feed.version,
-      updatedAt: feed.updatedAt,
-      freeLimits: FREE_LIMITS,
+  for (const [path, handler] of Object.entries(readRoutes(feed))) {
+    app.get(path, (req, res) => {
+      res.json(handler(req.query, req.user));
     });
-  });
-
-  app.get("/api/odds", (req, res) => {
-    const filter = marketFilterSchema.parse(req.query);
-    res.json({ updatedAt: feed.updatedAt, version: feed.version, rows: buildBoard(feed.listEvents(), feed.listMarkets(), filter) });
-  });
-
-  app.get("/api/ev", (req, res) => {
-    const filter = marketFilterSchema.parse(req.query);
-    const minEv = minEvSchema.parse(req.query.minEv);
-    const all = findEv(feed.listEvents(), feed.listMarkets(), BOOKS, { ...filter, minEv });
-    res.json({ updatedAt: feed.updatedAt, version: feed.version, ...gate(all, req.user, FREE_LIMITS.ev) });
-  });
-
-  app.get("/api/arbs", (req, res) => {
-    const filter = marketFilterSchema.parse(req.query);
-    const all = findArbs(feed.listEvents(), feed.listMarkets(), filter);
-    res.json({ updatedAt: feed.updatedAt, version: feed.version, ...gate(all, req.user, FREE_LIMITS.arbs) });
-  });
+  }
 
   // --- Accounts -------------------------------------------------------------
 

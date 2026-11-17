@@ -142,3 +142,27 @@ div.results.error { display: block; }
   .card-grid { grid-template-columns: 1fr; }
 }
 table.compact td + td { padding-left: 12px; }
+
+/* --- Navigation groups, pickers, multi-leg rows ----------------------------- */
+.sidebar { overflow-y: auto; }
+.nav-group { display: flex; flex-direction: column; gap: 2px; }
+.nav-group + .nav-group { margin-top: 12px; }
+.nav-section { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 4px 10px; }
+.dot-off { background: var(--muted); animation: none; }
+.switch { flex-direction: row; align-items: center; gap: 6px; cursor: pointer; }
+.switch input { min-width: 0; width: 16px; height: 16px; accent-color: var(--green); }
+.book-picker { position: relative; display: flex; flex-direction: column; gap: 5px; }
+.picker-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.picker-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: inherit; min-width: 140px; text-align: left; cursor: pointer; }
+.picker-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 30; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; display: flex; flex-direction: column; gap: 2px; min-width: 220px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); }
+.picker-item { flex-direction: row; align-items: center; gap: 8px; color: var(--text); padding: 6px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.picker-item:hover { background: var(--panel-2); }
+.picker-item input { min-width: 0; width: 16px; height: 16px; accent-color: var(--green); }
+.tag.inline { display: inline; margin-left: auto; }
+.line-tag { color: var(--muted); font-weight: 500; margin-right: 6px; font-size: 12px; }
+td.alt-line { background: rgba(251, 191, 36, 0.07); }
+td.alt-line .line-tag { color: var(--amber); }
+.legs { display: flex; flex-direction: column; gap: 6px; }
+.leg { display: grid; grid-template-columns: minmax(140px, auto) minmax(90px, auto) 56px; gap: 12px; align-items: baseline; }
+.leg .price { text-align: right; }
+.pill-muted { background: var(--panel-2); color: var(--text); }
