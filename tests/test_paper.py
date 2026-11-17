@@ -124,6 +124,17 @@ def test_resting_orders_reserve_cash():
     assert led.available_cash("other") == pytest.approx(1000)
 
 
+def test_resting_order_that_closes_a_position_reserves_nothing():
+    led = paper.Ledger()
+    led.record("b", "m", "long", 0.60, 10, 0.0, "taker", "x", None, NOW)
+    assert led.available_cash("b") == pytest.approx(994)
+    led.orders.append(paper.Order("b", "m", "short", 0.35, 10, "exit", "t", 0))
+    assert led.available_cash("b") == pytest.approx(994)
+    led.orders.append(paper.Order("b", "m", "short", 0.35, 30, "exit", "t", 0))   # flips 20 short
+    # 20 new shorts lock 20 * 0.35 = 7.00; cashing out the 10 longs at 0.65 returns 6.50
+    assert led.available_cash("b") == pytest.approx(994 - 0.5)
+
+
 # --- engine fill model -------------------------------------------------------
 
 class _Log(list):

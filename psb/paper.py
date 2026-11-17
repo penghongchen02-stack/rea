@@ -116,14 +116,19 @@ class Ledger:
 
     def available_cash(self, bot: str) -> float:
         """Bankroll plus settled P&L, minus worst-case loss of open positions and
-        the cost of resting orders."""
+        the cash resting orders would lock if they filled."""
         free = self.bankroll
         for slug, p in self.positions.get(bot, {}).items():
             if slug in self.settled:
                 free += p.cash + p.contracts * self.settled[slug]
             else:
                 free += worst_case(p.cash, p.contracts)
-        free -= sum(o.price * o.contracts for o in self.orders if o.bot == bot)
+        for o in self.orders:
+            if o.bot == bot:
+                # An order that closes a held position cashes out instead of
+                # spending, so it reserves only the part that would open new risk.
+                pos = self.positions.get(bot, {}).get(o.slug) or Position()
+                free -= max(0.0, cash_needed(pos, o.side, o.price, o.contracts, 0.0))
         return free
 
     def record(self, bot: str, slug: str, side: str, price: float, contracts: float,
