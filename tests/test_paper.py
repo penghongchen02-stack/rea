@@ -263,19 +263,6 @@ def test_kch123_bursts_small_buys_on_football_only():
     assert b.step(_view(_m(**{**NBA_EVENT, "name": "Knicks"}), _book(0.5, 0.51), 0.58), {}) == []
 
 
-def test_geiyecapixie_buys_building_lead_and_takes_rally_profit():
-    b, st = registry.BOTS["geiyecapixie"], {}
-    m = _m(league="lol", name="BLG", event="lol-blg-nip-2026-11-17", title="BLG vs. NIP",
-           start=NOW - timedelta(minutes=15))
-    acts = b.step(_view(m, _book(0.60, 0.61), 0.70, prev=0.66, live=True), st)
-    assert acts[0].tag == "clip" and acts[0].dollars == 30   # fair 0.70 -> $30 tier
-    b.on_fill(st, bots.Fill("long", 0.61, 49, "clip"), NOW)
-    acts = b.step(_view(m, _book(0.77, 0.78), 0.78, prev=0.78, live=True, held=49), st)
-    assert acts[0].tag == "rally_exit" and acts[0].side == "short"   # bid 0.77 >= 0.61 + 0.15
-    assert b.step(_view(m, _book(0.6, 0.61), 0.70, prev=0.66, live=True,
-                        now=NOW.replace(hour=20)), {}) == []          # outside 09-14 UTC
-
-
 def test_gambling_quotes_both_sides_and_exits_what_it_holds():
     b = registry.BOTS["gamblingisallyourneed"]
     m = _m(name="Manchester City", start=NOW + timedelta(hours=5))
@@ -399,13 +386,12 @@ def test_gambling_v2_skips_extreme_prices_and_never_closes_above_its_pair_cap():
             if a.side == "long"][0].price == pytest.approx(0.43)
 
 
-def test_swisstony_and_kch123_v2_need_two_cents_after_fee():
+def test_swisstony_v2_needs_two_cents_after_fee():
     m = _m(league="cbb", event="cbb-a-b-2026-11-17", title="A vs. B")
     # Ask 0.56, fee ~2.3c, fair 0.595: ~1.2c edge after fee.
     assert registry.BOTS["swisstony"].step(_view(m, _book(0.55, 0.56), 0.595), {})
     assert registry.BOTS["swisstony-v2"].step(_view(m, _book(0.55, 0.56), 0.595), {}) == []
     assert registry.BOTS["kch123"].step(_view(m, _book(0.55, 0.56), 0.595), {})
-    assert registry.BOTS["kch123-v2"].step(_view(m, _book(0.55, 0.56), 0.595), {}) == []
 
 
 def test_sinenooneei_v2_anchors_small_and_only_after_a_real_move():
@@ -437,7 +423,7 @@ def test_bots_added_later_get_their_own_start_time():
     paper.Engine(led, [], fees.WORST_TAKER_THETA, _Log(), 24)
     assert set(led.bot_started) == set(registry.BOTS)
     assert led.bot_started["kch123"] == "2026-11-17T11:03:25Z"      # traded since the start
-    assert led.bot_started["kch123-v2"] > "2026-11-17T11:03:25Z"    # joined now
+    assert led.bot_started["swisstony-v2"] > "2026-11-17T11:03:25Z"  # joined now
 
 
 def test_us_itf_leagues_link_to_the_international_itf_league():
@@ -488,6 +474,7 @@ def test_ideas_cover_1_to_50_and_each_running_idea_has_a_bot():
     assert [i.n for i in simple_bots.IDEAS] == list(range(1, 51))
     for i in simple_bots.IDEAS:
         assert (i.key in registry.BOTS) == (i.status in ("running", "proxy"))
+    assert not any(i.key for i in simple_bots.IDEAS if i.status == "removed")
 
 
 @pytest.mark.parametrize("bot", simple_bots.RUNNING, ids=lambda b: b.key)
@@ -539,14 +526,6 @@ def test_sequential_pair_buys_the_second_side_only_under_98c():
     assert b.step(_view(m, _book(0.50, 0.52), 0.5, held=19), st) == []
     # Short asks 1 - 0.58 = 0.42: pair 0.94 + fee -> buy it.
     assert b.step(_view(m, _book(0.58, 0.60), 0.6, held=19), st)[0].tag == "second"
-
-
-def test_home_side_follows_the_us_league_order(monkeypatch):
-    monkeypatch.setattr(simple_bots, "home_participant",
-                        lambda lg, parts: parts[1] if lg == "cbb" else None)
-    m = _m(league="cbb", event="cbb-a-b-2026-11-18", name="Away U", title="Away U vs. Home St",
-           teams=("Away U", "Home St"))
-    assert simple_bots.home_side(_view(m, _book(0.5, 0.52), 0.5)) == "short"
 
 
 def test_a_buy_never_walks_the_book_past_the_price_cap():

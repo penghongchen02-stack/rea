@@ -1,4 +1,4 @@
-"""The seven bots, each following its PR&R report playbook.
+"""The report bots, each following its PR&R report playbook.
 
 Dollar amounts in the reports assume $100K-$5M books. Here every bot has a
 $1,000 paper bankroll, so sizes keep the reports' ratios (probe vs anchor,
@@ -464,62 +464,6 @@ class Kch123(ProbeAnchor):
 
 
 # ---------------------------------------------------------------------------
-# Live leader with early exits: GEIYECAPIXIE
-
-
-class Geiyecapixie(Bot):
-    """Report playbook: League of Legends game markets only, live, 09-14 UTC.
-    Buy the team that takes a clear in-game lead at market, in clips scaled by
-    conviction; probe continuously; sell into rallies of +15c over entry in
-    tranches, close at $0.95-0.999 near the end, and flatten if the game
-    reverses. The opposing 10-20% hedge is not modelled: on Polymarket US it
-    would just net against the primary position at a spread cost.
-    Stand-in for the game-state signal: the live international price."""
-    key = "geiyecapixie"
-    trades_pregame = False
-    max_market_frac = 0.20
-    # (fair value of leader, clip $) at a $1,000 bankroll
-    tiers = ((0.90, 100.0), (0.80, 60.0), (0.65, 30.0), (0.55, 10.0))
-    probe_usd = 3.0
-
-    def step(self, v: View, st: dict) -> list[Take | Rest]:
-        if not 9 <= v.hour < 15:
-            return []
-        held = v.held_side()
-        if held:
-            n, vwap = self.leg(st, held)
-            bid = v.bid(held)
-            peak = max(st.get("peak", 0.0), v.fair(held))
-            st["peak"] = peak
-            exit_side = other(held)
-            limit = 1 - (bid or 0)
-            if bid is not None and bid >= 0.95:
-                return [Take(exit_side, abs(v.held) * (1 - bid), limit + 1e-9, "terminal_exit")]
-            if peak - v.fair(held) >= 0.15:
-                return [Take(exit_side, abs(v.held) * (1 - (bid or 0)), 1.0, "reversal_exit")]
-            sold = (st.get("fills_by_tag") or {}).get("rally_exit", 0)
-            if bid is not None and sold < 3 and bid >= vwap + 0.15 + 0.10 * sold:
-                return [Take(exit_side, n / 4 * (1 - bid), limit + 1e-9, "rally_exit")]
-        leader = "long" if v.fair_long >= 0.55 else "short" if v.fair_long <= 0.45 else None
-        if leader is None or (held and held != leader):
-            return []
-        prev = v.prev_fair(leader)
-        a = v.ask(leader)
-        if a is None or a >= 0.95 or prev is None or not v.accepts(self.rules_key, leader, a):
-            return []
-        # A lead that is still building: fair rising and above the price.
-        if v.fair(leader) < prev or v.fair(leader) - a < 0.01:
-            return [Take(leader, min(self.probe_usd, self.room(v, st)), a, "probe")]
-        clip = next(c for f, c in self.tiers if v.fair(leader) >= f)
-        if "t1" in v.m.event_slug.split("-"):
-            clip = min(clip, 20.0)   # T1 crowd premium: small clips only
-        dollars = min(self.room(v, st), clip)
-        if dollars < 1:
-            return []
-        return [Take(leader, dollars, v.fair(leader), "clip")]
-
-
-# ---------------------------------------------------------------------------
 # Fixed versions ("-v2"). Each keeps its original's report filters and changes
 # only what the first day of paper trading showed going wrong. The originals
 # keep running unchanged, so the two can be compared on the same games.
@@ -592,14 +536,6 @@ class SwissTonyV2(SwissTony):
     max_market_frac = 0.03
 
 
-class Kch123V2(Kch123):
-    """kch123, fixed: needs 2c of edge after the fee instead of 1c. It was the
-    only profitable original, but fees ($22) were larger than its profit."""
-    key = "kch123-v2"
-    rules = "kch123"
-    min_edge = 0.02
-
-
 class SinenooneeiV2(Sinenooneei):
     """Sinenooneei, fixed: anchor at most 5x the probe ($25, the original went up
     to 20x = $100), the anchor needs the price to move at least 2c toward the
@@ -625,6 +561,7 @@ class RandomGameBetV2(RandomGameBet):
     clips = {1.0: (10, 10), 1.5: (15, 10), 2.0: (15, 8), 3.0: (15, 6)}
 
 
-ORIGINALS = (Ferrari(), SwissTony(), Gambling(), Sinenooneei(), Kch123(), Geiyecapixie(),
-             RandomGameBet())
-FIXED = (FerrariV2(), SwissTonyV2(), GamblingV2(), SinenooneeiV2(), Kch123V2(), RandomGameBetV2())
+# Removed 2026-11-18 for never placing a bet: geiyecapixie (Polymarket US lists
+# no League of Legends games) and kch123-v2. See git history for their code.
+ORIGINALS = (Ferrari(), SwissTony(), Gambling(), Sinenooneei(), Kch123(), RandomGameBet())
+FIXED = (FerrariV2(), SwissTonyV2(), GamblingV2(), SinenooneeiV2(), RandomGameBetV2())

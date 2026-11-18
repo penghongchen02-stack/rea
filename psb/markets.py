@@ -51,31 +51,6 @@ def _us_league_sport() -> dict[str, str]:
             for lg in sp.get("leagues") or [] if lg.get("slug") and sp.get("slug")}
 
 
-@lru_cache(maxsize=1)
-def _us_league_ordering() -> dict[str, str]:
-    if not US_SPORTS_FILE.exists():
-        return {}
-    try:
-        body = json.loads(US_SPORTS_FILE.read_text())
-    except ValueError:
-        return {}
-    return {lg["slug"]: lg.get("ordering") or "" for sp in body.get("sports") or []
-            for lg in sp.get("leagues") or [] if lg.get("slug")}
-
-
-def home_participant(league: str, participants: tuple[str, ...]) -> str | None:
-    """The home side of a "A vs. B" title: Polymarket US lists each league's
-    games away-first or home-first. None when the league's order is unknown."""
-    if len(participants) != 2:
-        return None
-    order = _us_league_ordering().get(league)
-    if order == "away":
-        return participants[1]
-    if order == "home":
-        return participants[0]
-    return None
-
-
 def category_of(slug: str) -> str:
     league = slug.split("-", 1)[0].lower()
     if league in LEAGUE_CATEGORY:

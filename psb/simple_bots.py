@@ -18,15 +18,13 @@ from datetime import datetime
 
 from . import fees
 from .bots import SIDES, Bot, Rest, Take, View, other
-from .markets import ESPORTS, home_participant
-from .reference import _names_match
 
 
 @dataclass(frozen=True)
 class Idea:
     n: int
     title: str
-    status: str          # "running", "proxy", "needs data", "existing bots"
+    status: str          # "running", "proxy", "needs data", "removed", "existing bots"
     note: str
     key: str | None = None
 
@@ -314,87 +312,6 @@ class S19TennisSetFade(Simple):
         return None
 
 
-class S20EsportsMapFade(S19TennisSetFade):
-    key, idea, title = "s20-esports-map-fade", 20, "Esports map-1 fade (proxy)"
-    cats = frozenset(ESPORTS)
-
-
-class S21SoccerSwing(S15Momentum):
-    key, idea, title = "s21-soccer-swing", 21, "Red-card bot (proxy)"
-    cats = frozenset({"soccer"})
-    jump = 0.08
-
-
-# ---------------------------------------------------------------------------
-# Sport-specific
-
-
-def home_side(v: View) -> str | None:
-    """'long' or 'short' for the home team on a winner market, else None."""
-    if v.m.kind != "moneyline" or v.m.is_draw:
-        return None
-    home = home_participant(v.m.league, v.m.participants)
-    if home is None:
-        return None
-    return "long" if _names_match(v.m.long_name, home) else "short"
-
-
-class S27CbbHome(Simple):
-    key, idea, title = "s27-cbb-home", 27, "College basketball home bot"
-    cats = frozenset({"cbb"})
-
-    def pick(self, v, st):
-        s = home_side(v)
-        return (s, 0.0) if s else None
-
-
-class S28SoccerDraw(Simple):
-    key, idea, title = "s28-soccer-draw", 28, "Soccer draw bot"
-    cats = frozenset({"soccer"})
-    pregame_only = True
-
-    def pick(self, v, st):
-        return ("long", 0.01) if v.m.is_draw else None
-
-
-# ---------------------------------------------------------------------------
-# Timing
-
-
-class S35Overnight(Simple):
-    key, idea, title = "s35-overnight-gap", 35, "Overnight-gap bot"
-    pregame_only = True
-
-    def pick(self, v, st):
-        if not 3 <= v.hour < 10:
-            return None
-        s = best_edge_side(v)
-        return (s, 0.02) if s else None
-
-
-class S36WeekendTight(Simple):
-    key, idea, title = "s36-weekend-tight", 36, "Weekend-volume bot"
-
-    def pick(self, v, st):
-        sp = _spread(v)
-        if v.now.weekday() < 4 or sp is None or sp > 0.02:
-            return None
-        s = best_edge_side(v)
-        return (s, 0.01) if s else None
-
-
-class S37EarlyLine(Simple):
-    key, idea, title = "s37-early-line", 37, "Early-line bot"
-    pregame_only = True
-
-    def pick(self, v, st):
-        sp = _spread(v)
-        if _hours_to_start(v) < 12 or sp is None or sp < 0.03:
-            return None
-        s = best_edge_side(v)
-        return (s, 0.02) if s else None
-
-
 # ---------------------------------------------------------------------------
 # Sizing and risk overlays, all on one base signal: 1c+ edge after the fee.
 
@@ -452,16 +369,6 @@ class S42SportBudget(S39Flat):
 # Simple statistical rules
 
 
-class S45HomeUnderdog(Simple):
-    key, idea, title = "s45-home-underdog", 45, "Home-underdog bot"
-
-    def pick(self, v, st):
-        s = home_side(v)
-        if s is None or not 0.35 <= (v.ask(s) or 1) <= 0.45:
-            return None
-        return (s, 0.0)
-
-
 class S46Favourite(Simple):
     key, idea, title = "s46-favourite", 46, "Favourite-longshot bot"
 
@@ -494,7 +401,7 @@ class S50Ensemble(Simple):
     """Bet only when at least 3 of these simple bots would buy the same side now."""
     key, idea, title = "s50-ensemble", 50, "Ensemble bot"
     members = (S01Lag, S15Momentum, S16GarbageTime, S39Flat, S46Favourite, S47MeanReversion,
-               S14OverreactionFade, S35Overnight)
+               S14OverreactionFade)
 
     def pick(self, v, st):
         votes = {"long": 0, "short": 0}
@@ -512,16 +419,13 @@ class S50Ensemble(Simple):
 RUNNING = (S01Lag(), S02BookProxy(), S03ClosingLine(), S07SequentialPair(), S09TwoSided(),
            S10QuietMaker(), S11PregameMaker(), S12VolumeMaker(), S13InventoryMaker(),
            S14OverreactionFade(), S15Momentum(), S16GarbageTime(), S18TennisMomentum(),
-           S19TennisSetFade(), S20EsportsMapFade(), S21SoccerSwing(), S27CbbHome(),
-           S28SoccerDraw(), S35Overnight(), S36WeekendTight(), S37EarlyLine(), S38Kelly(),
-           S39Flat(), S40DailyStop(), S41StreakCooler(), S42SportBudget(), S45HomeUnderdog(),
-           S46Favourite(), S47MeanReversion(), S50Ensemble())
+           S19TennisSetFade(), S38Kelly(), S39Flat(), S40DailyStop(), S41StreakCooler(),
+           S42SportBudget(), S46Favourite(), S47MeanReversion(), S50Ensemble())
 
 _PROXY = {2: "International Polymarket price stands in for sportsbook odds.",
           18: "No point-by-point data: a 5c live price jump in tennis stands in for a break.",
           19: "No set scores: a 15c fall from the first price seen stands in for a lost set.",
-          20: "No map scores: a 15c fall from the first price seen stands in for a lost map.",
-          21: "No match events: an 8c live jump in soccer stands in for a red card."}
+}
 _RUNNING_NOTE = {
     1: "Live: US ask 2c+ under the international price after the fee.",
     3: "6-24 hours before start: 1c+ edge after the fee.",
@@ -534,20 +438,26 @@ _RUNNING_NOTE = {
     14: "Live: US price moved 4c+ in one poll while international moved under 1c; buy the side marked down.",
     15: "Live: international price jumped 3c+; buy that side at or under fair.",
     16: "Live: buy a 95c+ favourite at 97c or less.",
-    27: "College basketball: buy the home team at or under fair.",
-    28: "Soccer, before the game: buy the draw with 1c+ edge.",
-    35: "03-10 UTC, before the game: 2c+ edge.",
-    36: "Friday-Sunday UTC, spread 2c or less: 1c+ edge.",
-    37: "12+ hours before start, spread 3c+: 2c+ edge.",
     38: "1c+ edge, sized at a quarter of the Kelly stake (at most 3% of bankroll per market).",
     39: "One $10 bet per market with 1c+ edge after the fee.",
     40: "As 39, but stops for the day after losing $50 on games settled today.",
     41: "As 39, half size after three winning games in a row.",
     42: "As 39, at most $150 open per sport.",
-    45: "Buy a home underdog priced 35-45c at or under fair.",
     46: "Buy a favourite priced 70-85c with 0.5c+ edge.",
     47: "US price moved 10c+ since first seen while international moved under 3c; buy the side marked down.",
-    50: "Buy when 3+ of bots 1, 14, 15, 16, 35, 39, 46, 47 agree.",
+    50: "Buy when 3+ of bots 1, 14, 15, 16, 39, 46, 47 agree.",
+}
+# Removed 2026-11-18: built and run, but no bet in their first hours. See git
+# history for their code.
+_REMOVED = {
+    20: ("Esports map-1 fade", "Removed: no bets (stand-in for a lost map: a 15c fall from the first price)."),
+    21: ("Red-card bot", "Removed: no bets (stand-in for a red card: an 8c live jump in soccer)."),
+    27: ("College basketball home bot", "Removed: no bets (home team at or under fair)."),
+    28: ("Soccer draw bot", "Removed: no bets (draw with 1c+ edge before the game)."),
+    35: ("Overnight-gap bot", "Removed: no bets (03-10 UTC, 2c+ edge)."),
+    36: ("Weekend-volume bot", "Removed: no bets (Friday-Sunday only, tight spread)."),
+    37: ("Early-line bot", "Removed: no bets (12h+ before start, wide spread)."),
+    45: ("Home-underdog bot", "Removed: no bets (home underdog at 35-45c)."),
 }
 _NEEDS = {
     4: ("Same-game consistency", "Compares a game's winner, spread and total markets with each other; the engine prices each market alone."),
@@ -579,6 +489,8 @@ def _ideas() -> list[Idea]:
         out.append(Idea(b.idea, b.title, status, _PROXY.get(b.idea) or _RUNNING_NOTE.get(b.idea, ""), b.key))
     for n, (title, note) in _NEEDS.items():
         out.append(Idea(n, title, "needs data", note))
+    for n, (title, note) in _REMOVED.items():
+        out.append(Idea(n, title, "removed", note))
     out.append(Idea(49, "Whale-follower", "existing bots",
                     "The 7 original bots and their v2 versions copy winning wallets."))
     return sorted(out, key=lambda i: i.n)
