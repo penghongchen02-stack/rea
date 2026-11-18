@@ -349,3 +349,92 @@ def test_unmarked_partly_closed_position_keeps_its_realized_cash():
     # 10 longs left, carried at their 0.50 entry, plus $1.00 locked in on the pairs.
     row = [r for r in paper.report(led).splitlines() if r.startswith("| swisstony")][0]
     assert "$1,001.00" in row
+
+
+# --- fixed (-v2) bots ----------------------------------------------------------
+
+def test_every_v2_bot_keeps_its_original_entry_filters():
+    for key, b in bots.BOTS.items():
+        if key.endswith("-v2"):
+            assert b.rules_key == key[:-3] and b.rules_key in bots.BOTS
+
+
+def test_ferrari_v2_trades_one_line_per_game_and_caps_dominance():
+    old, new = bots.BOTS["ferrarichampions2026"], bots.BOTS["ferrarichampions2026-v2"]
+    m = _m(name="Manchester City")
+    # 10c raw edge: the original clips 5x ($50), the fix at most 2.5x ($25).
+    assert old.step(_view(m, _book(0.55, 0.56), 0.66), {})[0].dollars == 50
+    assert new.step(_view(m, _book(0.55, 0.56), 0.66), {})[0].dollars == 25
+    # Another line of the same game already traded: no new entry.
+    v = _view(m, _book(0.55, 0.56), 0.66)
+    v.siblings = 1
+    assert new.step(v, {}) == [] and old.step(v, {}) != []
+
+
+def test_engine_counts_other_lines_of_the_same_game():
+    # Observed 2026-11-18: over 232.5 and 234.5 plus under 220.5-222.5 on one game.
+    eng, led = _engine()
+    a = _m(kind="totals", name="Over", line=232.5, slug="tot-232", **NBA_EVENT)
+    b = _m(kind="totals", name="Over", line=234.5, slug="tot-234", **NBA_EVENT)
+    ml = _m(name="Knicks", slug="ml", **NBA_EVENT)
+    key = "ferrarichampions2026-v2"
+    st = led.state(key, a.slug)
+    st.update(event=a.event_slug, kind="totals", legs={"long": {"contracts": 10, "cost": 5}})
+    assert eng.siblings(key, b) == 1 and eng.siblings(key, a) == 0 and eng.siblings(key, ml) == 0
+
+
+def test_gambling_v2_skips_extreme_prices_and_never_closes_above_its_pair_cap():
+    old, new = bots.BOTS["gamblingisallyourneed"], bots.BOTS["gamblingisallyourneed-v2"]
+    m = _m(name="Fulham", start=NOW + timedelta(hours=5))
+    at = NOW.replace(hour=15)
+    # Fair 3.5c: the original quotes the long shot at 1.9c (rounded 2c), the fix does not.
+    assert any(a.side == "long" for a in old.step(_view(m, _book(0.01, 0.05), 0.035, now=at), {}))
+    assert all(a.side != "long" for a in new.step(_view(m, _book(0.01, 0.05), 0.035, now=at), {}))
+    # Holding 10 short bought at 0.60: the closing long bid is at most 0.985 - 0.60 - 0.005.
+    st = {"legs": {"short": {"contracts": 10, "cost": 6.0}}}
+    acts = new.step(_view(m, _book(0.30, 0.50), 0.45, held=-10, now=at), st)
+    close = [a for a in acts if a.side == "long"][0]
+    assert close.price == pytest.approx(0.38) and close.price + 0.60 <= 0.985
+    assert [a for a in old.step(_view(m, _book(0.30, 0.50), 0.45, held=-10, now=at), st)
+            if a.side == "long"][0].price == pytest.approx(0.43)
+
+
+def test_swisstony_and_kch123_v2_need_two_cents_after_fee():
+    m = _m(league="cbb", event="cbb-a-b-2026-11-17", title="A vs. B")
+    # Ask 0.56, fee ~2.3c, fair 0.595: ~1.2c edge after fee.
+    assert bots.BOTS["swisstony"].step(_view(m, _book(0.55, 0.56), 0.595), {})
+    assert bots.BOTS["swisstony-v2"].step(_view(m, _book(0.55, 0.56), 0.595), {}) == []
+    assert bots.BOTS["kch123"].step(_view(m, _book(0.55, 0.56), 0.595), {})
+    assert bots.BOTS["kch123-v2"].step(_view(m, _book(0.55, 0.56), 0.595), {}) == []
+
+
+def test_sinenooneei_v2_anchors_small_and_only_after_a_real_move():
+    b = bots.BOTS["sinenooneei-v2"]
+    m = _m(league="cs2", name="Hype Tech", event="cs2-ht-tlr-2026-11-17",
+           title="Hype Tech vs. The Last Resort", start=NOW - timedelta(minutes=20))
+    st = {"thesis": "long", "thesis_fair": 0.60}
+    for _ in range(3):
+        b.on_fill(st, bots.Fill("long", 0.51, 5, "probe"), NOW)
+    # Fair up 1c only: probe again, no anchor.
+    acts = b.step(_view(m, _book(0.50, 0.51), 0.61, prev=0.61, live=True, held=15), st)
+    assert acts and acts[0].tag == "probe"
+    # Fair up 5c with 10c+ edge: anchor of 5x probe, half size for esports.
+    acts = b.step(_view(m, _book(0.50, 0.51), 0.65, prev=0.65, live=True, held=15), st)
+    assert acts[0].tag == "anchor" and acts[0].dollars == pytest.approx(25 * 0.5)
+
+
+def test_randomgamebet_v2_caps_the_unhedged_dominant_leg():
+    m = _m(league="cs2", name="Hype Tech", event="cs2-ht-tlr-2026-11-17",
+           title="Hype Tech vs. The Last Resort", start=NOW - timedelta(minutes=30))
+    v = _view(m, _book(0.55, 0.56), 0.62, live=True)
+    assert bots.BOTS["randomgamebet"].step(v, {})[0].dollars == 50
+    assert bots.BOTS["randomgamebet-v2"].step(v, {})[0].dollars == 15
+
+
+def test_bots_added_later_get_their_own_start_time():
+    led = paper.Ledger(started_at="2026-11-17T11:03:25Z")
+    led.record("kch123", "m", "long", 0.5, 10, 0.0, "taker", "probe", 0.55, NOW)
+    paper.Engine(led, [], fees.WORST_TAKER_THETA, _Log(), 24)
+    assert set(led.bot_started) == set(bots.BOTS)
+    assert led.bot_started["kch123"] == "2026-11-17T11:03:25Z"      # traded since the start
+    assert led.bot_started["kch123-v2"] > "2026-11-17T11:03:25Z"    # joined now

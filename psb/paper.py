@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -35,8 +36,10 @@ from . import fees, reference, usmarket
 from .bots import BOTS, Fill, Rest, Take, View
 
 STATE = Path(__file__).resolve().parent.parent / "paper"
-DEFAULT_LEAGUES = ["nba", "nfl", "nhl", "cbb", "epl", "lal", "bun", "sea", "ucl", "mls",
-                   "ufc", "cs2", "dota2", "valorant", "lol", "mlb", "itfm", "atpcq"]
+# Polymarket US league slugs (GET /v2/sports). Tennis is "atp"/"wta"; ITF events
+# ("itfme"/"itfwo") have no international market to price them, so they are left out.
+DEFAULT_LEAGUES = ["nba", "nfl", "cfb", "nhl", "cbb", "epl", "lal", "bun", "sea", "ucl", "mls",
+                   "ufc", "cs2", "dota2", "valorant", "lol", "mlb", "atp", "wta"]
 LIVE_WINDOW = timedelta(hours=8)
 
 
@@ -90,6 +93,8 @@ class Ledger:
     settled: dict[str, float] = field(default_factory=dict)
     marks: dict[str, float] = field(default_factory=dict)   # last US mid per slug
     started_at: str = ""
+    bot_started: dict[str, str] = field(default_factory=dict)   # when each bot joined
+    settled_at: dict[str, str] = field(default_factory=dict)    # when we saw each settlement
 
     @classmethod
     def load(cls, path: Path, bankroll: float) -> "Ledger":
@@ -100,7 +105,8 @@ class Ledger:
             bankroll=d["bankroll"],
             positions={b: {m: Position(**p) for m, p in ms.items()} for b, ms in d["positions"].items()},
             states=d["states"], orders=[Order(**o) for o in d["orders"]], fills=d["fills"],
-            settled=d["settled"], marks=d["marks"], started_at=d["started_at"])
+            settled=d["settled"], marks=d["marks"], started_at=d["started_at"],
+            bot_started=d.get("bot_started") or {}, settled_at=d.get("settled_at") or {})
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -163,6 +169,11 @@ class Engine:
         self.events: dict[str, dict | None] = {}
         self.stats = {"polls": 0, "takes": 0, "maker_fills": 0, "no_cash": 0}
         self.bots = dict(BOTS)   # the live runner narrows this to one bot
+        for key in self.bots:   # a bot added to an existing ledger starts its own clock
+            if key not in ledger.bot_started:
+                traded = key in ledger.positions or key in ledger.states
+                ledger.bot_started[key] = ledger.started_at if traded and ledger.started_at \
+                    else _iso(_now())
         # Resting orders live one poll unless re-issued. Orders saved by an earlier
         # run were not watched in between, so they must not fill on that gap's trades.
         if ledger.orders:
@@ -239,10 +250,30 @@ class Engine:
                     continue
                 pos = self.ledger.position(key, t.m.slug)
                 st = self.ledger.state(key, t.m.slug)
+                sib = self.siblings(key, t.m) if bot.one_line_per_game else 0
                 v = View(t.m, bk, fair, t.prev_fair_long, live, now, self.ledger.bankroll,
-                         self.cash_for(key), pos.contracts, self.theta)
-                self._apply(key, bot, t, bk, fair, bot.step(v, st), now)
+                         self.cash_for(key), pos.contracts, self.theta, sib)
+                acts = bot.step(v, st)
+                if acts:   # remember the game and market type (see siblings())
+                    st.setdefault("event", t.m.event_slug)
+                    st.setdefault("kind", t.m.kind)
+                self._apply(key, bot, t, bk, fair, acts, now)
             t.prev_fair_long = fair
+
+    def siblings(self, key: str, m: usmarket.UsMarket) -> int:
+        """Other lines of m's game and market type this bot has traded or rests on.
+        Traded markets carry their event and kind in the bot's state, so lines
+        that are no longer the main line (or were traded before a restart) count."""
+        n = 0
+        for slug, st in self.ledger.states.get(key, {}).items():
+            if slug != m.slug and st.get("event") == m.event_slug and st.get("kind") == m.kind \
+                    and st.get("legs"):
+                n += 1
+        for o in self.ledger.orders:
+            if o.bot == key and o.slug != m.slug and o.slug in self.markets:
+                om = self.markets[o.slug].m
+                n += om.event_slug == m.event_slug and om.kind == m.kind
+        return n
 
     def cash_for(self, key: str) -> float:
         return self.ledger.available_cash(key)
@@ -324,6 +355,7 @@ class Engine:
             px = usmarket.settlement(slug)
             if px is not None:
                 self.ledger.settled[slug] = px
+                self.ledger.settled_at[slug] = _iso(_now())
                 n += 1
         return n
 
@@ -410,8 +442,11 @@ def main(argv=None):
     eng = Engine(led, a.leagues, a.taker_theta, log, a.horizon)
     if not a.report:
         end = time.monotonic() + a.minutes * 60
+        stop = []
+        # SIGTERM ends the run early but cleanly: settle, save and report as usual.
+        signal.signal(signal.SIGTERM, lambda *_: stop.append(1))
         next_discover = next_settle = next_save = 0.0
-        while time.monotonic() < end:
+        while time.monotonic() < end and not stop:
             mono = time.monotonic()
             if mono >= next_discover:
                 eng.discover()

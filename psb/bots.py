@@ -42,6 +42,10 @@ class View:
     cash: float                # available cash for this bot
     held: float                # signed contracts: >0 long, <0 short
     taker_theta: float
+    # Other lines of the same game and market type (e.g. another total) where
+    # this bot already holds, held, or rests an order. Only filled in for bots
+    # that set `one_line_per_game`.
+    siblings: int = 0
 
     @property
     def hour(self) -> int:
@@ -112,10 +116,16 @@ class Fill:
 
 class Bot:
     key: str = ""
+    rules: str = ""                 # entry filters (strategies.py) to use; default: key
+    one_line_per_game: bool = False
     trades_live: bool = True
     trades_pregame: bool = True
     kinds: tuple[str, ...] = ("moneyline",)
     max_market_frac: float = 0.10   # per-market cap as a share of bankroll
+
+    @property
+    def rules_key(self) -> str:
+        return self.rules or self.key
 
     def wants(self, m: UsMarket, live: bool) -> bool:
         if m.kind not in self.kinds:
@@ -180,10 +190,9 @@ class Ferrari(Bot):
         if dom is None:
             side = "long" if v.fair_long >= 0.5 else "short"
             price = v.bid(side) or v.ask(side)
-            if price is None or not v.accepts(self.key, side, price):
+            if price is None or not v.accepts(self.rules_key, side, price):
                 return []
-            edge = v.fair(side) - (v.ask(side) or 1)
-            mult = {1.0: 1.0, 1.5: 1.5, 2.0: 2.5, 3.0: 5.0}[dominance_from_edge(edge)]
+            mult = self.dominant_mult(v, side)
             dollars = min(self.room(v, st), v.bankroll * self.base_frac * mult)
             if dollars < 1:
                 return []
@@ -216,6 +225,10 @@ class Ferrari(Bot):
             acts.append(Rest(hedge, gold_px, min(left_usd, (n_dom - n_hedge) * gold_px), "hedge"))
         return acts
 
+    def dominant_mult(self, v: View, side: str) -> float:
+        edge = v.fair(side) - (v.ask(side) or 1)
+        return {1.0: 1.0, 1.5: 1.5, 2.0: 2.5, 3.0: 5.0}[dominance_from_edge(edge)]
+
     def on_fill(self, st: dict, f: Fill, now: datetime) -> None:
         super().on_fill(st, f, now)
         if f.tag == "dominant" and "dominant" not in st:
@@ -240,7 +253,7 @@ class RandomGameBet(Bot):
         if dom is None:
             side = "long" if v.fair_long >= 0.5 else "short"
             a = v.ask(side)
-            if a is None or not v.accepts(self.key, side, a):
+            if a is None or not v.accepts(self.rules_key, side, a):
                 return []
             # Report pre-check: skip when the expected paired cost (this ask plus
             # the other side at fair value) exceeds $0.98; no hedge could follow.
@@ -291,7 +304,7 @@ class Gambling(Bot):
             if px <= 0 or (best_ask is not None and px >= best_ask):
                 continue
             closing = held == other(side)
-            if not closing and not v.accepts(self.key, side, px):
+            if not closing and not v.accepts(self.rules_key, side, px):
                 continue
             edge = v.fair(side) - (best_ask or 1)
             mult = 2.0 if dominance_from_edge(max(edge, 0) + self.half_spread) >= 2.0 else 1.0
@@ -343,7 +356,7 @@ class ProbeAnchor(Bot):
                 return []
         a = v.ask(side)
         if (a is None or not self.price_floor <= a <= self.price_cap
-                or not v.accepts(self.key, side, a)):
+                or not v.accepts(self.rules_key, side, a)):
             return []
         if "thesis_fair" in st and st["thesis_fair"] - v.fair(side) >= self.abort_move:
             st["aborted"] = True
@@ -482,7 +495,7 @@ class Geiyecapixie(Bot):
             return []
         prev = v.prev_fair(leader)
         a = v.ask(leader)
-        if a is None or a >= 0.95 or prev is None or not v.accepts(self.key, leader, a):
+        if a is None or a >= 0.95 or prev is None or not v.accepts(self.rules_key, leader, a):
             return []
         # A lead that is still building: fair rising and above the price.
         if v.fair(leader) < prev or v.fair(leader) - a < 0.01:
@@ -496,5 +509,113 @@ class Geiyecapixie(Bot):
         return [Take(leader, dollars, v.fair(leader), "clip")]
 
 
-BOTS: dict[str, Bot] = {b.key: b for b in (
-    Ferrari(), SwissTony(), Gambling(), Sinenooneei(), Kch123(), Geiyecapixie(), RandomGameBet())}
+# ---------------------------------------------------------------------------
+# Fixed versions ("-v2"). Each keeps its original's report filters and changes
+# only what the first day of paper trading showed going wrong. The originals
+# keep running unchanged, so the two can be compared on the same games.
+
+
+class FerrariV2(Ferrari):
+    """Ferrari, fixed: one line per game and market type (the original bought
+    over 232.5 and 234.5 and under 220.5-222.5 on one game, and lost on all
+    five), and a 2.5x cap on the dominance clip, judged on the edge after the
+    taker fee (the original's 5x clips came from a few cents of raw edge)."""
+    key = "ferrarichampions2026-v2"
+    rules = "ferrarichampions2026"
+    one_line_per_game = True
+
+    def dominant_mult(self, v: View, side: str) -> float:
+        te = v.taker_edge(side)
+        mult = {1.0: 1.0, 1.5: 1.5, 2.0: 2.5, 3.0: 2.5}[dominance_from_edge(max(te or 0.0, 0.0))]
+        return mult
+
+    def step(self, v: View, st: dict) -> list[Take | Rest]:
+        if st.get("dominant") is None and v.siblings:
+            return []
+        return super().step(v, st)
+
+
+class GamblingV2(Gambling):
+    """Gambling, fixed: quotes only between 5c and 95c (most of the original's
+    loss came from 1-3c and 97-99c quotes, where a cent of error is multiplied
+    over hundreds of contracts), and the quote that closes a held position is
+    capped so the pair costs at most $0.985 (the original closed pairs at an
+    average $1.002, a small sure loss on each)."""
+    key = "gamblingisallyourneed-v2"
+    rules = "gamblingisallyourneed"
+    price_floor = 0.05
+    price_cap = 0.95
+    max_pair = 0.985
+
+    def step(self, v: View, st: dict) -> list[Take | Rest]:
+        acts: list[Take | Rest] = []
+        held = v.held_side()
+        for side in SIDES:
+            px = round(v.fair(side) - self.half_spread, 2)
+            closing = held == other(side)
+            if closing:
+                _, entry = self.leg(st, held)
+                px = min(px, round(self.max_pair - entry - 0.005, 2))
+            best_ask = v.ask(side)
+            if not self.price_floor <= px <= self.price_cap or (best_ask is not None and px >= best_ask):
+                continue
+            if not closing and not v.accepts(self.rules_key, side, px):
+                continue
+            edge = v.fair(side) - (best_ask or 1)
+            mult = 2.0 if dominance_from_edge(max(edge, 0) + self.half_spread) >= 2.0 else 1.0
+            dollars = v.bankroll * self.clip_frac * mult
+            if closing:
+                dollars = abs(v.held) * px
+            elif self.room(v, st) < dollars:
+                continue
+            acts.append(Rest(side, px, dollars, "quote"))
+        return acts
+
+
+class SwissTonyV2(SwissTony):
+    """SwissTony, fixed: needs 2c of edge after the fee instead of 1c (fees were
+    $45, about half its loss) and risks at most 3% of bankroll per market
+    instead of 5% (six $50 college basketball positions made most of the loss)."""
+    key = "swisstony-v2"
+    rules = "swisstony"
+    min_edge = 0.02
+    max_market_frac = 0.03
+
+
+class Kch123V2(Kch123):
+    """kch123, fixed: needs 2c of edge after the fee instead of 1c. It was the
+    only profitable original, but fees ($22) were larger than its profit."""
+    key = "kch123-v2"
+    rules = "kch123"
+    min_edge = 0.02
+
+
+class SinenooneeiV2(Sinenooneei):
+    """Sinenooneei, fixed: anchor at most 5x the probe ($25, the original went up
+    to 20x = $100), the anchor needs the price to move at least 2c toward the
+    thesis (the original anchored on no move at all), and 5% per market."""
+    key = "sinenooneei-v2"
+    rules = "sinenooneei"
+    max_market_frac = 0.05
+    confirm_move = 0.02
+
+    def anchor_dollars(self, v: View, st: dict, side: str) -> float:
+        if v.fair(side) < st.get("thesis_fair", 1.0) + self.confirm_move:
+            return 0.0
+        return self.probe_usd * 5
+
+
+class RandomGameBetV2(RandomGameBet):
+    """RandomGameBet, fixed: dominant clip at most $15 (its losses were $30-50
+    dominant legs whose hedge never filled) and a stricter pre-check (expected
+    paired cost $0.97 instead of $0.98), so it enters only when a hedge is likely."""
+    key = "randomgamebet-v2"
+    rules = "randomgamebet"
+    precheck = 0.97
+    clips = {1.0: (10, 10), 1.5: (15, 10), 2.0: (15, 8), 3.0: (15, 6)}
+
+
+ORIGINALS = (Ferrari(), SwissTony(), Gambling(), Sinenooneei(), Kch123(), Geiyecapixie(),
+             RandomGameBet())
+FIXED = (FerrariV2(), SwissTonyV2(), GamblingV2(), SinenooneeiV2(), Kch123V2(), RandomGameBetV2())
+BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED}
