@@ -477,3 +477,73 @@ def test_refreshing_one_league_leaves_the_others_and_an_outage_keeps_markets(mon
     monkeypatch.setattr(paper.usmarket, "discover", lambda lg, lines, **kw: [])
     eng.discover_league("epl")
     assert set(eng.markets) == {nba.slug}
+
+
+# --- the 50 simple ideas ---------------------------------------------------------
+
+from psb import simple_bots
+
+
+def test_ideas_cover_1_to_50_and_each_running_idea_has_a_bot():
+    assert [i.n for i in simple_bots.IDEAS] == list(range(1, 51))
+    for i in simple_bots.IDEAS:
+        assert (i.key in bots.BOTS) == (i.status in ("running", "proxy"))
+
+
+@pytest.mark.parametrize("bot", simple_bots.RUNNING, ids=lambda b: b.key)
+def test_every_simple_bot_steps_without_error_and_respects_its_limits(bot):
+    m_live = _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B",
+                teams=("A", "B"), start=NOW - timedelta(minutes=30))
+    m_pre = _m(start=NOW + timedelta(hours=14))
+    for m in (m_live, m_pre):
+        for bid, ask, fair, prev in [(0.50, 0.52, 0.60, 0.55), (0.30, 0.31, 0.25, 0.33),
+                                     (0.95, 0.96, 0.98, 0.97), (0.48, 0.56, 0.52, None)]:
+            st = {}
+            v = _view(m, _book(bid, ask, traded=10000), fair, prev=prev, live=m is m_live)
+            v.stats = {"pnl_today": 0.0, "last_results": [], "open_by_cat": {}}
+            if not bot.wants(m, m is m_live):
+                continue
+            for a in bot.step(v, st):
+                assert a.dollars <= 1000 * bot.max_market_frac + 1e-9
+                if isinstance(a, bots.Take):
+                    assert a.limit <= v.fair(a.side) + 1e-9 or a.tag == "second"
+
+
+def test_flat_bot_buys_once_with_edge_and_skips_without():
+    b = bots.BOTS["s39-flat-10"]
+    m = _m(name="Manchester City")
+    st = {}
+    acts = b.step(_view(m, _book(0.50, 0.52), 0.60), st)
+    assert acts and acts[0].dollars == 10 and acts[0].side == "long"
+    b.on_fill(st, bots.Fill("long", 0.52, 19, "entry"), NOW)
+    assert b.step(_view(m, _book(0.50, 0.52), 0.60), st) == []          # once per market
+    assert b.step(_view(m, _book(0.50, 0.52), 0.53), {}) == []          # no edge after fee
+
+
+def test_daily_stop_and_sport_budget_use_the_bots_own_results():
+    m = _m(name="Manchester City")
+    v = _view(m, _book(0.50, 0.52), 0.60)
+    v.stats = {"pnl_today": -60.0, "last_results": [], "open_by_cat": {"soccer": 200.0}}
+    assert bots.BOTS["s40-daily-stop"].step(v, {}) == []
+    assert bots.BOTS["s42-sport-budget"].step(v, {}) == []
+    v.stats = {"pnl_today": 0.0, "last_results": [5, 5, 5], "open_by_cat": {}}
+    assert bots.BOTS["s41-streak-cooler"].step(v, {})[0].dollars == 5
+
+
+def test_sequential_pair_buys_the_second_side_only_under_98c():
+    b, st = bots.BOTS["s07-underpriced-pair"], {}
+    m = _m(name="Manchester City")
+    assert b.step(_view(m, _book(0.50, 0.52), 0.55), st)[0].tag == "first"
+    b.on_fill(st, bots.Fill("long", 0.52, 19, "first"), NOW)
+    # Short asks 1 - 0.50 = 0.50: pair 1.02 -> wait.
+    assert b.step(_view(m, _book(0.50, 0.52), 0.5, held=19), st) == []
+    # Short asks 1 - 0.58 = 0.42: pair 0.94 + fee -> buy it.
+    assert b.step(_view(m, _book(0.58, 0.60), 0.6, held=19), st)[0].tag == "second"
+
+
+def test_home_side_follows_the_us_league_order(monkeypatch):
+    monkeypatch.setattr(simple_bots, "home_participant",
+                        lambda lg, parts: parts[1] if lg == "cbb" else None)
+    m = _m(league="cbb", event="cbb-a-b-2026-11-18", name="Away U", title="Away U vs. Home St",
+           teams=("Away U", "Home St"))
+    assert simple_bots.home_side(_view(m, _book(0.5, 0.52), 0.5)) == "short"

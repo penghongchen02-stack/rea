@@ -34,6 +34,7 @@ from pathlib import Path
 
 from . import fees, reference, usmarket
 from .bots import BOTS, Fill, Rest, Take, View
+from .markets import category_of
 
 STATE = Path(__file__).resolve().parent.parent / "paper"
 # Polymarket US league slugs (GET /v2/sports). Tennis is "atp"/"wta" plus ITF
@@ -286,8 +287,9 @@ class Engine:
                 pos = self.ledger.position(key, t.m.slug)
                 st = self.ledger.state(key, t.m.slug)
                 sib = self.siblings(key, t.m) if bot.one_line_per_game else 0
+                stats = self.bot_stats(key, now) if bot.needs_stats else None
                 v = View(t.m, bk, fair, t.prev_fair_long, live, now, self.ledger.bankroll,
-                         self.cash_for(key), pos.contracts, self.theta, sib)
+                         self.cash_for(key), pos.contracts, self.theta, sib, stats)
                 acts = bot.step(v, st)
                 if acts:   # remember the game and market type (see siblings())
                     st.setdefault("event", t.m.event_slug)
@@ -309,6 +311,22 @@ class Engine:
                 om = self.markets[o.slug].m
                 n += om.event_slug == m.event_slug and om.kind == m.kind
         return n
+
+    def bot_stats(self, key: str, now: datetime) -> dict:
+        """A bot's own results (see View.stats), from the ledger."""
+        today = now.strftime("%Y-%m-%d")
+        done, open_by_cat = [], {}
+        for slug, p in self.ledger.positions.get(key, {}).items():
+            if abs(p.cash) < 1e-9 and abs(p.contracts) < 1e-9:
+                continue
+            if slug in self.ledger.settled:
+                done.append((self.ledger.settled_at.get(slug, ""), p.cash + p.contracts * self.ledger.settled[slug]))
+            else:
+                cat = category_of(slug.split("-", 1)[1]) if "-" in slug else "other"
+                open_by_cat[cat] = open_by_cat.get(cat, 0.0) + max(0.0, -p.cash)
+        done.sort()
+        return {"pnl_today": sum(v for t, v in done if t.startswith(today)),
+                "last_results": [v for _, v in done[-10:]], "open_by_cat": open_by_cat}
 
     def cash_for(self, key: str) -> float:
         return self.ledger.available_cash(key)

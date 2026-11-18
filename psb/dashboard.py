@@ -2,9 +2,10 @@
 
     python3 -m psb.dashboard [--ledger paper-results/ledger.json] [--out paper-results/dashboard]
 
-bots.json     one row per bot: totals as in the report
+bots.json     one row per original and v2 bot: totals as in the report
 games.json    one row per bot and settled market: P&L and when it settled
 fills.json    the most recent fills, with the fair value each was judged against
+ideas.json    the 50 simple bot ideas: status, rule, and totals for those that trade
 Each file is {"rows": [...], "meta": [...]}; meta carries this script so a
 reader can see how every number was made. Paper only: nothing here trades.
 """
@@ -14,12 +15,14 @@ import argparse
 import json
 from pathlib import Path
 
-from .bots import BOTS, FIXED
+from .bots import BOTS, FIXED, ORIGINALS
+from .simple_bots import IDEAS
 from .markets import category_of
 from .paper import Ledger, _entry_long_px, paired_cost
 
 RECENT_FILLS = 300
 FIXED_KEYS = {b.key for b in FIXED}
+IDEA_KEYS = {i.key for i in IDEAS if i.key}
 
 
 def _family(key: str) -> str:
@@ -33,9 +36,9 @@ def _last_fill_times(led: Ledger) -> dict[tuple[str, str], str]:
     return out
 
 
-def bot_rows(led: Ledger) -> list[dict]:
+def bot_rows(led: Ledger, keys=None) -> list[dict]:
     rows = []
-    for key in BOTS:
+    for key in keys or [b.key for b in ORIGINALS + FIXED]:
         fills = [f for f in led.fills if f["bot"] == key]
         taker = sum(f["kind"] == "taker" for f in fills)
         settled_pnl = fees_paid = 0.0
@@ -74,6 +77,21 @@ def bot_rows(led: Ledger) -> list[dict]:
     return rows
 
 
+def idea_rows(led: Ledger) -> list[dict]:
+    totals = {r["bot"]: r for r in bot_rows(led, [i.key for i in IDEAS if i.key])}
+    rows = []
+    for i in IDEAS:
+        t = totals.get(i.key) or {}
+        rows.append({
+            "idea": i.n, "title": i.title, "status": i.status, "rule": i.note, "bot": i.key or "",
+            "since": t.get("since"), "settled_pnl": t.get("settled_pnl"), "equity": t.get("equity"),
+            "fees": t.get("fees"), "fills": (t.get("taker_fills") or 0) + (t.get("maker_fills") or 0)
+            if t else None, "markets": t.get("markets"), "open": t.get("open"),
+            "settled_markets": t.get("settled_markets"), "won_markets": t.get("won_markets"),
+        })
+    return rows
+
+
 def game_rows(led: Ledger) -> list[dict]:
     last = _last_fill_times(led)
     rows = []
@@ -84,7 +102,7 @@ def game_rows(led: Ledger) -> list[dict]:
             league = slug.split("-")[1] if slug.count("-") > 1 else ""
             rows.append({
                 "bot": key, "family": _family(key),
-                "version": "v2" if key in FIXED_KEYS else "original",
+                "version": "v2" if key in FIXED_KEYS else "idea" if key in IDEA_KEYS else "original",
                 "market": slug, "sport": category_of(slug.split("-", 1)[1]) if "-" in slug else "other",
                 "league": league,
                 # Settlement times are recorded from 2026-11-18; before that the
@@ -124,7 +142,8 @@ def main(argv=None) -> None:
     meta = [{"label": "dashboard.py", "value": code, "type": "code", "lang": "python"},
             {"label": "Input", "value": "paper-results/ledger.json (paper only, no real orders)"},
             {"label": "Paper bankroll per bot", "value": f"${led.bankroll:,.0f}"}]
-    for name, rows in (("bots", bot_rows(led)), ("games", game_rows(led)), ("fills", fill_rows(led))):
+    for name, rows in (("bots", bot_rows(led)), ("games", game_rows(led)), ("fills", fill_rows(led)),
+                       ("ideas", idea_rows(led))):
         (out / f"{name}.json").write_text(json.dumps({"rows": rows, "meta": meta}))
         print(f"{out / name}.json: {len(rows)} rows")
 

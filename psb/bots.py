@@ -46,6 +46,10 @@ class View:
     # this bot already holds, held, or rests an order. Only filled in for bots
     # that set `one_line_per_game`.
     siblings: int = 0
+    # The bot's own results, for bots that set `needs_stats`: pnl_today (settled
+    # today, UTC), last_results (settled P&L per market, oldest first) and
+    # open_by_cat (cash at risk in unsettled markets, by sport).
+    stats: dict | None = None
 
     @property
     def hour(self) -> int:
@@ -118,6 +122,7 @@ class Bot:
     key: str = ""
     rules: str = ""                 # entry filters (strategies.py) to use; default: key
     one_line_per_game: bool = False
+    needs_stats: bool = False
     trades_live: bool = True
     trades_pregame: bool = True
     kinds: tuple[str, ...] = ("moneyline",)
@@ -619,3 +624,7 @@ ORIGINALS = (Ferrari(), SwissTony(), Gambling(), Sinenooneei(), Kch123(), Geiyec
              RandomGameBet())
 FIXED = (FerrariV2(), SwissTonyV2(), GamblingV2(), SinenooneeiV2(), Kch123V2(), RandomGameBetV2())
 BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED}
+
+from .simple_bots import RUNNING as SIMPLE  # noqa: E402  (defined on top of the classes above)
+
+BOTS.update({b.key: b for b in SIMPLE})
