@@ -35,6 +35,8 @@ mkdir -p data && python3 -I -c "import json,urllib.request;open('data/sports.jso
   || mkdir -p data
 python3 -m psb.paper --minutes "$MINUTES" --fast "$FAST" --slow "$SLOW" --ledger paper-results/ledger.json > paper-results/report.md.tmp
 mv paper-results/report.md.tmp paper-results/report.md
+# Data files for the dashboard (bots, settled games, recent fills).
+python3 -m psb.dashboard --ledger paper-results/ledger.json --out paper-results/dashboard || true
 git add paper-results
 git -c user.name="psb" -c user.email="noreply@anthropic.com" \
   commit -q -m "chore(paper): results through $(date -u +%Y-%m-%dT%H:%MZ)" || true

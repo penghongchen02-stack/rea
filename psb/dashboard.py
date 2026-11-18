@@ -98,9 +98,10 @@ def game_rows(led: Ledger) -> list[dict]:
 
 def fill_rows(led: Ledger) -> list[dict]:
     rows = []
-    for f in led.fills[-RECENT_FILLS:]:
+    start = max(0, len(led.fills) - RECENT_FILLS)
+    for i, f in enumerate(led.fills[start:], start):
         rows.append({
-            "t": f["t"], "bot": f["bot"], "market": f["slug"], "side": f["side"],
+            "id": i, "t": f["t"], "bot": f["bot"], "market": f["slug"], "side": f["side"],
             "price": f["price"], "fair": f["fair"],
             "edge": None if f["fair"] is None else round(f["fair"] - f["price"], 4),
             "contracts": f["contracts"], "dollars": round(f["contracts"] * f["price"], 2),
