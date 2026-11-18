@@ -544,3 +544,26 @@ def test_audit_flags_a_buy_above_fair_and_passes_a_clean_ledger(tmp_path):
     assert audit.audit(led, tmp_path)[0] == []
     led.record("kch123", "m", "long", 0.60, 10, 0.1, "taker", "probe", 0.55, NOW)
     assert any("above fair" in p for p in audit.audit(led, tmp_path)[0])
+
+
+def test_poll_reads_live_games_first_and_never_acts_on_a_stale_price(monkeypatch):
+    eng, led = _engine()
+    live_m = _m(name="Live", slug="live", start=NOW - timedelta(minutes=10))
+    pre = [_m(name=f"P{i}", slug=f"pre{i}", start=NOW + timedelta(hours=3)) for i in range(40)]
+    link = reference.Link({"clobTokenIds": '["t0", "t1"]'}, 0, False)
+    for m in [*pre, live_m]:
+        eng.markets[m.slug] = paper.Tracked(m, link)
+    order = []
+    monkeypatch.setattr(paper, "_now", lambda: NOW)
+    monkeypatch.setattr(paper.reference, "live_mids", lambda links: {"t0": 0.6})
+    monkeypatch.setattr(paper.usmarket, "book", lambda slug: order.append(slug) or _book(0.5, 0.52))
+    eng.poll(5, 60)
+    assert order[0] == "live"                                   # live first
+    assert len(order) == 1 + paper.PREGAME_PER_POLL             # upcoming ones are capped
+    # A price read longer ago than MAX_FAIR_AGE is not acted on.
+    clock = iter([0.0] + [100.0] * 50)
+    monkeypatch.setattr(paper.time, "monotonic", lambda: next(clock))
+    eng.markets = {"live": paper.Tracked(live_m, link)}
+    led.fills.clear()
+    eng._poll_group([eng.markets["live"]])
+    assert led.fills == [] and eng.stats["stale"] == 1

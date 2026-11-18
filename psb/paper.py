@@ -28,6 +28,7 @@ import argparse
 import json
 import signal
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -53,6 +54,17 @@ DEFAULT_LEAGUES = [
     "atp", "wta", "itfme", "itfwo", "pdcdarts", "cs2", "dota2", "valorant", "lol",
 ]
 LIVE_WINDOW = timedelta(hours=8)
+POLL_GROUP = 8            # markets per group: one international read, then their US books
+PREGAME_PER_POLL = 24     # upcoming markets per poll, so live games never wait long
+MAX_FAIR_AGE = 3.0        # seconds: an older international price is not acted on
+_BOOK_POOL = ThreadPoolExecutor(max_workers=4)   # usmarket's throttle still caps the rate
+
+
+def _read_book(slug: str):
+    try:
+        return usmarket.book(slug)
+    except Exception as e:   # returned, so one bad book does not lose the group
+        return e
 
 
 def _now() -> datetime:
@@ -252,25 +264,37 @@ class Engine:
 
     # -- one poll ------------------------------------------------------------
     def poll(self, fast: float, slow: float) -> None:
+        """Poll due markets: live games first, then at most PREGAME_PER_POLL
+        upcoming ones, in groups of POLL_GROUP. Each group reads its international
+        prices right before its US books, and a bot acts only while that price is
+        under MAX_FAIR_AGE seconds old, so no decision uses a stale fair value."""
         now, mono = _now(), time.monotonic()
-        due = []
+        live_due, pre_due = [], []
         for t in self.markets.values():
             live = t.m.start <= now
             if t.link is None or not any(b.wants(t.m, live) for b in self.bots.values()):
                 continue
             if mono - t.last_poll >= (fast if live else slow):
-                due.append(t)
-        if not due:
-            return
-        mids = reference.live_mids([t.link for t in due])
-        for t in due:
-            t.last_poll = mono
-            fair = reference.live_fair(t.link, mids)
-            try:
-                bk = usmarket.book(t.m.slug)
-            except Exception as e:
-                self.log(f"book {t.m.slug}: {e}")
+                (live_due if live else pre_due).append(t)
+        live_due.sort(key=lambda t: t.last_poll)
+        pre_due.sort(key=lambda t: t.last_poll)
+        due = live_due + pre_due[:PREGAME_PER_POLL]
+        for i in range(0, len(due), POLL_GROUP):
+            self._poll_group(due[i:i + POLL_GROUP])
+
+    def _poll_group(self, group: list[Tracked]) -> None:
+        mids = reference.live_mids([t.link for t in group])
+        read_at = time.monotonic()
+        books = list(_BOOK_POOL.map(_read_book, [t.m.slug for t in group]))
+        for t, bk in zip(group, books):
+            t.last_poll = time.monotonic()
+            if isinstance(bk, Exception):
+                self.log(f"book {t.m.slug}: {bk}")
                 continue
+            fair = reference.live_fair(t.link, mids)
+            stale = fair is not None and time.monotonic() - read_at > MAX_FAIR_AGE
+            if stale:
+                self.stats["stale"] = self.stats.get("stale", 0) + 1
             self.stats["polls"] += 1
             if bk.bid is not None and bk.ask is not None:
                 self.ledger.marks[t.m.slug] = (bk.bid + bk.ask) / 2
@@ -278,21 +302,22 @@ class Engine:
                 self.ledger.marks.pop(t.m.slug, None)   # no two-sided book: no mark
             now = _now()
             self._settle_orders(t, bk, now)
-            if bk.state not in (None, "MARKET_STATE_OPEN") or fair is None:
-                self._cancel(t.m.slug)
-                t.prev_fair_long = fair
+            if bk.state not in (None, "MARKET_STATE_OPEN") or fair is None or stale:
+                self._cancel(t.m.slug)   # no fresh fair value: nothing may rest or trade
+                if not stale:
+                    t.prev_fair_long = fair
                 continue
             live = t.m.start <= now
             for key, bot in self.bots.items():
                 if not bot.wants(t.m, live):
                     self._cancel(t.m.slug, key)
                     continue
-                pos = self.ledger.position(key, t.m.slug)
+                pos = self.ledger.positions.get(key, {}).get(t.m.slug)   # read only
                 st = self.ledger.state(key, t.m.slug)
                 sib = self.siblings(key, t.m) if bot.one_line_per_game else 0
                 stats = self.bot_stats(key, now) if bot.needs_stats else None
                 v = View(t.m, bk, fair, t.prev_fair_long, live, now, self.ledger.bankroll,
-                         self.cash_for(key), pos.contracts, self.theta, sib, stats)
+                         self.cash_for(key), pos.contracts if pos else 0.0, self.theta, sib, stats)
                 acts = bot.step(v, st)
                 if acts:   # remember the game and market type (see siblings())
                     st.setdefault("event", t.m.event_slug)
@@ -438,12 +463,12 @@ def _entry_long_px(led: Ledger, bot: str, slug: str, contracts: float) -> float:
     return avg if side == "long" else 1 - avg
 
 
-def report(led: Ledger) -> str:
+def report(led: Ledger, keys: list[str] | None = None) -> str:
     lines = [f"Paper bankroll ${led.bankroll:,.0f} per bot since {led.started_at}. No real orders.", "",
              "| Bot | Fills taker/maker | Markets traded | Open | Settled P&L | Fees "
              "| Equity (open at US mid, else cost) | Cash free | Both-sides markets (avg paired cost) |",
              "|---|---|---|---|---|---|---|---|---|"]
-    for key in BOTS:
+    for key in keys or list(BOTS):
         fills = [f for f in led.fills if f["bot"] == key]
         taker = sum(f["kind"] == "taker" for f in fills)
         settled_pnl = fee_total = 0.0

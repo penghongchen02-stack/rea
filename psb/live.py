@@ -360,6 +360,15 @@ class LiveEngine(Engine):
         if final or d.get("state") in TERMINAL or o.filled >= o.contracts - 1e-9:
             del self.live[oid]
 
+    def siblings(self, key: str, m: usmarket.UsMarket) -> int:
+        """Also count real orders resting on other lines of the same game."""
+        n = super().siblings(key, m)
+        for o in self.live.values():
+            if o.slug != m.slug and o.slug in self.markets:
+                om = self.markets[o.slug].m
+                n += om.event_slug == m.event_slug and om.kind == m.kind
+        return n
+
     def _cancel(self, slug: str, bot: str | None = None) -> None:
         super()._cancel(slug, bot)
         if not self.armed:
@@ -549,7 +558,7 @@ def main(argv=None) -> int:
     finally:
         eng.cancel_all()
         led.save(ledger_path)
-    print(report(led))
+    print(report(led, [bot]))
     return 0
 
 
