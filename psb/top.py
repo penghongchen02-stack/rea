@@ -8,6 +8,8 @@ bets at the current US mid). Paper only: nothing here trades.
 from __future__ import annotations
 
 import argparse
+import json
+from datetime import datetime, timezone
 import shutil
 import tempfile
 from pathlib import Path
@@ -31,10 +33,33 @@ def _row(r: dict) -> str:
             f"| {r['taker_fills'] + r['maker_fills']} | {r['open']} |")
 
 
+def brief(rows: list[dict], last: dict | None, n: int = 5) -> str:
+    """Top n by settled P&L, plus the biggest moves since the last snapshot."""
+    out = ["| Bot | Settled P&L | Won/settled |", "|---|---|---|"]
+    for r in rows[:n]:
+        won = f"{r['won_markets']}/{r['settled_markets']}" if r["settled_markets"] else "-"
+        out.append(f"| {NAMES.get(r['bot'], r['bot'])} | {r['settled_pnl']:+,.2f} | {won} |")
+    if last:
+        moves = [(r["settled_pnl"] - last["pnl"].get(r["bot"], 0.0), r) for r in rows]
+        moves.sort(key=lambda m: abs(m[0]), reverse=True)
+        big = [m for m in moves if abs(m[0]) >= 10][:3]
+        settled_new = sum(r["settled_markets"] for r in rows) - last.get("settled", 0)
+        out.append("")
+        out.append(f"Changes since {last['at']} UTC: {settled_new} more matches settled.")
+        for d, r in big:
+            out.append(f"- {NAMES.get(r['bot'], r['bot'])}: {d:+,.2f} (now {r['settled_pnl']:+,.2f})")
+        if not big:
+            out.append("- No bot moved by $10 or more.")
+    return "\n".join(out)
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--ledger", default="paper-results/ledger.json")
     ap.add_argument("--n", type=int, default=10, help="rows at the top and bottom")
+    ap.add_argument("--brief", metavar="SNAPSHOT",
+                    help="print only the top 5 and the changes since SNAPSHOT (a JSON file this "
+                         "writes after reading)")
     a = ap.parse_args(argv)
     # Read a copy: the running engine rewrites the ledger every two minutes.
     with tempfile.TemporaryDirectory() as d:
@@ -43,6 +68,15 @@ def main(argv=None) -> None:
         led = Ledger.load(snap, 1000.0)
     rows = bot_rows(led, list(BOTS))
     rows.sort(key=lambda r: (r["settled_pnl"], r["equity"]), reverse=True)
+    if a.brief:
+        snap_path = Path(a.brief)
+        last = json.loads(snap_path.read_text()) if snap_path.exists() else None
+        print(brief(rows, last))
+        snap_path.write_text(json.dumps({
+            "at": datetime.now(timezone.utc).strftime("%H:%M"),
+            "settled": sum(r["settled_markets"] for r in rows),
+            "pnl": {r["bot"]: r["settled_pnl"] for r in rows}}))
+        return
     traded = [r for r in rows if r["taker_fills"] + r["maker_fills"] > 0]
     idle = [r for r in rows if r["taker_fills"] + r["maker_fills"] == 0]
     head = ("| Bot | Settled P&L | Equity | Won/settled | Bets | Open |\n"
