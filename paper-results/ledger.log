@@ -757,3 +757,24 @@
 2026-11-18T11:39:00Z stats {"polls": 916, "takes": 165, "maker_fills": 11, "no_cash": 5} resting=653
 2026-11-18T11:40:07Z stats {"polls": 1433, "takes": 230, "maker_fills": 16, "no_cash": 12} resting=661
 2026-11-18T11:41:30Z final settle 0; stats {"polls": 1891, "takes": 274, "maker_fills": 19, "no_cash": 15}
+2026-11-18T11:41:44Z dropped 661 resting orders from the previous run
+2026-11-18T11:46:44Z discovered 656 markets, 461 linked, 63 linked and live
+2026-11-18T11:48:16Z settled 2 markets
+2026-11-18T11:48:16Z stats {"polls": 461, "takes": 53, "maker_fills": 0, "no_cash": 5} resting=650
+2026-11-18T11:49:22Z stats {"polls": 921, "takes": 64, "maker_fills": 2, "no_cash": 8} resting=648
+2026-11-18T11:49:58Z book aec-khl-sal-bar-2026-11-18: Remote end closed connection without response
+2026-11-18T11:51:26Z stats {"polls": 1840, "takes": 79, "maker_fills": 15, "no_cash": 24} resting=652
+2026-11-18T11:54:08Z settled 3 markets
+2026-11-18T11:54:08Z stats {"polls": 2761, "takes": 121, "maker_fills": 21, "no_cash": 42} resting=650
+2026-11-18T11:56:16Z stats {"polls": 3683, "takes": 166, "maker_fills": 27, "no_cash": 64} resting=659
+2026-11-18T11:57:25Z stats {"polls": 4208, "takes": 181, "maker_fills": 31, "no_cash": 78} resting=654
+2026-11-18T12:00:41Z stats {"polls": 5591, "takes": 203, "maker_fills": 38, "no_cash": 98} resting=558
+2026-11-18T12:02:46Z stats {"polls": 6513, "takes": 229, "maker_fills": 47, "no_cash": 106} resting=486
+2026-11-18T12:04:05Z settled 4 markets
+2026-11-18T12:05:07Z stats {"polls": 7435, "takes": 264, "maker_fills": 55, "no_cash": 111} resting=493
+2026-11-18T12:07:11Z stats {"polls": 8357, "takes": 288, "maker_fills": 67, "no_cash": 125} resting=490
+2026-11-18T12:09:19Z stats {"polls": 9279, "takes": 330, "maker_fills": 74, "no_cash": 142} resting=489
+2026-11-18T12:11:24Z stats {"polls": 10201, "takes": 381, "maker_fills": 79, "no_cash": 158} resting=486
+2026-11-18T12:13:31Z stats {"polls": 11123, "takes": 404, "maker_fills": 88, "no_cash": 177} resting=485
+2026-11-18T12:14:55Z settled 2 markets
+2026-11-18T12:15:16Z final settle 0; stats {"polls": 11584, "takes": 431, "maker_fills": 92, "no_cash": 182}
