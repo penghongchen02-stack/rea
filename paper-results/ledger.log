@@ -750,3 +750,10 @@
 2026-11-18T11:31:34Z settled 3 markets
 2026-11-18T11:31:34Z stats {"polls": 20585, "takes": 568, "maker_fills": 70, "no_cash": 99} resting=277
 2026-11-18T11:31:51Z final settle 0; stats {"polls": 20585, "takes": 568, "maker_fills": 70, "no_cash": 99}
+2026-11-18T11:32:04Z dropped 277 resting orders from the previous run
+2026-11-18T11:36:36Z discovered 653 markets, 458 linked, 56 linked and live
+2026-11-18T11:37:56Z settled 1 markets
+2026-11-18T11:37:56Z stats {"polls": 458, "takes": 142, "maker_fills": 0, "no_cash": 2} resting=661
+2026-11-18T11:39:00Z stats {"polls": 916, "takes": 165, "maker_fills": 11, "no_cash": 5} resting=653
+2026-11-18T11:40:07Z stats {"polls": 1433, "takes": 230, "maker_fills": 16, "no_cash": 12} resting=661
+2026-11-18T11:41:30Z final settle 0; stats {"polls": 1891, "takes": 274, "maker_fills": 19, "no_cash": 15}
