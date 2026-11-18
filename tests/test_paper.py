@@ -327,7 +327,7 @@ def test_orders_are_cancelled_when_their_market_is_dropped(monkeypatch):
     m = _m()
     eng.markets[m.slug] = paper.Tracked(m, None)
     led.orders.append(paper.Order("ferrarichampions2026", m.slug, "long", 0.40, 10, "x", "t", 0))
-    monkeypatch.setattr(paper.usmarket, "discover", lambda lg, lines: [])
+    monkeypatch.setattr(paper.usmarket, "discover", lambda lg, lines, **kw: [])
     eng.leagues = ["epl"]
     eng.discover()
     assert m.slug not in eng.markets and led.orders == []

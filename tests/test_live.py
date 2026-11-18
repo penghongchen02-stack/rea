@@ -240,7 +240,7 @@ def test_dropped_market_cancels_its_real_orders(tmp_path, monkeypatch):
     eng.markets[m.slug] = t
     eng._apply(eng.key, eng.bots[eng.key], t, _book(0.40, 0.45), 0.5,
                [bots.Rest("long", 0.42, 4.2, "dominant")], NOW)
-    monkeypatch.setattr(paper.usmarket, "discover", lambda lg, lines: [])
+    monkeypatch.setattr(paper.usmarket, "discover", lambda lg, lines, **kw: [])
     eng.leagues = ["epl"]
     eng.discover()
     assert eng.live == {} and ex.orders["o1"]["state"] == "ORDER_STATE_CANCELED"

@@ -112,9 +112,12 @@ def main_line(markets: list[dict], mtype: str) -> float | None:
     return best[1] if best else None
 
 
-def discover(league: str, with_lines: bool, limit: int = 100) -> list[UsMarket]:
+def discover(league: str, with_lines: bool, limit: int = 100,
+             starts: tuple[datetime, datetime] | None = None) -> list[UsMarket]:
     """Open full-game markets for one US league: game winners, and with_lines
-    adds the main spread (both sides of the main line) and the main total."""
+    adds the main spread (both sides of the main line) and the main total.
+    `starts` keeps only events starting inside that window, before any per-event
+    request: each line lookup is one more call, and live polling waits on them."""
     body = _get(f"/v2/leagues/{league}/events", [("limit", str(limit))])
     out: list[UsMarket] = []
     for e in body.get("events") or []:
@@ -124,6 +127,8 @@ def discover(league: str, with_lines: bool, limit: int = 100) -> list[UsMarket]:
         if not start_s:
             continue
         start = _parse_time(start_s)
+        if starts and not starts[0] <= start <= starts[1]:
+            continue
         markets = e.get("markets") or []
         state = e.get("eventState") or {}
         main_spread, main_total = state.get("mainSpreadLine"), state.get("mainTotalLine")

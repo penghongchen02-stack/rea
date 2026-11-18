@@ -187,7 +187,8 @@ class Engine:
         with_lines = any(set(b.kinds) - {"moneyline"} for b in self.bots.values())
         for lg in self.leagues:
             try:
-                found = usmarket.discover(lg, with_lines)
+                found = usmarket.discover(lg, with_lines,
+                                          starts=(now - LIVE_WINDOW, now + self.horizon))
             except Exception as e:  # one league's outage must not stop the rest
                 self.log(f"discover {lg}: {e}")
                 continue
