@@ -611,26 +611,19 @@ def test_live_like_copy_misses_a_price_that_is_gone_when_its_order_arrives(monke
     monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.30, 0.40))
     eng._apply("Live_19", bot, t, _book(0.10, 0.12), 0.20,
                [bots.Take("long", 10.0, 0.15, "entry")], NOW)
-    assert led.fills == [] and livesim.counts(led, "Live_19")["missed"] == 1
-    # Still there: fills whole contracts, $5 at most, half the shown size.
-    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.10, 0.12, qty=20))
+    c = livesim.counts(led, "Live_19")
+    assert led.fills == [] and c["missed"] == 1 and c["missed_price_gone"] == 1
+    # Still there: whole contracts, the bot's own $10 size, half the shown size.
+    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.10, 0.12, qty=200))
     eng._apply("Live_19", bot, t, _book(0.10, 0.12), 0.20,
                [bots.Take("long", 10.0, 0.15, "entry")], NOW)
-    assert [f["contracts"] for f in led.fills] == [10]          # half of 20 shown, under $5/0.15 = 33
+    assert [f["contracts"] for f in led.fills] == [66]          # $10 / 0.15 = 66, half of 200 shown
+    # One contract shown: half rounds to none, counted as lost to competition.
+    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.10, 0.12, qty=1))
+    eng._apply("Live_19", bot, t, _book(0.10, 0.12), 0.20,
+               [bots.Take("long", 10.0, 0.15, "entry")], NOW)
+    assert livesim.counts(led, "Live_19")["missed_competition"] == 1
     assert led.fills[0]["contracts"] == int(led.fills[0]["contracts"])
-
-
-def test_live_like_copy_respects_the_total_risk_limit(monkeypatch):
-    from psb import livesim
-    eng, led = _engine()
-    bot = registry.BOTS["Live_15"]
-    led.record("Live_15", "other", "long", 0.5, 100, 0.0, "taker", "entry", 0.5, NOW)  # $50 at risk
-    m = _m(name="A")
-    monkeypatch.setattr(livesim.time, "sleep", lambda s: None)
-    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.50, 0.52))
-    eng._apply("Live_15", bot, paper.Tracked(m, None), _book(0.50, 0.52), 0.6,
-               [bots.Take("long", 10.0, 0.55, "entry")], NOW)
-    assert len(led.fills) == 1 and livesim.counts(led, "Live_15")["no_room"] == 1
 
 
 def test_old_live_like_keys_move_to_the_live_names():

@@ -60,16 +60,16 @@ def main(argv=None) -> None:
     by_key = {r["bot"]: r for r in rows}
     pairs = [(base, twin) for twin, base in BASE_OF.items() if twin in by_key and base in by_key]
     if pairs:
-        print("\nPaper vs Live_ copies (same decisions; Live_ fills after a delay, $5 orders,"
-              " $50 at risk, half the shown size):")
-        print("| Bot | Paper settled | Live_ settled | Live_ equity | Orders sent | Missed | Part-filled |\n"
-              "|---|---|---|---|---|---|---|")
+        print("\nPaper vs Live_ copies (same decisions and bet sizes; Live_ fills ~0.3 s later,"
+              " whole contracts, half the shown size):")
+        print("| Bot | Paper settled | Live_ settled | Live_ equity | Orders sent | Missed: price gone "
+              "| Missed: competition | Part-filled |\n|---|---|---|---|---|---|---|---|")
         for base, twin in pairs:
             b, w = by_key[base], by_key[twin]
             c = livesim_counts(led, twin)
             print(f"| {NAMES.get(base, base)} | {b['settled_pnl']:+,.2f} | {w['settled_pnl']:+,.2f} "
-                  f"| {w['equity']:,.2f} | {c.get('orders', 0)} | {c.get('missed', 0)} "
-                  f"| {c.get('partial', 0)} |")
+                  f"| {w['equity']:,.2f} | {c.get('orders', 0)} | {c.get('missed_price_gone', 0)} "
+                  f"| {c.get('missed_competition', 0)} | {c.get('partial', 0)} |")
     problems, s = audit(led, Path.cwd())
     print(f"\nRule check: {s['fills_checked']} bets checked, {len(problems)} problems; "
           f"real money {'ARMED' if s['live_armed'] else 'off'}.")

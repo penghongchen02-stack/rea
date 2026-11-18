@@ -4,9 +4,8 @@ Paper bots fill instantly against the book they decided on. A real order on
 Polymarket US is sent ~0.1-0.3 s later and fills only against what is still
 there. A live copy (key "Live_...") therefore, for every buy:
 
-1. sizes it under the real-money limits in live.json's defaults: at most
-   ORDER_USD per order, EXPOSURE_USD at risk in total, and no new orders after
-   a DAILY_LOSS_USD loss on games settled today;
+1. sizes it exactly as its paper base does (same dollars per bet and per
+   match), so paper and live results compare dollar for dollar;
 2. rounds down to whole contracts, as real orders must be;
 3. waits DELAY_S, then reads the US book again (another ~0.1 s);
 4. fills like a fill-or-cancel limit order against that new book, taking only
@@ -24,9 +23,6 @@ from . import fees, usmarket
 from .bots import SwissTonyV2
 from .simple_bots import S15Momentum, S19TennisSetFade
 
-ORDER_USD = 5.0
-EXPOSURE_USD = 50.0
-DAILY_LOSS_USD = 25.0
 DELAY_S = 0.2
 COMPETITION = 0.5
 
@@ -76,11 +72,7 @@ def counts(ledger, key: str) -> dict:
 def take(engine, key: str, bot, t, a, fair: float, now, st: dict) -> None:
     """Fill one Take the way a real fill-or-cancel limit order would be filled."""
     stats = engine.ledger.state(key, COUNTS)
-    if (engine.bot_stats(key, now)["pnl_today"] <= -DAILY_LOSS_USD):
-        stats["daily_stop"] = stats.get("daily_stop", 0) + 1
-        return
-    at_risk = engine.ledger.bankroll - engine.ledger.available_cash(key)
-    dollars = min(a.dollars, ORDER_USD, EXPOSURE_USD - at_risk)
+    dollars = min(a.dollars, engine.ledger.available_cash(key))
     n = int(math.floor(dollars / a.limit + 1e-9)) if a.limit > 0 else 0
     if n < 1:
         stats["no_room"] = stats.get("no_room", 0) + 1
@@ -94,9 +86,11 @@ def take(engine, key: str, bot, t, a, fair: float, now, st: dict) -> None:
         stats["missed"] = stats.get("missed", 0) + 1
         return
     left = n
+    shown = 0.0   # contracts still offered at or under the limit when the order arrives
     for px, qty in bk.side_asks(a.side):
         if px > a.limit + 1e-9 or left < 1:
             break
+        shown += qty
         k = min(left, int(math.floor(qty * COMPETITION)))
         if k < 1:
             continue
@@ -106,5 +100,8 @@ def take(engine, key: str, bot, t, a, fair: float, now, st: dict) -> None:
         left -= k
     if left == n:
         stats["missed"] = stats.get("missed", 0) + 1
+        # Why: the price was gone, or only the assumed competition took what was left.
+        why = "missed_price_gone" if shown < 1e-9 else "missed_competition"
+        stats[why] = stats.get(why, 0) + 1
     elif left > 0:
         stats["partial"] = stats.get("partial", 0) + 1
