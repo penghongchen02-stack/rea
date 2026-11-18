@@ -29,6 +29,9 @@ class Idea:
     key: str | None = None
 
 
+EPS = 1e-9   # prices are decimals: 0.60 - 0.50 is 0.0999..., which must count as 10c
+
+
 def _mid(v: View) -> float | None:
     b, a = v.book.bid, v.book.ask
     return (b + a) / 2 if b is not None and a is not None else None
@@ -254,7 +257,7 @@ class S14OverreactionFade(Simple):
         prev, now = st.get("mid_prev"), st.get("mid_last")
         if prev is None or now is None or v.prev_fair_long is None:
             return None
-        if abs(v.fair_long - v.prev_fair_long) >= 0.01 or abs(now - prev) < 0.04:
+        if abs(v.fair_long - v.prev_fair_long) >= 0.01 - EPS or abs(now - prev) < 0.04 - EPS:
             return None
         return ("short" if now > prev else "long", 0.01)
 
@@ -265,14 +268,15 @@ class S15Momentum(Simple):
     key, idea, title = "s15-momentum", 15, "Momentum follower"
     live_only = True
     jump = 0.03
+    edge = 0.0             # minimum edge after the fee
 
     def pick(self, v, st):
         if v.prev_fair_long is None:
             return None
         d = v.fair_long - v.prev_fair_long
-        if abs(d) < self.jump:
+        if abs(d) < self.jump - EPS:
             return None
-        return ("long" if d > 0 else "short", 0.0)
+        return ("long" if d > 0 else "short", self.edge)
 
 
 class S16GarbageTime(Simple):
@@ -300,15 +304,16 @@ class S19TennisSetFade(Simple):
     cats = frozenset({"tennis"})
     live_only = True
     drop = 0.15
+    edge = 0.01            # minimum edge after the fee
 
     def pick(self, v, st):
         f0 = st.get("fair0")
         if f0 is None:
             return None
-        if f0 - v.fair_long >= self.drop:
-            return ("long", 0.01)
-        if v.fair_long - f0 >= self.drop:
-            return ("short", 0.01)
+        if f0 - v.fair_long >= self.drop - EPS:
+            return ("long", self.edge)
+        if v.fair_long - f0 >= self.drop - EPS:
+            return ("short", self.edge)
         return None
 
 
@@ -388,7 +393,7 @@ class S47MeanReversion(Simple):
         m0, now, f0 = st.get("mid0"), st.get("mid_last"), st.get("fair0")
         if m0 is None or now is None or f0 is None:
             return None
-        if abs(now - m0) < 0.10 or abs(v.fair_long - f0) >= 0.03:
+        if abs(now - m0) < 0.10 - EPS or abs(v.fair_long - f0) >= 0.03 - EPS:
             return None
         return ("short" if now > m0 else "long", 0.01)
 

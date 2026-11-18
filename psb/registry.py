@@ -5,5 +5,6 @@ from __future__ import annotations
 
 from .bots import FIXED, ORIGINALS, Bot
 from .simple_bots import RUNNING
+from .variants import VARIANTS
 
-BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING}
+BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING + VARIANTS}

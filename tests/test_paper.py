@@ -567,3 +567,30 @@ def test_poll_reads_live_games_first_and_never_acts_on_a_stale_price(monkeypatch
     led.fills.clear()
     eng._poll_group([eng.markets["live"]])
     assert led.fills == [] and eng.stats["stale"] == 1
+
+
+# --- higher-volume versions of #19, #15 and swisstony ------------------------------
+
+from psb import variants
+
+
+def test_ten_versions_each_with_unique_keys_and_the_base_filters():
+    assert len(variants.S19) == len(variants.S15) == len(variants.SWISS) == 10
+    keys = [b.key for b in variants.VARIANTS]
+    assert len(set(keys)) == 30 and all(k in registry.BOTS for k in keys)
+    m_nba = _m(**{**NBA_EVENT, "name": "Knicks"})
+    v = _view(m_nba, _book(0.55, 0.56), 0.62)
+    assert registry.BOTS["swisstony-x01"].step(v, {}) == []          # swisstony skips the NBA
+    assert registry.BOTS["swisstony-x05"].step(v, {})                # the all-sports version trades it
+
+
+def test_looser_versions_trade_where_the_base_does_not():
+    m = _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B", teams=("A", "B"),
+           start=NOW - timedelta(minutes=30))
+    st = {"fair0": 0.60}
+    v = _view(m, _book(0.45, 0.46), 0.50, live=True)                  # 10c fall, 4c+ edge
+    assert registry.BOTS["s19-tennis-set-fade"].step(v, dict(st)) == []   # needs 15c
+    assert registry.BOTS["s19-x01"].step(v, dict(st))                     # 10c is enough
+    v = _view(m, _book(0.45, 0.46), 0.52, prev=0.50, live=True)       # 2c jump
+    assert registry.BOTS["s15-momentum"].step(v, {}) == []                # needs 3c
+    assert registry.BOTS["s15-x01"].step(v, {})

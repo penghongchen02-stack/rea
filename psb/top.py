@@ -19,6 +19,7 @@ from .paper import Ledger
 from .simple_bots import IDEAS
 
 NAMES = {i.key: f"#{i.n} {i.title}" for i in IDEAS if i.key}
+NAMES.update({k: b.title for k, b in BOTS.items() if k not in NAMES and getattr(b, "title", "")})
 
 
 def _row(r: dict) -> str:

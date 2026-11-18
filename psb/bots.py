@@ -132,6 +132,10 @@ class Bot:
     def rules_key(self) -> str:
         return self.rules or self.key
 
+    def allows(self, v: View, side: str, price: float) -> bool:
+        """The bot's entry filter: its report's rules (strategies.py)."""
+        return v.accepts(self.rules_key, side, price)
+
     def wants(self, m: UsMarket, live: bool) -> bool:
         if m.kind not in self.kinds:
             return False
@@ -195,7 +199,7 @@ class Ferrari(Bot):
         if dom is None:
             side = "long" if v.fair_long >= 0.5 else "short"
             price = v.bid(side) or v.ask(side)
-            if price is None or not v.accepts(self.rules_key, side, price):
+            if price is None or not self.allows(v, side, price):
                 return []
             mult = self.dominant_mult(v, side)
             dollars = min(self.room(v, st), v.bankroll * self.base_frac * mult)
@@ -258,7 +262,7 @@ class RandomGameBet(Bot):
         if dom is None:
             side = "long" if v.fair_long >= 0.5 else "short"
             a = v.ask(side)
-            if a is None or not v.accepts(self.rules_key, side, a):
+            if a is None or not self.allows(v, side, a):
                 return []
             # Report pre-check: skip when the expected paired cost (this ask plus
             # the other side at fair value) exceeds $0.98; no hedge could follow.
@@ -309,7 +313,7 @@ class Gambling(Bot):
             if px <= 0 or (best_ask is not None and px >= best_ask):
                 continue
             closing = held == other(side)
-            if not closing and not v.accepts(self.rules_key, side, px):
+            if not closing and not self.allows(v, side, px):
                 continue
             edge = v.fair(side) - (best_ask or 1)
             mult = 2.0 if dominance_from_edge(max(edge, 0) + self.half_spread) >= 2.0 else 1.0
@@ -366,7 +370,7 @@ class ProbeAnchor(Bot):
                 return []
         a = v.ask(side)
         if (a is None or not self.price_floor <= a <= self.price_cap
-                or not v.accepts(self.rules_key, side, a)):
+                or not self.allows(v, side, a)):
             return []
         if "thesis_fair" in st and st["thesis_fair"] - v.fair(side) >= self.abort_move:
             st["aborted"] = True
@@ -513,7 +517,7 @@ class GamblingV2(Gambling):
             best_ask = v.ask(side)
             if not self.price_floor <= px <= self.price_cap or (best_ask is not None and px >= best_ask):
                 continue
-            if not closing and not v.accepts(self.rules_key, side, px):
+            if not closing and not self.allows(v, side, px):
                 continue
             edge = v.fair(side) - (best_ask or 1)
             mult = 2.0 if dominance_from_edge(max(edge, 0) + self.half_spread) >= 2.0 else 1.0
