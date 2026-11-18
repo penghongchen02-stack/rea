@@ -31,6 +31,16 @@ def intl_league(m: UsMarket) -> str:
     return INTL_LEAGUE.get(m.league, m.league)
 
 
+def _slug_candidate(m: UsMarket, slug: str) -> bool:
+    """An international event slug that could be this game: the same league code,
+    or a different league code with the same teams and date ("jpbl-chi-aki-..."
+    is "bkjpn-chi-aki-..." internationally). same_game() still has to confirm it."""
+    if slug.startswith(intl_league(m) + "-"):
+        return True
+    ours, theirs = m.event_slug.split("-", 1), slug.split("-", 1)
+    return len(ours) == 2 and len(theirs) == 2 and ours[1] == theirs[1]
+
+
 def _norm(s: str) -> str:
     return "".join(ch for ch in s.lower() if ch.isalnum())
 
@@ -60,7 +70,7 @@ def same_game(m: UsMarket, event: dict) -> bool:
     """Both US participants must appear in the international event, and start
     times must agree. Unconfirmed matches are rejected rather than guessed."""
     slug = event.get("slug") or ""
-    if not slug.startswith(intl_league(m) + "-") or not event.get("startTime"):
+    if not _slug_candidate(m, slug) or not event.get("startTime"):
         return False
     start = datetime.fromisoformat(event["startTime"].replace("Z", "+00:00"))
     if abs(start - m.start) > MAX_START_GAP:
@@ -95,7 +105,7 @@ def find_event(m: UsMarket) -> dict | None:
                              [("q", q), ("limit_per_type", "8"), ("events_status", "active")])
             for e in found.get("events") or []:
                 slug = e.get("slug") or ""
-                if not slug.startswith(intl_league(m) + "-") or slug in tried:
+                if not _slug_candidate(m, slug) or slug in tried:
                     continue
                 tried.add(slug)
                 full = get_json(f"{GAMMA_API}/events", [("slug", slug)])

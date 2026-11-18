@@ -529,8 +529,8 @@ def main(argv=None) -> int:
                 break
             mono = time.monotonic()
             if mono >= next_discover:
-                eng.discover()
-                next_discover = mono + a.discover
+                eng.discover_next()
+                next_discover = mono + a.discover / max(1, len(eng.leagues))
             if armed:
                 eng.buying_power = client.buying_power()
             eng.poll(a.fast, a.slow)

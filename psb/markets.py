@@ -19,7 +19,13 @@ LEAGUE_CATEGORY = {
     "val": "valorant", "valorant": "valorant",
     "cricipl": "cricket", "ipl": "cricket", "cric": "cricket", "crint": "cricket",
 }
-# International Polymarket's /sports list owns league -> sport for everything else.
+# Polymarket US's own sport tree (GET /v2/sports, saved by scripts/run_paper.sh)
+# owns league -> sport for US leagues not named above; international
+# Polymarket's /sports list is the fallback.
+US_SPORTS_FILE = Path(__file__).resolve().parent.parent / "data" / "us_sports.json"
+US_SPORT_CATEGORY = {"soccer": "soccer", "tennis": "tennis", "basketball": "basketball",
+                     "ice-hockey": "nhl", "football": "nfl", "baseball": "mlb", "mma": "ufc",
+                     "cricket": "cricket", "boxing": "boxing"}
 SPORTS_FILE = Path(__file__).resolve().parent.parent / "data" / "sports.json"
 SOCCER_TAG, TENNIS_TAG = "100350", "864"
 ESPORTS = {"lol", "cs", "dota", "valorant"}
@@ -33,10 +39,26 @@ def _league_tags() -> dict[str, frozenset[str]]:
     return {r["sport"].lower(): frozenset((r.get("tags") or "").split(",")) for r in rows}
 
 
+@lru_cache(maxsize=1)
+def _us_league_sport() -> dict[str, str]:
+    if not US_SPORTS_FILE.exists():
+        return {}
+    try:
+        body = json.loads(US_SPORTS_FILE.read_text())
+    except ValueError:
+        return {}
+    return {lg["slug"]: sp["slug"] for sp in body.get("sports") or []
+            for lg in sp.get("leagues") or [] if lg.get("slug") and sp.get("slug")}
+
+
 def category_of(slug: str) -> str:
     league = slug.split("-", 1)[0].lower()
     if league in LEAGUE_CATEGORY:
         return LEAGUE_CATEGORY[league]
+    sport = _us_league_sport().get(league)
+    if sport:
+        # Women's college basketball is not the men's game the reports traded.
+        return "wcbb" if league == "wcbb" else US_SPORT_CATEGORY.get(sport, sport)
     tags = _league_tags().get(league, frozenset())
     if SOCCER_TAG in tags:
         return "soccer"

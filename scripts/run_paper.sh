@@ -33,6 +33,8 @@ git pull --ff-only origin "$BRANCH" || true
 # The replay data is not needed for paper trading, only the league list.
 mkdir -p data && python3 -I -c "import json,urllib.request;open('data/sports.json','w').write(json.dumps(json.load(urllib.request.urlopen(urllib.request.Request('https://gamma-api.polymarket.com/sports',headers={'User-Agent':'psb-research/0.1'}),timeout=60))))" 2>/dev/null \
   || mkdir -p data
+# Polymarket US's sport tree: which sport each US league belongs to.
+python3 -I -c "import json,urllib.request;open('data/us_sports.json','w').write(json.dumps(json.load(urllib.request.urlopen(urllib.request.Request('https://gateway.polymarket.us/v2/sports',headers={'User-Agent':'psb-research/0.1'}),timeout=60))))" 2>/dev/null || true
 python3 -m psb.paper --minutes "$MINUTES" --fast "$FAST" --slow "$SLOW" --ledger paper-results/ledger.json > paper-results/report.md.tmp
 mv paper-results/report.md.tmp paper-results/report.md
 # Data files for the dashboard (bots, settled games, recent fills).

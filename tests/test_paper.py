@@ -449,3 +449,31 @@ def test_us_itf_leagues_link_to_the_international_itf_league():
     assert reference.same_game(m, ev)
     assert bots.View(m, _book(0.5, 0.52), 0.6, None, False, NOW, 1000, 1000, 0,
                      fees.WORST_TAKER_THETA).category == "tennis"
+
+
+def test_other_league_codes_link_when_teams_and_date_match():
+    # Observed 2026-11-18: US "jpbl-chi-aki-..." is international "bkjpn-chi-aki-...".
+    m = _m(league="jpbl", event="jpbl-chi-aki-2026-11-18", name="Chiba Jets",
+           title="Chiba Jets vs. Akita Northern Happinets",
+           teams=("Chiba Jets", "Akita Northern Happinets"))
+    ev = {"slug": "bkjpn-chi-aki-2026-11-18", "startTime": m.start.isoformat(),
+          "title": "Chiba Jets vs. Akita Northern Happinets", "markets": []}
+    assert reference.same_game(m, ev)
+    assert not reference.same_game(m, {**ev, "slug": "bkjpn-chi-kaw-2026-11-18",
+                                       "title": "Chiba Jets vs. Kawasaki Brave Thunders"})
+
+
+def test_refreshing_one_league_leaves_the_others_and_an_outage_keeps_markets(monkeypatch):
+    eng, led = _engine()
+    epl, nba = _m(), _m(name="Knicks", **NBA_EVENT)
+    eng.markets = {epl.slug: paper.Tracked(epl, None), nba.slug: paper.Tracked(nba, None)}
+
+    def down(lg, lines, **kw):
+        raise usmarket_error("gateway down")
+    usmarket_error = RuntimeError
+    monkeypatch.setattr(paper.usmarket, "discover", down)
+    eng.discover_league("epl")
+    assert set(eng.markets) == {epl.slug, nba.slug}
+    monkeypatch.setattr(paper.usmarket, "discover", lambda lg, lines, **kw: [])
+    eng.discover_league("epl")
+    assert set(eng.markets) == {nba.slug}

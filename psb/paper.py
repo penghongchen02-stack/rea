@@ -39,8 +39,17 @@ STATE = Path(__file__).resolve().parent.parent / "paper"
 # Polymarket US league slugs (GET /v2/sports). Tennis is "atp"/"wta" plus ITF
 # men's and women's ("itfme"/"itfwo", one "itf" league internationally). UTR
 # events have no international market to price them, so they are left out.
-DEFAULT_LEAGUES = ["nba", "nfl", "cfb", "nhl", "cbb", "epl", "lal", "bun", "sea", "ucl", "mls",
-                   "ufc", "cs2", "dota2", "valorant", "lol", "mlb", "atp", "wta", "itfme", "itfwo"]
+DEFAULT_LEAGUES = [
+    # US majors and college
+    "nba", "nfl", "cfb", "nhl", "cbb", "mlb", "ufc",
+    # soccer
+    "epl", "lal", "bun", "sea", "lg1", "ere", "ucl", "uel", "uecl", "uwcl", "eflch", "cdr",
+    "mls", "lmx", "bra",
+    # basketball and hockey outside the US (checked 2026-11-18: these link and price)
+    "eurolg", "eurocup", "vtb", "jpbl", "lkl", "khl", "ahl", "shl", "snhl",
+    # tennis, darts, esports
+    "atp", "wta", "itfme", "itfwo", "pdcdarts", "cs2", "dota2", "valorant", "lol",
+]
 LIVE_WINDOW = timedelta(hours=8)
 
 
@@ -183,32 +192,56 @@ class Engine:
 
     # -- discovery ---------------------------------------------------------
     def discover(self) -> None:
-        now = _now()
-        seen = set()
-        with_lines = any(set(b.kinds) - {"moneyline"} for b in self.bots.values())
+        """Refresh every league at once (start of a run, tests)."""
         for lg in self.leagues:
-            try:
-                found = usmarket.discover(lg, with_lines,
-                                          starts=(now - LIVE_WINDOW, now + self.horizon))
-            except Exception as e:  # one league's outage must not stop the rest
-                self.log(f"discover {lg}: {e}")
+            self.discover_league(lg)
+        self._next_league = 0
+        self._log_markets()
+
+    def discover_next(self) -> None:
+        """Refresh one league, round-robin, so live polling never waits for a
+        whole discovery pass. The first call does a full pass."""
+        if not getattr(self, "_discovered", False):
+            self._discovered = True
+            self.discover()
+            return
+        if not self.leagues:
+            return
+        i = getattr(self, "_next_league", 0) % len(self.leagues)
+        self.discover_league(self.leagues[i])
+        self._next_league = i + 1
+        if self._next_league == len(self.leagues):
+            self._log_markets()
+
+    def discover_league(self, lg: str) -> None:
+        now = _now()
+        with_lines = any(set(b.kinds) - {"moneyline"} for b in self.bots.values())
+        try:
+            found = usmarket.discover(lg, with_lines,
+                                      starts=(now - LIVE_WINDOW, now + self.horizon))
+        except Exception as e:  # an outage keeps what we already track
+            self.log(f"discover {lg}: {e}")
+            return
+        seen = set()
+        for m in found:
+            if m.start > now + self.horizon or m.start < now - LIVE_WINDOW:
                 continue
-            for m in found:
-                if m.start > now + self.horizon or m.start < now - LIVE_WINDOW:
-                    continue
-                if not any(b.wants(m, True) or b.wants(m, False) for b in self.bots.values()):
-                    continue
-                seen.add(m.slug)
-                if m.slug in self.markets:
-                    continue
-                if m.event_slug not in self.events:
-                    self.events[m.event_slug] = reference.find_event(m)
-                ev = self.events[m.event_slug]
-                self.markets[m.slug] = Tracked(m, reference.link(m, ev) if ev else None)
-        for slug in list(self.markets):
-            if slug not in seen:   # finished, closed, or no longer the main line
+            if not any(b.wants(m, True) or b.wants(m, False) for b in self.bots.values()):
+                continue
+            seen.add(m.slug)
+            if m.slug in self.markets:
+                continue
+            if m.event_slug not in self.events:
+                self.events[m.event_slug] = reference.find_event(m)
+            ev = self.events[m.event_slug]
+            self.markets[m.slug] = Tracked(m, reference.link(m, ev) if ev else None)
+        for slug, t in list(self.markets.items()):
+            if t.m.league == lg and slug not in seen:   # finished, closed, or not the main line
                 del self.markets[slug]
                 self._cancel(slug)
+
+    def _log_markets(self) -> None:
+        now = _now()
         linked = sum(t.link is not None for t in self.markets.values())
         live = sum(t.m.start <= now for t in self.markets.values() if t.link)
         self.log(f"discovered {len(self.markets)} markets, {linked} linked, {live} linked and live")
@@ -451,8 +484,8 @@ def main(argv=None):
         while time.monotonic() < end and not stop:
             mono = time.monotonic()
             if mono >= next_discover:
-                eng.discover()
-                next_discover = mono + a.discover
+                eng.discover_next()
+                next_discover = mono + a.discover / max(1, len(eng.leagues))
             eng.poll(a.fast, a.slow)
             if mono >= next_settle:
                 n = eng.settle()
