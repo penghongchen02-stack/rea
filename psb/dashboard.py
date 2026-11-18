@@ -62,7 +62,8 @@ def bot_rows(led: Ledger) -> list[dict]:
         rows.append({
             "bot": key, "family": _family(key),
             "version": "v2" if key in FIXED_KEYS else "original",
-            "since": led.bot_started.get(key, led.started_at),
+            # Ledgers from before per-bot start times: only the originals existed.
+            "since": led.bot_started.get(key) or (None if key in FIXED_KEYS else led.started_at),
             "settled_pnl": round(settled_pnl, 2), "equity": round(equity, 2),
             "fees": round(fees_paid, 2), "taker_fills": taker, "maker_fills": len(fills) - taker,
             "markets": traded, "open": open_n, "settled_markets": settled_n, "won_markets": wins,
