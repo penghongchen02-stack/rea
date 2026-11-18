@@ -7,7 +7,8 @@ there. A live copy (key "Live_...") therefore, for every buy:
 1. sizes it exactly as its paper base does (same dollars per bet and per
    match), so paper and live results compare dollar for dollar;
 2. rounds down to whole contracts, as real orders must be;
-3. waits DELAY_S, then reads the US book again (another ~0.1 s);
+3. sends at once: the US book is read again right away, and that read's own
+   ~0.1 s stands in for the order's trip to the exchange;
 4. fills like a fill-or-cancel limit order against that new book, taking only
    COMPETITION of each level's size (other traders see the same price). That
    share is an assumption, not a measurement.
@@ -23,7 +24,7 @@ from . import fees, usmarket
 from .bots import SwissTonyV2
 from .simple_bots import S15Momentum, S19TennisSetFade
 
-DELAY_S = 0.2
+DELAY_S = 0.0   # no added wait: buy as soon as the price looks good
 COMPETITION = 0.5
 
 
@@ -78,7 +79,8 @@ def take(engine, key: str, bot, t, a, fair: float, now, st: dict) -> None:
         stats["no_room"] = stats.get("no_room", 0) + 1
         return
     stats["orders"] = stats.get("orders", 0) + 1
-    time.sleep(DELAY_S)
+    if DELAY_S:
+        time.sleep(DELAY_S)
     try:
         bk = usmarket.book(t.m.slug)   # the book as it is when the order would arrive
     except Exception as e:
