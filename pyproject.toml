@@ -6,7 +6,8 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
-test = ["pytest>=8"]
+test = ["pytest>=8", "cryptography>=42"]
+live = ["cryptography>=42"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

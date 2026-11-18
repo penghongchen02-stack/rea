@@ -5,9 +5,10 @@ Rebuilds the seven sports traders described in the
 follow each report's playbook, backtests the source wallets on real data, and
 paper-trades the bots on live Polymarket US order books.
 
-**This project never sends an order.** It uses only public, unauthenticated
-endpoints and has no API-key handling or order code. Live trading would be a
-separate, deliberate change.
+**Real-money trading is built but switched off.** Paper trading and the
+scheduled runs use only public endpoints and cannot send orders. The live runner
+(`psb.live`, below) sends real orders only after five separate gates are all
+opened by you; out of the box it runs in shadow mode and sends nothing.
 
 ## Commands
 
@@ -127,6 +128,63 @@ For these windows only:
   SWISSTONY. They roughly preserved FERRARICHAMPIONS2026.
 * These are short windows, one wallet each: none of this is evidence of a
   durable edge.
+
+## Real-money trading (off until you turn it on)
+
+`python3 -m psb.live` runs **one** bot against your Polymarket US account. One
+account holds one position per market, so two bots cannot share an account.
+
+**Shadow mode (the default).** The bot trades on paper exactly as in the
+scheduled runs, and every order it *would* send is written to
+`live-results/shadow-orders.jsonl` with the exact side, price and size. Nothing
+is sent and no keys are needed:
+
+```bash
+python3 -m psb.live --bot gamblingisallyourneed --minutes 120
+```
+
+**Armed mode.** Real orders go out only when all five hold; any one missing
+keeps it off, and an armed config with a gate missing refuses to start:
+
+1. `live.json` has `"armed": true` and `"bot": "<one bot>"` (committed as `false`).
+2. `PSB_LIVE_CONFIRM=real-money` is set in your shell.
+3. `POLYMARKET_KEY_ID` and `POLYMARKET_SECRET_KEY` are set in your shell, from
+   [polymarket.us/developer](https://polymarket.us/developer) after your account
+   passes identity checks. Never put them in a file in this repo.
+4. There is no `live-results/STOP` file. Creating one (`touch live-results/STOP`)
+   cancels the bot's orders and stops it within a second.
+5. The account has no open orders when the run starts, so the bot only manages
+   orders it placed itself.
+
+Run it on your own computer (`pip install cryptography` first), not in a cloud
+session: the keys have to be in the process that signs each request.
+
+**Limits in `live.json`, checked before every order:**
+
+| Limit | Default | What happens |
+|---|---|---|
+| `max_order_usd` | $5 | Each order is cut to this size. |
+| `max_exposure_usd` | $50 | Worst-case loss of open positions plus open orders never goes above this. |
+| `max_daily_loss_usd` | $25 | When today's P&L (UTC day, kept across restarts) reaches −$25, all orders are cancelled and the run stops. |
+
+**How orders map to the exchange.** A bot's *Take* becomes a limit order at its
+price limit, immediate-or-cancel, so it never pays more than the limit. A *Rest*
+becomes a post-only good-till-cancel limit order, kept while the bot re-issues
+the same price and cancelled when it moves, when the market drops out, or when
+the run ends. Prices are sent as the long (first team) side, as the API
+requires, rounded so the order never pays more than intended. Fills come from
+the exchange (order `cumQuantity`, IOC executions and their real fees) and are
+kept in `live-results/ledger.json`; the run cancels its own open orders on exit,
+including errors and Ctrl-C.
+
+**Not verified against the real exchange.** The signing follows the official
+SDK and docs, and every path is tested against a fake exchange
+(`tests/test_live.py`), but no request has been sent to `api.polymarket.us`. The
+first armed run should use the default $5 / $50 / $25 limits and be watched.
+
+**Before arming a bot, check at least:** several days of paper results, settled
+P&L positive after fees across many games (not one night), shadow orders that
+match what you expect, and a loss you can afford if the $50 limit is hit.
 
 ## Scheduled paper runs
 

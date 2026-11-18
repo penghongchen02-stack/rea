@@ -162,6 +162,7 @@ class Engine:
         self.markets: dict[str, Tracked] = {}
         self.events: dict[str, dict | None] = {}
         self.stats = {"polls": 0, "takes": 0, "maker_fills": 0, "no_cash": 0}
+        self.bots = dict(BOTS)   # the live runner narrows this to one bot
         # Resting orders live one poll unless re-issued. Orders saved by an earlier
         # run were not watched in between, so they must not fill on that gap's trades.
         if ledger.orders:
@@ -172,7 +173,7 @@ class Engine:
     def discover(self) -> None:
         now = _now()
         seen = set()
-        with_lines = any(set(b.kinds) - {"moneyline"} for b in BOTS.values())
+        with_lines = any(set(b.kinds) - {"moneyline"} for b in self.bots.values())
         for lg in self.leagues:
             try:
                 found = usmarket.discover(lg, with_lines)
@@ -182,7 +183,7 @@ class Engine:
             for m in found:
                 if m.start > now + self.horizon or m.start < now - LIVE_WINDOW:
                     continue
-                if not any(b.wants(m, True) or b.wants(m, False) for b in BOTS.values()):
+                if not any(b.wants(m, True) or b.wants(m, False) for b in self.bots.values()):
                     continue
                 seen.add(m.slug)
                 if m.slug in self.markets:
@@ -205,7 +206,7 @@ class Engine:
         due = []
         for t in self.markets.values():
             live = t.m.start <= now
-            if t.link is None or not any(b.wants(t.m, live) for b in BOTS.values()):
+            if t.link is None or not any(b.wants(t.m, live) for b in self.bots.values()):
                 continue
             if mono - t.last_poll >= (fast if live else slow):
                 due.append(t)
@@ -232,16 +233,19 @@ class Engine:
                 t.prev_fair_long = fair
                 continue
             live = t.m.start <= now
-            for key, bot in BOTS.items():
+            for key, bot in self.bots.items():
                 if not bot.wants(t.m, live):
                     self._cancel(t.m.slug, key)
                     continue
                 pos = self.ledger.position(key, t.m.slug)
                 st = self.ledger.state(key, t.m.slug)
                 v = View(t.m, bk, fair, t.prev_fair_long, live, now, self.ledger.bankroll,
-                         self.ledger.available_cash(key), pos.contracts, self.theta)
+                         self.cash_for(key), pos.contracts, self.theta)
                 self._apply(key, bot, t, bk, fair, bot.step(v, st), now)
             t.prev_fair_long = fair
+
+    def cash_for(self, key: str) -> float:
+        return self.ledger.available_cash(key)
 
     def _cancel(self, slug: str, bot: str | None = None) -> None:
         self.ledger.orders = [o for o in self.ledger.orders

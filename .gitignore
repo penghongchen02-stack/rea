@@ -6,3 +6,4 @@ __pycache__/
 .env
 paper-results/.lock
 paper-results/*.tmp
+live-results/

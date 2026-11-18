@@ -1,0 +1,10 @@
+{
+  "armed": false,
+  "bot": null,
+  "bankroll_usd": 1000,
+  "limits": {
+    "max_order_usd": 5,
+    "max_exposure_usd": 50,
+    "max_daily_loss_usd": 25
+  }
+}
