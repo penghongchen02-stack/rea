@@ -34,7 +34,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import fees, usmarket
-from .bots import BOTS, Rest, Take
+from .bots import Rest, Take
+from .registry import BOTS
 from .paper import DEFAULT_LEAGUES, Engine, Ledger, Tracked, _iso, _now, report
 
 API = "https://api.polymarket.us"
@@ -530,7 +531,8 @@ def main(argv=None) -> int:
             mono = time.monotonic()
             if mono >= next_discover:
                 eng.discover_next()
-                next_discover = mono + a.discover / max(1, len(eng.leagues))
+                next_discover = mono + (a.discover / max(1, len(eng.leagues))
+                                        if eng.first_pass_done else 0.0)
             if armed:
                 eng.buying_power = client.buying_power()
             eng.poll(a.fast, a.slow)

@@ -33,7 +33,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import fees, reference, usmarket
-from .bots import BOTS, Fill, Rest, Take, View
+from .bots import Fill, Rest, Take, View
+from .registry import BOTS
 from .markets import category_of
 
 STATE = Path(__file__).resolve().parent.parent / "paper"
@@ -199,19 +200,21 @@ class Engine:
         self._next_league = 0
         self._log_markets()
 
+    @property
+    def first_pass_done(self) -> bool:
+        return getattr(self, "_passes", 0) > 0
+
     def discover_next(self) -> None:
         """Refresh one league, round-robin, so live polling never waits for a
-        whole discovery pass. The first call does a full pass."""
-        if not getattr(self, "_discovered", False):
-            self._discovered = True
-            self.discover()
-            return
+        whole discovery pass. The caller runs the first pass back to back (one
+        league between polls), then spreads later passes over its interval."""
         if not self.leagues:
             return
         i = getattr(self, "_next_league", 0) % len(self.leagues)
         self.discover_league(self.leagues[i])
         self._next_league = i + 1
         if self._next_league == len(self.leagues):
+            self._passes = getattr(self, "_passes", 0) + 1
             self._log_markets()
 
     def discover_league(self, lg: str) -> None:
@@ -503,7 +506,8 @@ def main(argv=None):
             mono = time.monotonic()
             if mono >= next_discover:
                 eng.discover_next()
-                next_discover = mono + a.discover / max(1, len(eng.leagues))
+                next_discover = mono + (a.discover / max(1, len(eng.leagues))
+                                        if eng.first_pass_done else 0.0)
             eng.poll(a.fast, a.slow)
             if mono >= next_settle:
                 n = eng.settle()

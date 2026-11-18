@@ -15,7 +15,8 @@ import argparse
 import json
 from pathlib import Path
 
-from .bots import BOTS, FIXED, ORIGINALS
+from .bots import FIXED, ORIGINALS
+from .registry import BOTS
 from .simple_bots import IDEAS
 from .markets import category_of
 from .paper import Ledger, _entry_long_px, paired_cost

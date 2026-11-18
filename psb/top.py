@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 from .audit import audit
-from .bots import BOTS
+from .registry import BOTS
 from .dashboard import bot_rows
 from .paper import Ledger
 from .simple_bots import IDEAS

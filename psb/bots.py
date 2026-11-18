@@ -628,8 +628,3 @@ class RandomGameBetV2(RandomGameBet):
 ORIGINALS = (Ferrari(), SwissTony(), Gambling(), Sinenooneei(), Kch123(), Geiyecapixie(),
              RandomGameBet())
 FIXED = (FerrariV2(), SwissTonyV2(), GamblingV2(), SinenooneeiV2(), Kch123V2(), RandomGameBetV2())
-BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED}
-
-from .simple_bots import RUNNING as SIMPLE  # noqa: E402  (defined on top of the classes above)
-
-BOTS.update({b.key: b for b in SIMPLE})

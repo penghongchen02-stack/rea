@@ -21,7 +21,7 @@ import subprocess
 from collections import defaultdict
 from pathlib import Path
 
-from .bots import BOTS
+from .registry import BOTS
 from .paper import Ledger
 
 # Legs that may pay above fair by design (closing a pair or exiting).
@@ -79,7 +79,9 @@ def audit(led: Ledger, repo: Path) -> tuple[list[str], dict]:
             armed = bool(json.loads(live_cfg.read_text()).get("armed"))
         except ValueError:
             armed = True   # unreadable: report it rather than assume it is off
-    running_live = subprocess.run(["pgrep", "-f", "psb.live"], capture_output=True).returncode == 0
+    # The real-money runner is started as `python3 -m psb.live`; match only that.
+    running_live = subprocess.run(["pgrep", "-f", r"-m psb\.live( |$)"],
+                                  capture_output=True).returncode == 0
     if armed:
         problems.append("live.json is ARMED (real money)")
     if running_live:
