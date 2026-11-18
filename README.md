@@ -17,7 +17,7 @@ separate, deliberate change.
 | Replay the wallets: as traded, after their real fees, under Polymarket US fees, and under each report's filters | `python3 -m psb.replay` | `data/` |
 | Paper-trade the seven bots, $1,000 each | `python3 -m psb.paper --minutes 120` | `gateway.polymarket.us`, `gamma-api`, `clob.polymarket.com` |
 | Settle and report paper positions | `python3 -m psb.paper --report` | `paper/ledger.json` |
-| One scheduled run: resume, trade, commit and push results | `scripts/run_paper.sh 110` | `paper-results/` |
+| One scheduled run: resume, trade until just before the next start, commit and push results | `scripts/run_paper.sh` | `paper-results/` |
 | Tests | `python3 -m pytest` | |
 
 Python 3.10+, no runtime dependencies.
@@ -72,7 +72,8 @@ ratios at a smaller scale.
   outcome. Both teams must match by name and start times within 3 h; spreads
   link by team and line, or by the complement (Knicks +2.5 = not Raptors −2.5).
   A US market with no matching international line stays unlinked.
-* **Polling:** live games every 15 s, upcoming games (next 24 h) every 3 min.
+* **Polling:** live games every 5 s, upcoming games (next 24 h) every 60 s in
+  scheduled runs (CLI defaults 15 s and 3 min), limited by a 12 req/s throttle.
   Each poll reads fresh international midpoints in one batch
   (`clob.polymarket.com/books`), then the US book. A fair value needs an
   international bid–ask spread ≤ 4¢.
