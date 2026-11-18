@@ -193,6 +193,8 @@ class Engine:
         self.events: dict[str, dict | None] = {}
         self.stats = {"polls": 0, "takes": 0, "maker_fills": 0, "no_cash": 0}
         self.bots = dict(BOTS)   # the live runner narrows this to one bot
+        if livesim.migrate_keys(ledger):
+            log("renamed live-like copies to Live_19, Live_15, Live_swisstony-v2")
         for key in self.bots:   # a bot added to an existing ledger starts its own clock
             if key not in ledger.bot_started:
                 traded = key in ledger.positions or key in ledger.states

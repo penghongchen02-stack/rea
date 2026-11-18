@@ -60,9 +60,9 @@ def main(argv=None) -> None:
     by_key = {r["bot"]: r for r in rows}
     pairs = [(base, twin) for twin, base in BASE_OF.items() if twin in by_key and base in by_key]
     if pairs:
-        print("\nPaper vs live-like (same decisions; live-like fills after a delay, $5 orders,"
+        print("\nPaper vs Live_ copies (same decisions; Live_ fills after a delay, $5 orders,"
               " $50 at risk, half the shown size):")
-        print("| Bot | Paper settled | Live-like settled | Live-like equity | Orders sent | Missed | Part-filled |\n"
+        print("| Bot | Paper settled | Live_ settled | Live_ equity | Orders sent | Missed | Part-filled |\n"
               "|---|---|---|---|---|---|---|")
         for base, twin in pairs:
             b, w = by_key[base], by_key[twin]

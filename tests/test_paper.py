@@ -341,9 +341,8 @@ def test_unmarked_partly_closed_position_keeps_its_realized_cash():
 # --- fixed (-v2) bots ----------------------------------------------------------
 
 def test_every_v2_bot_keeps_its_original_entry_filters():
-    for key, b in registry.BOTS.items():
-        if key.endswith("-v2"):
-            assert b.rules_key == key[:-3] and b.rules_key in registry.BOTS
+    for b in bots.FIXED:
+        assert b.rules_key == b.key[:-3] and b.rules_key in registry.BOTS
 
 
 def test_ferrari_v2_trades_one_line_per_game_and_caps_dominance():
@@ -603,19 +602,19 @@ def test_looser_versions_trade_where_the_base_does_not():
 def test_live_like_copy_misses_a_price_that_is_gone_when_its_order_arrives(monkeypatch):
     from psb import livesim
     eng, led = _engine()
-    bot = registry.BOTS["s19-livesim"]
+    bot = registry.BOTS["Live_19"]
     m = _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B", teams=("A", "B"),
            start=NOW - timedelta(minutes=30))
     t = paper.Tracked(m, None)
     monkeypatch.setattr(livesim.time, "sleep", lambda s: None)
     # The 12c offer is gone when the order arrives: nothing fills.
     monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.30, 0.40))
-    eng._apply("s19-livesim", bot, t, _book(0.10, 0.12), 0.20,
+    eng._apply("Live_19", bot, t, _book(0.10, 0.12), 0.20,
                [bots.Take("long", 10.0, 0.15, "entry")], NOW)
-    assert led.fills == [] and livesim.counts(led, "s19-livesim")["missed"] == 1
+    assert led.fills == [] and livesim.counts(led, "Live_19")["missed"] == 1
     # Still there: fills whole contracts, $5 at most, half the shown size.
     monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.10, 0.12, qty=20))
-    eng._apply("s19-livesim", bot, t, _book(0.10, 0.12), 0.20,
+    eng._apply("Live_19", bot, t, _book(0.10, 0.12), 0.20,
                [bots.Take("long", 10.0, 0.15, "entry")], NOW)
     assert [f["contracts"] for f in led.fills] == [10]          # half of 20 shown, under $5/0.15 = 33
     assert led.fills[0]["contracts"] == int(led.fills[0]["contracts"])
@@ -624,11 +623,23 @@ def test_live_like_copy_misses_a_price_that_is_gone_when_its_order_arrives(monke
 def test_live_like_copy_respects_the_total_risk_limit(monkeypatch):
     from psb import livesim
     eng, led = _engine()
-    bot = registry.BOTS["s15-livesim"]
-    led.record("s15-livesim", "other", "long", 0.5, 100, 0.0, "taker", "entry", 0.5, NOW)  # $50 at risk
+    bot = registry.BOTS["Live_15"]
+    led.record("Live_15", "other", "long", 0.5, 100, 0.0, "taker", "entry", 0.5, NOW)  # $50 at risk
     m = _m(name="A")
     monkeypatch.setattr(livesim.time, "sleep", lambda s: None)
     monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.50, 0.52))
-    eng._apply("s15-livesim", bot, paper.Tracked(m, None), _book(0.50, 0.52), 0.6,
+    eng._apply("Live_15", bot, paper.Tracked(m, None), _book(0.50, 0.52), 0.6,
                [bots.Take("long", 10.0, 0.55, "entry")], NOW)
-    assert len(led.fills) == 1 and livesim.counts(led, "s15-livesim")["no_room"] == 1
+    assert len(led.fills) == 1 and livesim.counts(led, "Live_15")["no_room"] == 1
+
+
+def test_old_live_like_keys_move_to_the_live_names():
+    from psb import livesim
+    led = paper.Ledger()
+    led.record("s19-livesim", "m", "long", 0.12, 40, 0.0, "taker", "entry", 0.15, NOW)
+    led.state("s19-livesim", "m")["fair0"] = 0.3
+    led.bot_started["s19-livesim"] = "2026-11-18T17:40:13Z"
+    assert livesim.migrate_keys(led) == 1
+    assert "s19-livesim" not in led.positions and led.positions["Live_19"]["m"].contracts == 40
+    assert led.states["Live_19"]["m"]["fair0"] == 0.3 and led.fills[0]["bot"] == "Live_19"
+    assert led.bot_started["Live_19"] == "2026-11-18T17:40:13Z"

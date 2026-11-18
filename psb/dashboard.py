@@ -27,7 +27,7 @@ IDEA_KEYS = {i.key for i in IDEAS if i.key}
 
 
 def _family(key: str) -> str:
-    return key[:-3] if key.endswith("-v2") else key
+    return key[:-3] if key in FIXED_KEYS else key
 
 
 def _last_fill_times(led: Ledger) -> dict[tuple[str, str], str]:

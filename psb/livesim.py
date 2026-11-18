@@ -1,8 +1,8 @@
-"""Live-like copies of bots: the same decisions, filled the way real orders would be.
+"""Live copies ("Live_...") of bots: the same decisions, filled the way real orders would be.
 
 Paper bots fill instantly against the book they decided on. A real order on
 Polymarket US is sent ~0.1-0.3 s later and fills only against what is still
-there. A live-like copy (key ending "-livesim") therefore, for every buy:
+there. A live copy (key "Live_...") therefore, for every buy:
 
 1. sizes it under the real-money limits in live.json's defaults: at most
    ORDER_USD per order, EXPOSURE_USD at risk in total, and no new orders after
@@ -39,12 +39,31 @@ def _twin(base, key: str, title: str):
 
 
 TWINS = (
-    _twin(S19TennisSetFade, "s19-livesim", "#19 live-like"),
-    _twin(S15Momentum, "s15-livesim", "#15 live-like"),
-    _twin(SwissTonyV2, "swisstony-v2-livesim", "swisstony-v2 live-like"),
+    _twin(S19TennisSetFade, "Live_19", "Live_19"),
+    _twin(S15Momentum, "Live_15", "Live_15"),
+    _twin(SwissTonyV2, "Live_swisstony-v2", "Live_swisstony-v2"),
 )
-BASE_OF = {"s19-livesim": "s19-tennis-set-fade", "s15-livesim": "s15-momentum",
-           "swisstony-v2-livesim": "swisstony-v2"}
+BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
+           "Live_swisstony-v2": "swisstony-v2"}
+# Keys these copies had before 2026-11-18 17:50 UTC (see migrate_keys).
+OLD_KEYS = {"s19-livesim": "Live_19", "s15-livesim": "Live_15",
+            "swisstony-v2-livesim": "Live_swisstony-v2"}
+
+
+def migrate_keys(ledger) -> int:
+    """Move history recorded under OLD_KEYS to the current keys; returns fills moved."""
+    moved = 0
+    for old, new in OLD_KEYS.items():
+        for table in (ledger.positions, ledger.states):
+            if old in table:
+                table.setdefault(new, {}).update(table.pop(old))
+        if old in ledger.bot_started:
+            ledger.bot_started.setdefault(new, ledger.bot_started.pop(old))
+        for f in ledger.fills:
+            if f["bot"] == old:
+                f["bot"] = new
+                moved += 1
+    return moved
 
 
 COUNTS = "_livesim"   # per-bot order outcomes, kept in the ledger's states
