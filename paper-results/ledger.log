@@ -827,3 +827,23 @@
 2026-11-18T13:42:40Z stats {"polls": 31582, "takes": 1275, "maker_fills": 442, "no_cash": 1338} resting=472
 2026-11-18T13:44:09Z settled 3 markets
 2026-11-18T13:44:31Z final settle 0; stats {"polls": 32026, "takes": 1289, "maker_fills": 455, "no_cash": 1359}
+2026-11-18T13:44:43Z dropped 484 resting orders from the previous run
+2026-11-18T13:45:21Z stats {"polls": 24, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=68
+2026-11-18T13:46:46Z stats {"polls": 200, "takes": 0, "maker_fills": 0, "no_cash": 4} resting=339
+2026-11-18T13:49:03Z stats {"polls": 575, "takes": 0, "maker_fills": 8, "no_cash": 17} resting=432
+2026-11-18T13:51:12Z stats {"polls": 744, "takes": 29, "maker_fills": 11, "no_cash": 29} resting=468
+2026-11-18T13:52:13Z discovered 641 markets, 431 linked, 49 linked and live
+2026-11-18T13:53:20Z stats {"polls": 1415, "takes": 69, "maker_fills": 15, "no_cash": 74} resting=461
+2026-11-18T13:55:17Z settled 5 markets
+2026-11-18T13:55:27Z stats {"polls": 2084, "takes": 109, "maker_fills": 27, "no_cash": 125} resting=474
+2026-11-18T13:57:34Z stats {"polls": 2999, "takes": 157, "maker_fills": 37, "no_cash": 205} resting=475
+2026-11-18T13:59:37Z stats {"polls": 3901, "takes": 207, "maker_fills": 48, "no_cash": 289} resting=473
+2026-11-18T14:01:40Z stats {"polls": 4783, "takes": 242, "maker_fills": 65, "no_cash": 333} resting=617
+2026-11-18T14:03:44Z stats {"polls": 5679, "takes": 263, "maker_fills": 87, "no_cash": 394} resting=643
+2026-11-18T14:05:21Z settled 3 markets
+2026-11-18T14:05:51Z stats {"polls": 6423, "takes": 346, "maker_fills": 102, "no_cash": 461} resting=646
+2026-11-18T14:08:10Z stats {"polls": 7377, "takes": 444, "maker_fills": 115, "no_cash": 567} resting=649
+2026-11-18T14:10:05Z stats {"polls": 8026, "takes": 503, "maker_fills": 135, "no_cash": 645} resting=647
+2026-11-18T14:11:27Z discovered 636 markets, 427 linked, 53 linked and live
+2026-11-18T14:12:14Z stats {"polls": 8895, "takes": 533, "maker_fills": 143, "no_cash": 757} resting=628
+2026-11-18T14:14:29Z final settle 3; stats {"polls": 9621, "takes": 560, "maker_fills": 148, "no_cash": 838}
