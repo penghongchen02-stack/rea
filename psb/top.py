@@ -15,6 +15,8 @@ from pathlib import Path
 from .audit import audit
 from .registry import BOTS
 from .dashboard import bot_rows
+from .livesim import BASE_OF
+from .livesim import counts as livesim_counts
 from .paper import Ledger
 from .simple_bots import IDEAS
 
@@ -55,6 +57,19 @@ def main(argv=None) -> None:
             print(_row(r))
     if idle:
         print(f"\nNo bets yet ({len(idle)}): " + ", ".join(NAMES.get(r["bot"], r["bot"]) for r in idle))
+    by_key = {r["bot"]: r for r in rows}
+    pairs = [(base, twin) for twin, base in BASE_OF.items() if twin in by_key and base in by_key]
+    if pairs:
+        print("\nPaper vs live-like (same decisions; live-like fills after a delay, $5 orders,"
+              " $50 at risk, half the shown size):")
+        print("| Bot | Paper settled | Live-like settled | Live-like equity | Orders sent | Missed | Part-filled |\n"
+              "|---|---|---|---|---|---|---|")
+        for base, twin in pairs:
+            b, w = by_key[base], by_key[twin]
+            c = livesim_counts(led, twin)
+            print(f"| {NAMES.get(base, base)} | {b['settled_pnl']:+,.2f} | {w['settled_pnl']:+,.2f} "
+                  f"| {w['equity']:,.2f} | {c.get('orders', 0)} | {c.get('missed', 0)} "
+                  f"| {c.get('partial', 0)} |")
     problems, s = audit(led, Path.cwd())
     print(f"\nRule check: {s['fills_checked']} bets checked, {len(problems)} problems; "
           f"real money {'ARMED' if s['live_armed'] else 'off'}.")

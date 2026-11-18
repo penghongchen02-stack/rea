@@ -557,9 +557,11 @@ def test_poll_reads_live_games_first_and_never_acts_on_a_stale_price(monkeypatch
     monkeypatch.setattr(paper, "_now", lambda: NOW)
     monkeypatch.setattr(paper.reference, "live_mids", lambda links: {"t0": 0.6})
     monkeypatch.setattr(paper.usmarket, "book", lambda slug: order.append(slug) or _book(0.5, 0.52))
+    monkeypatch.setattr(paper.livesim.time, "sleep", lambda s: None)
     eng.poll(5, 60)
     assert order[0] == "live"                                   # live first
-    assert len(order) == 1 + paper.PREGAME_PER_POLL             # upcoming ones are capped
+    # Upcoming ones are capped (live-like bots re-read a book they trade, so count markets).
+    assert len(set(order)) == 1 + paper.PREGAME_PER_POLL
     # A price read longer ago than MAX_FAIR_AGE is not acted on.
     clock = iter([0.0] + [100.0] * 50)
     monkeypatch.setattr(paper.time, "monotonic", lambda: next(clock))
@@ -594,3 +596,39 @@ def test_looser_versions_trade_where_the_base_does_not():
     v = _view(m, _book(0.45, 0.46), 0.52, prev=0.50, live=True)       # 2c jump
     assert registry.BOTS["s15-momentum"].step(v, {}) == []                # needs 3c
     assert registry.BOTS["s15-x01"].step(v, {})
+
+
+# --- live-like copies -----------------------------------------------------------
+
+def test_live_like_copy_misses_a_price_that_is_gone_when_its_order_arrives(monkeypatch):
+    from psb import livesim
+    eng, led = _engine()
+    bot = registry.BOTS["s19-livesim"]
+    m = _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B", teams=("A", "B"),
+           start=NOW - timedelta(minutes=30))
+    t = paper.Tracked(m, None)
+    monkeypatch.setattr(livesim.time, "sleep", lambda s: None)
+    # The 12c offer is gone when the order arrives: nothing fills.
+    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.30, 0.40))
+    eng._apply("s19-livesim", bot, t, _book(0.10, 0.12), 0.20,
+               [bots.Take("long", 10.0, 0.15, "entry")], NOW)
+    assert led.fills == [] and livesim.counts(led, "s19-livesim")["missed"] == 1
+    # Still there: fills whole contracts, $5 at most, half the shown size.
+    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.10, 0.12, qty=20))
+    eng._apply("s19-livesim", bot, t, _book(0.10, 0.12), 0.20,
+               [bots.Take("long", 10.0, 0.15, "entry")], NOW)
+    assert [f["contracts"] for f in led.fills] == [10]          # half of 20 shown, under $5/0.15 = 33
+    assert led.fills[0]["contracts"] == int(led.fills[0]["contracts"])
+
+
+def test_live_like_copy_respects_the_total_risk_limit(monkeypatch):
+    from psb import livesim
+    eng, led = _engine()
+    bot = registry.BOTS["s15-livesim"]
+    led.record("s15-livesim", "other", "long", 0.5, 100, 0.0, "taker", "entry", 0.5, NOW)  # $50 at risk
+    m = _m(name="A")
+    monkeypatch.setattr(livesim.time, "sleep", lambda s: None)
+    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.50, 0.52))
+    eng._apply("s15-livesim", bot, paper.Tracked(m, None), _book(0.50, 0.52), 0.6,
+               [bots.Take("long", 10.0, 0.55, "entry")], NOW)
+    assert len(led.fills) == 1 and livesim.counts(led, "s15-livesim")["no_room"] == 1

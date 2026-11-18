@@ -33,7 +33,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import fees, reference, usmarket
+from . import fees, livesim, reference, usmarket
 from .bots import Fill, Rest, Take, View
 from .registry import BOTS
 from .markets import category_of
@@ -397,7 +397,9 @@ class Engine:
         st = self.ledger.state(key, t.m.slug)
         for a in acts:
             fair = fair_long if a.side == "long" else 1 - fair_long
-            if isinstance(a, Take):
+            if isinstance(a, Take) and getattr(bot, "live_sim", False):
+                livesim.take(self, key, bot, t, a, fair, now, st)
+            elif isinstance(a, Take):
                 budget = a.dollars
                 for px, qty in bk.side_asks(a.side):
                     if px > a.limit + 1e-9 or budget < 0.01:
