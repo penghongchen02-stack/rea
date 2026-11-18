@@ -130,8 +130,9 @@ For these windows only:
 
 ## Scheduled paper runs
 
-`scripts/run_paper.sh` resumes from `paper-results/ledger.json`, paper-trades for
-the given minutes, writes `paper-results/report.md`, and commits and pushes both,
+`scripts/run_paper.sh` resumes from `paper-results/ledger.json`, paper-trades until 3
+minutes before the next scheduled start (or for the minutes given), writes `paper-results/report.md`, and commits and pushes both,
 so a run in a fresh container picks up where the last one stopped. A lock file
-prevents overlapping runs. A Claude Code scheduled task starts it every 2 hours;
-between runs nothing is polled, so resting paper orders and live games are missed.
+prevents overlapping runs. A Claude Code scheduled task starts it every 2 hours at
+:17 UTC; in the few minutes between runs nothing is polled, and each run starts
+with no resting orders.
