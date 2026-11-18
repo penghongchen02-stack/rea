@@ -438,3 +438,14 @@ def test_bots_added_later_get_their_own_start_time():
     assert set(led.bot_started) == set(bots.BOTS)
     assert led.bot_started["kch123"] == "2026-11-17T11:03:25Z"      # traded since the start
     assert led.bot_started["kch123-v2"] > "2026-11-17T11:03:25Z"    # joined now
+
+
+def test_us_itf_leagues_link_to_the_international_itf_league():
+    # Observed 2026-11-18: 58 live ITF matches, none linked ("itfme" vs "itf").
+    m = _m(league="itfme", event="itfme-piebai-saviva-2026-11-18", name="Piero Bailey",
+           title="Piero Bailey vs. Savio Viva", teams=("Piero Bailey", "Savio Viva"))
+    ev = {"slug": "itf-bailey1-viva1-2026-11-18", "startTime": m.start.isoformat(),
+          "title": "M15 Monastir: Piero Bailey vs Savio Viva", "markets": []}
+    assert reference.same_game(m, ev)
+    assert bots.View(m, _book(0.5, 0.52), 0.6, None, False, NOW, 1000, 1000, 0,
+                     fees.WORST_TAKER_THETA).category == "tennis"

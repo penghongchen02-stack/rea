@@ -13,6 +13,7 @@ LEAGUE_CATEGORY = {
     "cbb": "cbb", "ncaab": "cbb", "cwbb": "cbb",
     "mlb": "mlb", "nhl": "nhl", "khl": "nhl", "shl": "nhl",
     "atp": "tennis", "wta": "tennis", "tennis": "tennis", "itf": "tennis", "chal": "tennis",
+    "itfme": "tennis", "itfwo": "tennis",
     "ufc": "ufc", "mma": "ufc", "pfl": "ufc", "boxing": "boxing",
     "lol": "lol", "cs2": "cs", "csgo": "cs", "cs": "cs", "dota2": "dota", "dota": "dota",
     "val": "valorant", "valorant": "valorant",

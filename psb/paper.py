@@ -36,10 +36,11 @@ from . import fees, reference, usmarket
 from .bots import BOTS, Fill, Rest, Take, View
 
 STATE = Path(__file__).resolve().parent.parent / "paper"
-# Polymarket US league slugs (GET /v2/sports). Tennis is "atp"/"wta"; ITF events
-# ("itfme"/"itfwo") have no international market to price them, so they are left out.
+# Polymarket US league slugs (GET /v2/sports). Tennis is "atp"/"wta" plus ITF
+# men's and women's ("itfme"/"itfwo", one "itf" league internationally). UTR
+# events have no international market to price them, so they are left out.
 DEFAULT_LEAGUES = ["nba", "nfl", "cfb", "nhl", "cbb", "epl", "lal", "bun", "sea", "ucl", "mls",
-                   "ufc", "cs2", "dota2", "valorant", "lol", "mlb", "atp", "wta"]
+                   "ufc", "cs2", "dota2", "valorant", "lol", "mlb", "atp", "wta", "itfme", "itfwo"]
 LIVE_WINDOW = timedelta(hours=8)
 
 

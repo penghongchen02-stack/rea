@@ -22,6 +22,15 @@ MAX_START_GAP = timedelta(hours=3)
 MAX_SPREAD = 0.04
 
 
+# Polymarket US splits some international leagues: ITF men's and women's events
+# are "itfme"/"itfwo" on US and one "itf" league internationally.
+INTL_LEAGUE = {"itfme": "itf", "itfwo": "itf"}
+
+
+def intl_league(m: UsMarket) -> str:
+    return INTL_LEAGUE.get(m.league, m.league)
+
+
 def _norm(s: str) -> str:
     return "".join(ch for ch in s.lower() if ch.isalnum())
 
@@ -51,7 +60,7 @@ def same_game(m: UsMarket, event: dict) -> bool:
     """Both US participants must appear in the international event, and start
     times must agree. Unconfirmed matches are rejected rather than guessed."""
     slug = event.get("slug") or ""
-    if not slug.startswith(m.league + "-") or not event.get("startTime"):
+    if not slug.startswith(intl_league(m) + "-") or not event.get("startTime"):
         return False
     start = datetime.fromisoformat(event["startTime"].replace("Z", "+00:00"))
     if abs(start - m.start) > MAX_START_GAP:
@@ -86,7 +95,7 @@ def find_event(m: UsMarket) -> dict | None:
                              [("q", q), ("limit_per_type", "8"), ("events_status", "active")])
             for e in found.get("events") or []:
                 slug = e.get("slug") or ""
-                if not slug.startswith(m.league + "-") or slug in tried:
+                if not slug.startswith(intl_league(m) + "-") or slug in tried:
                     continue
                 tried.add(slug)
                 full = get_json(f"{GAMMA_API}/events", [("slug", slug)])
