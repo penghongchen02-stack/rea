@@ -2,7 +2,8 @@
 # One scheduled paper-trading run. Paper only: no orders are ever sent.
 # Usage: scripts/run_paper.sh [minutes|auto]   (default auto)
 #   auto: run until 3 minutes before the next scheduled start (every 2 hours at
-#   :17 UTC), so consecutive runs leave only a few minutes unwatched.
+#   :17 UTC), capped at 115 minutes so it always finishes inside the
+#   2-hour limit on background jobs.
 # Reads and writes paper-results/ledger.json, then commits and pushes the
 # ledger and report so the next run (possibly in a fresh container) resumes.
 set -euo pipefail
@@ -13,9 +14,11 @@ if [ "$MINUTES" = auto ]; then
 from datetime import datetime, timedelta, timezone
 now = datetime.now(timezone.utc)
 t = now.replace(minute=14, second=0, microsecond=0)
-while t.hour % 2 or t - now < timedelta(minutes=30):
+while t.hour % 2 or t - now < timedelta(minutes=5):
     t += timedelta(hours=1)
-print(round((t - now).total_seconds() / 60, 1))")
+# Background jobs are stopped after 2 hours, so a run must finish (and push)
+# well inside that; a late restart just runs until the next scheduled start.
+print(min(115.0, round((t - now).total_seconds() / 60, 1)))")
 fi
 # Live games every 5 s and upcoming games every 60 s; US requests stay under
 # the client's 12 req/s throttle (venue limit 25 req/s), so busy slates poll
