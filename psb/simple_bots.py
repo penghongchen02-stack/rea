@@ -101,7 +101,7 @@ class Simple(Bot):
         dollars = min(self.room(v, st), self.size(v, st, side))
         if dollars < 1:
             return []
-        return [Take(side, dollars, round(v.fair(side) - min_edge, 4), "entry")]
+        return [Take(side, dollars, round(min(v.fair(side) - min_edge, self.price_cap), 4), "entry")]
 
 
 def best_edge_side(v: View) -> str | None:

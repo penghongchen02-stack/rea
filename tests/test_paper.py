@@ -547,3 +547,21 @@ def test_home_side_follows_the_us_league_order(monkeypatch):
     m = _m(league="cbb", event="cbb-a-b-2026-11-18", name="Away U", title="Away U vs. Home St",
            teams=("Away U", "Home St"))
     assert simple_bots.home_side(_view(m, _book(0.5, 0.52), 0.5)) == "short"
+
+
+def test_a_buy_never_walks_the_book_past_the_price_cap():
+    # Observed 2026-11-18: swisstony filled a level at 0.96 after checking a 0.94 ask.
+    m = _m(league="cbb", event="cbb-a-b-2026-11-17", title="A vs. B")
+    acts = bots.BOTS["swisstony"].step(_view(m, _book(0.93, 0.94), 0.995), {})
+    assert acts and acts[0].limit <= 0.95
+    acts = bots.BOTS["s39-flat-10"].step(_view(_m(), _book(0.93, 0.94), 0.995), {})
+    assert acts and acts[0].limit <= 0.95
+
+
+def test_audit_flags_a_buy_above_fair_and_passes_a_clean_ledger(tmp_path):
+    from psb import audit
+    led = paper.Ledger()
+    led.record("kch123", "m", "long", 0.50, 10, 0.1, "taker", "probe", 0.55, NOW)
+    assert audit.audit(led, tmp_path)[0] == []
+    led.record("kch123", "m", "long", 0.60, 10, 0.1, "taker", "probe", 0.55, NOW)
+    assert any("above fair" in p for p in audit.audit(led, tmp_path)[0])

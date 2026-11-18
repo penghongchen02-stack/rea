@@ -341,6 +341,11 @@ class ProbeAnchor(Bot):
     def size_scale(self, v: View) -> float:
         return 1.0
 
+    def limit(self, v: View, side: str) -> float:
+        """Highest price a buy may walk the book to: the edge rule and the price cap
+        both hold for every level filled, not just the first."""
+        return min(v.fair(side) - self.min_edge, self.price_cap)
+
     def anchor_dollars(self, v: View, st: dict, side: str) -> float:
         return 0.0
 
@@ -379,13 +384,13 @@ class ProbeAnchor(Bot):
             dollars = min(room, self.anchor_dollars(v, st, side) * scale)
             if dollars >= 1:
                 st.setdefault("thesis", side)
-                return [Take(side, dollars, v.fair(side) - self.min_edge, "anchor")]
+                return [Take(side, dollars, self.limit(v, side), "anchor")]
         if probes < self.max_probes:
             dollars = min(room, self.probe_usd * scale)
             if dollars >= 1:
                 st.setdefault("thesis", side)
                 st.setdefault("thesis_fair", v.fair(side))
-                return [Take(side, dollars, v.fair(side) - self.min_edge, "probe")]
+                return [Take(side, dollars, self.limit(v, side), "probe")]
         return []
 
 
