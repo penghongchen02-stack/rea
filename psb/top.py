@@ -59,6 +59,9 @@ def main(argv=None) -> None:
           f"real money {'ARMED' if s['live_armed'] else 'off'}.")
     for p in problems[:5]:
         print(f"- {p}")
+    if s["removed_bot_fills"]:
+        print("Not checked, from removed bots: " + ", ".join(
+            f"{k} ({n} bets)" for k, n in sorted(s["removed_bot_fills"].items())))
 
 
 if __name__ == "__main__":

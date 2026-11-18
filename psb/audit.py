@@ -35,10 +35,11 @@ def audit(led: Ledger, repo: Path) -> tuple[list[str], dict]:
     entries = defaultdict(int)
     lines = defaultdict(set)            # (bot, event, kind) -> slugs traded
     checked = 0
+    removed: dict[str, int] = defaultdict(int)
     for f in led.fills:
         bot = BOTS.get(f["bot"])
-        if bot is None:
-            problems.append(f"{f['bot']}: fill from a bot that no longer exists ({f['slug']})")
+        if bot is None:   # a removed bot: its rules are gone, so its history is not checked
+            removed[f["bot"]] += 1
             continue
         checked += 1
         key = (f["bot"], f["slug"])
@@ -87,7 +88,7 @@ def audit(led: Ledger, repo: Path) -> tuple[list[str], dict]:
     if running_live:
         problems.append("a psb.live process is running")
     return problems, {"fills_checked": checked, "bots": len(BOTS), "live_armed": armed,
-                      "live_running": running_live}
+                      "live_running": running_live, "removed_bot_fills": dict(removed)}
 
 
 def main(argv=None) -> int:
