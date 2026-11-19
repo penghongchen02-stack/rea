@@ -23,7 +23,7 @@ import time
 from . import fees, usmarket
 from .bots import SwissTonyV2
 from .exits import S19Lock70
-from .simple_bots import S15Momentum, S19TennisSetFade
+from .simple_bots import S15Momentum, S19TennisSetFade, S50Ensemble
 from .allsports import ALL_CLASSES
 from .fifty import FIFTY_CLASSES
 from .gaps import GAP_CLASSES
@@ -69,6 +69,7 @@ TWINS = (
     _twin(_VARIANT["s15-x06"], "Live_15-x06", "Live_15-x06"),
     _twin(_VARIANT["swisstony-x01"], "Live_swisstony-x01", "Live_swisstony-x01"),
     _twin(Underdog, "Live_underdog", "Live_underdog"),
+    _twin(S50Ensemble, "Live_50", "Live_50"),
     _twin(TnPre1, "Live_tn-pre-1c", "Live_tn-pre-1c"),
     _twin(TnPre2, "Live_tn-pre-2c", "Live_tn-pre-2c"),
     *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in IDEA_CLASSES),
@@ -96,7 +97,7 @@ TWINS = tuple(b for b in TWINS if b.key not in PAUSED)
 BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
            "Live_swisstony-v2": "swisstony-v2", "Live_19-lock70": "s19-lock70",
            "Live_15-x06": "s15-x06", "Live_swisstony-x01": "swisstony-x01",
-           "Live_underdog": "underdog-1",
+           "Live_underdog": "underdog-1", "Live_50": "s50-ensemble",
            "Live_tn-pre-1c": "tn-pre-1c", "Live_tn-pre-2c": "tn-pre-2c",
            **{f"Live_{c.key}": c.key for c in IDEA_CLASSES},
            **{f"Live_{b.key}": b.key for b in TENNIS_BOTS if b.key.startswith("tn-maker")},
