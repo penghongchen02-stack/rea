@@ -782,3 +782,54 @@ def test_tennis_makers_quote_only_tennis_and_prematch_bots_buy_only_before_play(
         (a,) = b.step(_view(pre, _book(0.48, 0.50), 0.55), {})            # 5c under fair
         assert a.side == "long" and a.tag == "entry"
     assert registry.BOTS["tn-pre-2c"].step(_view(pre, _book(0.53, 0.54), 0.55), {}) == []
+
+
+def test_live_maker_waits_behind_others_at_its_price_and_gets_its_queue_share():
+    eng, led = _engine()
+    t = paper.Tracked(_tennis(), None)
+    for key in ("tn-maker-2c", "Live_tn-maker-2c"):
+        eng._apply(key, registry.BOTS[key], t, _book(0.40, 0.45, traded=500), 0.5,
+                   [bots.Rest("long", 0.42, 4.2, "quote")], NOW)
+    eng._settle_orders(t, _book(0.40, 0.45, last=0.42, traded=504), NOW)   # 4 traded at our price
+    assert {f["bot"]: f["contracts"] for f in led.fills} == {"tn-maker-2c": pytest.approx(4)}
+    eng._settle_orders(t, _book(0.40, 0.45, last=0.41, traded=514), NOW)   # 10 traded through it
+    live = [f["contracts"] for f in led.fills if f["bot"] == "Live_tn-maker-2c"]
+    assert live == [5.0]                                                    # half, whole contracts
+
+
+def test_six_ideas_and_their_live_copies():
+    from psb import ideas
+    assert len(ideas.IDEAS6) == 6
+    for b in ideas.IDEAS6:
+        assert b.key in registry.BOTS and registry.BOTS[f"Live_{b.key}"].live_sim
+    nba = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=30))
+    # Comeback fade: the Knicks (favourite) fall 67c -> 65c, offered at 62c.
+    (a,) = registry.BOTS["fav-fade"].step(_view(nba, _book(0.61, 0.62), 0.65, prev=0.67, live=True), {})
+    assert a.side == "long"
+    # Late underdog: only once the game is late.
+    late = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=120))
+    v = _view(late, _book(0.63, 0.64), 0.60, live=True)                  # underdog 40c, offered 37c
+    assert registry.BOTS["late-underdog"].step(v, {})
+    assert registry.BOTS["late-underdog"].step(_view(nba, _book(0.63, 0.64), 0.60, live=True), {}) == []
+    # Big jump needs 5c.
+    assert registry.BOTS["big-jump"].step(_view(nba, _book(0.60, 0.61), 0.65, prev=0.62, live=True), {}) == []
+    assert registry.BOTS["big-jump"].step(_view(nba, _book(0.60, 0.61), 0.68, prev=0.62, live=True), {})
+    # Set loser: favourite at 70c before play, 45c now and offered at 40c.
+    bot, st = registry.BOTS["tn-set-loser"], {}
+    pre = _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B",
+             teams=("A", "B"), start=NOW + timedelta(hours=1))
+    bot.step(_view(pre, _book(0.69, 0.71), 0.70), st)
+    (a,) = bot.step(_view(_tennis(), _book(0.39, 0.40), 0.45, live=True), st)
+    assert a.side == "long"
+    # Pre-game underdog, then a lock once it is 15c above cost.
+    bot = registry.BOTS["pre-dog-lock"]
+    (a,) = bot.step(_view(pre, _book(0.27, 0.28), 0.32), {})
+    assert a.side == "long"
+    st = _held_long(price=0.28)
+    (a,) = bot.step(_view(_tennis(), _book(0.44, 0.46), 0.45, live=True, held=100.0), st)
+    assert a.tag == "lock"
+    # x06 on ITF men's only.
+    itf = _m(league="itfme", event="itfme-a-b-2026-11-18", name="A", title="A vs. B",
+             teams=("A", "B"), start=NOW - timedelta(minutes=30))
+    v = lambda m: _view(m, _book(0.60, 0.61), 0.65, prev=0.63, live=True)
+    assert registry.BOTS["x06-itfme"].step(v(itf), {}) and registry.BOTS["x06-itfme"].step(v(_tennis()), {}) == []

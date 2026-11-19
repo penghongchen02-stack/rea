@@ -372,6 +372,10 @@ class Engine:
                 keep.append(o)
                 continue
             filled = 0.0
+            # A Live_ copy's bid waits behind others at its price: it fills only on
+            # trades strictly through it, and only its queue share, in whole contracts.
+            live = getattr(BOTS.get(o.bot), "live_sim", False)
+            tol = -1e-9 if live else 1e-9
             asks = bk.side_asks(o.side)
             if asks and asks[0][0] <= o.price + 1e-9:     # the book crossed our bid
                 filled = min(o.contracts, asks[0][1])
@@ -379,10 +383,12 @@ class Engine:
                   and bk.shares_traded > o.traded_at_place and bk.last_trade is not None):
                 # A long bid at p fills on trades at <= p; a short bid at q is an
                 # offer on the long at 1-q and fills on trades at >= 1-q.
-                through = (bk.last_trade <= o.price + 1e-9 if o.side == "long"
-                           else bk.last_trade >= 1 - o.price - 1e-9)
+                through = (bk.last_trade <= o.price + tol if o.side == "long"
+                           else bk.last_trade >= 1 - o.price - tol)
                 if through:
                     filled = min(o.contracts, bk.shares_traded - o.traded_at_place)
+            if live:
+                filled = livesim.queue_share(filled)
             if filled > 1e-9:
                 f = self.ledger.record(o.bot, o.slug, o.side, o.price, filled, 0.0, "maker",
                                        o.tag, None, now)

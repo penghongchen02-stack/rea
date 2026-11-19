@@ -24,7 +24,8 @@ from . import fees, usmarket
 from .bots import SwissTonyV2
 from .exits import S19Lock70
 from .simple_bots import S15Momentum, S19TennisSetFade
-from .tennis import TnPre1, TnPre2
+from .ideas import IDEA_CLASSES
+from .tennis import TENNIS_BOTS, TnPre1, TnPre2
 from .underdog import Underdog
 from .variants import VARIANTS
 
@@ -67,12 +68,17 @@ TWINS = (
     _twin(Underdog, "Live_underdog", "Live_underdog"),
     _twin(TnPre1, "Live_tn-pre-1c", "Live_tn-pre-1c"),
     _twin(TnPre2, "Live_tn-pre-2c", "Live_tn-pre-2c"),
+    *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in IDEA_CLASSES),
+    *(_twin(type(b), f"Live_{b.key}", f"Live_{b.key}") for b in TENNIS_BOTS
+      if b.key.startswith("tn-maker")),
 )
 BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
            "Live_swisstony-v2": "swisstony-v2", "Live_19-lock70": "s19-lock70",
            "Live_15-x06": "s15-x06", "Live_swisstony-x01": "swisstony-x01",
            "Live_underdog": "underdog-1",
-           "Live_tn-pre-1c": "tn-pre-1c", "Live_tn-pre-2c": "tn-pre-2c"}
+           "Live_tn-pre-1c": "tn-pre-1c", "Live_tn-pre-2c": "tn-pre-2c",
+           **{f"Live_{c.key}": c.key for c in IDEA_CLASSES},
+           **{f"Live_{b.key}": b.key for b in TENNIS_BOTS if b.key.startswith("tn-maker")}}
 # Keys these copies had before 2026-11-18 17:50 UTC (see migrate_keys).
 OLD_KEYS = {"s19-livesim": "Live_19", "s15-livesim": "Live_15",
             "swisstony-v2-livesim": "Live_swisstony-v2"}
@@ -92,6 +98,13 @@ def migrate_keys(ledger) -> int:
                 f["bot"] = new
                 moved += 1
     return moved
+
+
+def queue_share(contracts: float) -> float:
+    """Whole contracts a resting order gets of `contracts` that traded at or
+    through its price: other bids rest at the same price, so only COMPETITION
+    of it."""
+    return float(math.floor(contracts * COMPETITION + 1e-9))
 
 
 COUNTS = "_livesim"   # per-bot order outcomes, kept in the ledger's states
