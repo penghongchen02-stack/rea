@@ -833,3 +833,58 @@ def test_six_ideas_and_their_live_copies():
              teams=("A", "B"), start=NOW - timedelta(minutes=30))
     v = lambda m: _view(m, _book(0.60, 0.61), 0.65, prev=0.63, live=True)
     assert registry.BOTS["x06-itfme"].step(v(itf), {}) and registry.BOTS["x06-itfme"].step(v(_tennis()), {}) == []
+
+
+def _grid_views():
+    """Varied live and pre-match views across sports, prices and moves."""
+    import itertools
+    out = []
+    leagues = [("atp", "atp-a-b-2026-11-18"), ("itfme", "itfme-a-b-2026-11-18"),
+               ("nba", "nba-ny-tor-2026-11-17"), ("epl", "epl-mnc-ful-2026-11-21")]
+    for (lg, ev), start, fair, prev, ask, spread in itertools.product(
+            leagues, (NOW + timedelta(hours=1), NOW - timedelta(minutes=30),
+                      NOW - timedelta(minutes=130)),
+            (0.20, 0.35, 0.45, 0.65, 0.80), (None, -0.06, -0.02, 0.02, 0.06), (-0.05, -0.02, 0.01),
+            (0.01, 0.05)):
+        m = _m(league=lg, event=ev, name="A", title="A vs. B", teams=("A", "B"), start=start)
+        a = round(fair + ask, 2)
+        if not 0.02 <= a <= 0.98:
+            continue
+        p = None if prev is None else round(fair - prev, 3)
+        out.append(_view(m, _book(round(a - spread, 2), a), fair, prev=p, live=start <= NOW))
+    return out
+
+
+def test_every_live_copy_decides_exactly_like_its_paper_bot():
+    import copy
+    from psb import livesim
+    views = _grid_views()
+    for twin, base in livesim.BASE_OF.items():
+        a, b = registry.BOTS[twin], registry.BOTS[base]
+        assert a.live_sim and isinstance(a, type(b)), twin
+        acted = 0
+        for v in views:
+            sa, sb = {"fair0": 0.6, "pre_fair": 0.7}, {"fair0": 0.6, "pre_fair": 0.7}
+            assert a.wants(v.m, v.live) == b.wants(v.m, v.live), (twin, v.m.slug)
+            if not b.wants(v.m, v.live):
+                continue
+            ra, rb = a.step(v, sa), b.step(v, sb)
+            assert ra == rb, (twin, v)
+            acted += bool(rb)
+        assert acted, f"{twin}: no test view made it act"
+
+
+def test_every_live_copy_fills_through_the_engine(monkeypatch):
+    from psb import livesim
+    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.29, 0.30, qty=400))
+    for twin in livesim.BASE_OF:
+        eng, led = _engine()
+        t = paper.Tracked(_tennis(), None)
+        bot = registry.BOTS[twin]
+        eng._apply(twin, bot, t, _book(0.29, 0.30), 0.40, [bots.Take("long", 10.0, 0.35, "entry")], NOW)
+        eng._apply(twin, bot, t, _book(0.29, 0.30, traded=0), 0.40,
+                   [bots.Rest("short", 0.60, 6.0, "quote")], NOW)
+        eng._settle_orders(t, _book(0.29, 0.30, last=0.45, traded=40), NOW)   # through the 40c offer
+        kinds = {f["kind"] for f in led.fills}
+        assert kinds == {"taker", "maker"}, (twin, led.fills)
+        assert all(f["contracts"] == int(f["contracts"]) for f in led.fills), twin
