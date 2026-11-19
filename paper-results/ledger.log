@@ -1683,3 +1683,23 @@
 2026-11-19T12:33:13Z stats {"polls": 13, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=0
 2026-11-19T12:34:50Z stats {"polls": 109, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
 2026-11-19T12:37:19Z final settle 2; stats {"polls": 243, "takes": 0, "maker_fills": 0, "no_cash": 0}
+2026-11-19T12:37:29Z dropped 19 resting orders from the previous run
+2026-11-19T12:37:55Z stats {"polls": 13, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=0
+2026-11-19T12:39:33Z stats {"polls": 127, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T12:42:34Z stats {"polls": 348, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T12:43:39Z discovered 405 markets, 275 linked, 47 linked and live
+2026-11-19T12:43:54Z stats {"polls": 742, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T12:46:06Z stats {"polls": 1606, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T12:47:58Z settled 2 markets
+2026-11-19T12:48:09Z stats {"polls": 2342, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T12:50:15Z stats {"polls": 3239, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T12:52:19Z stats {"polls": 4110, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T12:54:27Z stats {"polls": 4997, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T12:56:30Z stats {"polls": 5868, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T12:58:13Z settled 3 markets
+2026-11-19T12:58:33Z stats {"polls": 6578, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T13:00:35Z stats {"polls": 7203, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T13:01:17Z discovered 397 markets, 269 linked, 44 linked and live
+2026-11-19T13:02:38Z stats {"polls": 8055, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T13:04:44Z stats {"polls": 8864, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T13:06:34Z final settle 3; stats {"polls": 9506, "takes": 0, "maker_fills": 0, "no_cash": 0}
