@@ -12,6 +12,9 @@ The picks are the best bots per time slot in paper results to 2026-11-19:
 bots and two of the three night bots (a different night bot left out in turn),
 giving 30.
 
+At night (the slow tennis hours) the clock bots skip tennis and leave it to the
+tennis bots: they trade the night bot's other sports only.
+
     python3 -m psb.clock [--ledger paper-results/ledger.json]
 
 prints them ranked, best total first.
@@ -40,12 +43,18 @@ def slot(hour: int) -> str:
     return "night"
 
 
+NO_TENNIS_SLOTS = ("night",)
+
+
 class ClockBot(Copier):
     live_sim = True
     plan: dict[str, str] = {}
 
     def choose(self, v, st):
-        return self.plan[slot(v.now.hour)]
+        s = slot(v.now.hour)
+        if s in NO_TENNIS_SLOTS and v.category == "tennis":
+            return None
+        return self.plan[s]
 
 
 def _combos():

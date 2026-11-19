@@ -1217,12 +1217,15 @@ def test_thirty_live_clock_bots_switch_bot_by_time_of_day():
     m = _m(league="itfme", event="itfme-aa-bb-2026-11-19", name="A", title="A vs. B",
            teams=("A", "B"), start=NOW - timedelta(minutes=20))
     for hour, want in ((8, bot.plan["morning"]), (14, bot.plan["afternoon"]),
-                       (20, bot.plan["night"]), (2, bot.plan["night"])):
+                       (20, None), (2, None)):           # no tennis at night
         v = _view(m, _book(0.60, 0.61), 0.65, prev=0.63, live=True, now=NOW.replace(hour=hour))
         assert bot.choose(v, {}) == want
-    # At night it acts as its night #15 version would on a 2c jump.
+        if want is None:
+            assert bot.step(v, {}) == []
+    # At night it trades other sports as its night #15 version would on a 2c jump.
+    nba = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=30))
     st = {}
-    v = _view(m, _book(0.60, 0.61), 0.65, prev=0.63, live=True, now=NOW.replace(hour=20))
+    v = _view(nba, _book(0.60, 0.61), 0.65, prev=0.63, live=True, now=NOW.replace(hour=20))
     assert bot.step(v, st) and st["via"] == bot.plan["night"]
 
 
