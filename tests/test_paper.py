@@ -697,7 +697,7 @@ def test_copies_ordering_one_market_together_share_one_fresh_read(monkeypatch):
     reads = []
     monkeypatch.setattr(livesim.usmarket, "book",
                         lambda slug: reads.append(slug) or _book(0.10, 0.12, qty=200))
-    for key in ("Live_19", "Live_19-00", "Live_19-13"):
+    for key in ("Live_19", "Live_19-00", "Live_19-10"):
         eng._apply(key, registry.BOTS[key], t, _book(0.10, 0.12), 0.20,
                    [bots.Take("long", 10.0, 0.15, "entry")], NOW)
     assert reads == [m.slug]                                        # one read, three orders
@@ -708,16 +708,18 @@ def test_copies_ordering_one_market_together_share_one_fresh_read(monkeypatch):
 
 def test_forty_live19_versions_and_a_control_with_their_own_settings():
     from psb import live19
+    from psb import livesim
     keys = [b.key for b in live19.LIVE19]
-    assert len(keys) == len(set(keys)) == 41 and all(k in registry.BOTS for k in keys)
+    assert len(keys) == len(set(keys)) and all(k in registry.BOTS for k in keys)
+    assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 41
     assert all(registry.BOTS[k].live_sim for k in keys)
     st = {"fair0": 0.30}
     v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True)         # 15c fall to a 12c ask
     assert registry.BOTS["Live_19-00"].step(v, dict(st))              # the control buys it
-    assert registry.BOTS["Live_19-23"].step(v, dict(st)) == []        # 15c-and-up skips it
+    assert live19._make(*live19.SPECS[23]).step(v, dict(st)) == []    # 15c-and-up skips it
     v = _view(_tennis(), _book(0.16, 0.17), 0.20, live=True)          # only a 10c fall
     assert registry.BOTS["Live_19-00"].step(v, dict(st)) == []
-    assert registry.BOTS["Live_19-01"].step(v, dict(st))              # the 10c version buys
+    assert live19._make(*live19.SPECS[1]).step(v, dict(st))           # the 10c version buys
     m_nba = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=30))
     v = _view(m_nba, _book(0.11, 0.12), 0.15, live=True)
     assert registry.BOTS["Live_19-00"].step(v, dict(st)) == []        # tennis only
@@ -725,7 +727,8 @@ def test_forty_live19_versions_and_a_control_with_their_own_settings():
 
 
 def test_stop_cuts_a_falling_bet_at_a_loss_and_then_stays_out():
-    bot = registry.BOTS["Live_19-19"]                                 # stop 15c under cost
+    from psb import live19
+    bot = live19._make(*live19.SPECS[19])                             # stop 15c under cost
     st = _held_long(price=0.40)
     assert bot.step(_view(_tennis(), _book(0.29, 0.31), 0.30, live=True, held=100.0), st) == []
     (a,) = bot.step(_view(_tennis(), _book(0.24, 0.26), 0.25, live=True, held=100.0), st)
@@ -740,10 +743,12 @@ def test_stop_cuts_a_falling_bet_at_a_loss_and_then_stays_out():
 def test_live_copies_of_15_x06_and_swisstony_x01_keep_their_settings():
     from psb import livesim
     for twin, base in (("Live_15-x06", "s15-x06"), ("Live_swisstony-x01", "swisstony-x01")):
+        if twin in livesim.PAUSED:
+            continue
         a, b = registry.BOTS[twin], registry.BOTS[base]
         assert a.live_sim and livesim.BASE_OF[twin] == base and a.rules_key == b.rules_key
     assert registry.BOTS["Live_15-x06"].jump == 0.015 and registry.BOTS["Live_15-x06"].edge == 0.005
-    assert registry.BOTS["Live_swisstony-x01"].min_edge == 0.005
+    assert registry.BOTS["swisstony-x01"].min_edge == 0.005
 
 
 def test_underdog_buys_one_dollar_when_the_underdog_jumps_in_any_live_game():
@@ -1048,6 +1053,8 @@ def test_each_of_the_fifty_and_its_live_copy_acts_in_its_scenario():
     assert sorted(S) == sorted(b.key for b in fifty.FIFTY)
     for key, steps in S.items():
         for k in (key, f"Live_{key}"):
+            if k not in registry.BOTS:    # a paused Live_ copy (livesim.PAUSED)
+                continue
             bot, st, acts = registry.BOTS[k], None, []
             for v, st0 in steps:
                 if st0 is not None:
@@ -1093,6 +1100,8 @@ def test_eight_gap_bots_and_live_copies_act_and_extra_leagues_are_opt_in():
     }
     for key, views in cases.items():
         for k in (key, f"Live_{key}"):
+            if k not in registry.BOTS:    # a paused Live_ copy
+                continue
             for v in views:
                 assert registry.BOTS[k].wants(v.m, v.live), (k, v.m.slug)
                 assert registry.BOTS[k].step(v, {}), (k, v.m.slug)
@@ -1151,6 +1160,8 @@ def test_fifteen_all_sports_bots_and_live_copies_act_on_their_own_data():
     assert sorted(cases) == sorted(b.key for b in allsports.ALL15)
     for key, make in cases.items():
         for k in (key, f"Live_{key}"):
+            if k not in registry.BOTS:    # a paused Live_ copy
+                continue
             bot = type(registry.BOTS[k])()          # fresh memory
             st, acts = {}, []
             for v in make(bot):

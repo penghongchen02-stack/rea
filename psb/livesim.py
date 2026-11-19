@@ -79,6 +79,20 @@ TWINS = (
     *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in ALL_CLASSES),
     *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in UD_CLASSES),
 )
+# Live_ copies paused on 2026-11-19 at 14:06 UTC, the weakest by total then: each
+# Live_ order re-reads the US book, and with 144 copies those reads slowed every
+# bot's checks (a live game was read every ~18 s instead of ~10 s). Their paper
+# bots keep running; delete a key here to bring its copy back.
+PAUSED = frozenset({
+    *(f"Live_19-{n}" for n in ("24", "26", "38", "23", "14", "07", "09", "15", "40", "01", "18",
+                               "27", "35", "02", "28", "20", "22", "19", "21", "37", "36", "17",
+                               "04", "13", "16")),
+    "Live_swisstony-v2", "Live_swisstony-x01", "Live_n42-low-fee", "Live_n10-aggressive",
+    "Live_n29-game-high", "Live_n47-scale-in", "Live_n14-busy-abroad", "Live_a07-price-step",
+    "Live_n12-intl-wall", "Live_g12-clock", "Live_g09-take-profit", "Live_n08-volume-spike",
+    "Live_n49-re-entry", "Live_n48-half-lock",
+})
+TWINS = tuple(b for b in TWINS if b.key not in PAUSED)
 BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
            "Live_swisstony-v2": "swisstony-v2", "Live_19-lock70": "s19-lock70",
            "Live_15-x06": "s15-x06", "Live_swisstony-x01": "swisstony-x01",
@@ -90,6 +104,7 @@ BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
            **{f"Live_{c.key}": c.key for c in GAP_CLASSES},
            **{f"Live_{c.key}": c.key for c in ALL_CLASSES},
            **{f"Live_{c.key}": c.key for c in UD_CLASSES}}
+BASE_OF = {k: v for k, v in BASE_OF.items() if k not in PAUSED}
 # Keys these copies had before 2026-11-18 17:50 UTC (see migrate_keys).
 OLD_KEYS = {"s19-livesim": "Live_19", "s15-livesim": "Live_15",
             "swisstony-v2-livesim": "Live_swisstony-v2"}

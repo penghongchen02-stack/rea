@@ -96,7 +96,12 @@ def _make(num: int, desc: str, settings: dict):
     return cls()
 
 
-LIVE19 = tuple(_make(*s) for s in SPECS)
+def _active(bot) -> bool:
+    from .livesim import PAUSED   # late import: livesim imports this module's neighbours
+    return bot.key not in PAUSED
+
+
+LIVE19 = tuple(b for b in (_make(*s) for s in SPECS) if _active(b))
 
 
 def report(led) -> str:
