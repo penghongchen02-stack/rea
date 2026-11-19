@@ -203,6 +203,7 @@ class Engine:
         self.series: dict[str, deque] = {}           # slug -> recent samples
         self.learned: dict = {}
         self._next_learn = 0.0
+        self.removed: dict[str, str] = {}             # bots taken off this run, and why
         ledger.states.setdefault(learn.MARKET, {}).setdefault("_meta", {"since": _iso(_now())})
         if livesim.migrate_keys(ledger):
             log("renamed live-like copies to Live_19, Live_15, Live_swisstony-v2")
@@ -328,23 +329,33 @@ class Engine:
                 continue
             live = t.m.start <= now
             ctx = self._observe(t, bk, fair, live, now)
-            for key, bot in self.bots.items():
-                if not bot.wants(t.m, live):
+            for key, bot in list(self.bots.items()):
+                try:
+                    self._step_bot(key, bot, t, bk, fair, live, now, ctx)
+                except Exception as e:   # one broken bot must not stop the others
+                    self.bots.pop(key, None)
                     self._cancel(t.m.slug, key)
-                    continue
-                pos = self.ledger.positions.get(key, {}).get(t.m.slug)   # read only
-                st = self.ledger.state(key, t.m.slug)
-                sib = self.siblings(key, t.m) if bot.one_line_per_game else 0
-                stats = self.bot_stats(key, now) if bot.needs_stats else None
-                v = View(t.m, bk, fair, t.prev_fair_long, live, now, self.ledger.bankroll,
-                         self.cash_for(key), pos.contracts if pos else 0.0, self.theta, sib, stats,
-                         **ctx)
-                acts = bot.step(v, st)
-                if acts:   # remember the game and market type (see siblings())
-                    st.setdefault("event", t.m.event_slug)
-                    st.setdefault("kind", t.m.kind)
-                self._apply(key, bot, t, bk, fair, acts, now)
+                    self.removed[key] = f"{type(e).__name__}: {e}"
+                    self.log(f"removed bot {key} for this run: {type(e).__name__}: {e}")
             t.prev_fair_long = fair
+
+    def _step_bot(self, key, bot, t: "Tracked", bk, fair: float, live: bool, now: datetime,
+                  ctx: dict) -> None:
+        if not bot.wants(t.m, live):
+            self._cancel(t.m.slug, key)
+            return
+        pos = self.ledger.positions.get(key, {}).get(t.m.slug)   # read only
+        st = self.ledger.state(key, t.m.slug)
+        sib = self.siblings(key, t.m) if bot.one_line_per_game else 0
+        stats = self.bot_stats(key, now) if bot.needs_stats else None
+        v = View(t.m, bk, fair, t.prev_fair_long, live, now, self.ledger.bankroll,
+                 self.cash_for(key), pos.contracts if pos else 0.0, self.theta, sib, stats,
+                 **ctx)
+        acts = bot.step(v, st)
+        if acts:   # remember the game and market type (see siblings())
+            st.setdefault("event", t.m.event_slug)
+            st.setdefault("kind", t.m.kind)
+        self._apply(key, bot, t, bk, fair, acts, now)
 
     def _observe(self, t: "Tracked", bk, fair: float, live: bool, now: datetime) -> dict:
         """Record this poll for the bots that read history or other markets."""
@@ -610,6 +621,8 @@ def main(argv=None):
     n = eng.settle()
     led.save(path)
     log(f"final settle {n}; stats {json.dumps(eng.stats)}")
+    for key, why in eng.removed.items():
+        log(f"taken off this run: {key} ({why})")
     print(report(led))
 
 

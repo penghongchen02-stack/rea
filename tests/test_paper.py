@@ -1055,3 +1055,19 @@ def test_each_of_the_fifty_and_its_live_copy_acts_in_its_scenario():
                 assert bot.wants(v.m, v.live), (k, "does not want its market")
                 acts = bot.step(v, st)
             assert acts, f"{k}: did not act in its scenario"
+
+
+def test_a_bot_that_errors_is_taken_off_and_the_others_keep_trading(monkeypatch):
+    eng, led = _engine()
+    m = _m(name="Live", slug="live", start=NOW - timedelta(minutes=10))
+    link = reference.Link({"clobTokenIds": '["t0", "t1"]'}, 0, False)
+    eng.markets[m.slug] = paper.Tracked(m, link)
+    monkeypatch.setattr(paper, "_now", lambda: NOW)
+    monkeypatch.setattr(paper.reference, "live_mids", lambda links: {"t0": 0.6})
+    monkeypatch.setattr(paper.usmarket, "book", lambda slug: _book(0.5, 0.52))
+    broken = registry.BOTS["n50-even-money"]
+    monkeypatch.setattr(type(broken), "step", lambda self, v, st: 1 / 0)
+    eng.poll(5, 60)
+    assert "n50-even-money" not in eng.bots and "ZeroDivisionError" in eng.removed["n50-even-money"]
+    assert "Live_n50-even-money" not in eng.bots          # same class, also broken
+    assert "n01-pileup" in eng.bots and eng.stats["polls"] == 1
