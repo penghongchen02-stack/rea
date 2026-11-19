@@ -129,11 +129,15 @@ class A03BusyGames(A):
 
 class A04Confirmed(A):
     key, title = "a04-confirmed", "Two-speed confirm: a jump the US site starts to follow"
+    # Between its last two checks, the international price jumped 1.5c+ and the US
+    # mid moved the same way by at least 0.5c but less than the jump.
     live_only = True
 
     def pick(self, v, st):
-        w = _window(v.series, 10)
-        if len(w) < 2 or w[0][6] is None or w[-1][6] is None:
+        # The last two checks of this game (a busy run checks each game every
+        # 10-20 s, so a fixed 10 s window would often hold only one).
+        w = v.series[-2:]
+        if len(w) < 2 or w[-1][0] - w[0][0] > 30 or w[0][6] is None or w[-1][6] is None:
             return None
         d, us = w[-1][1] - w[0][1], w[-1][6] - w[0][6]
         if abs(d) >= JUMP - EPS and us * d > 0 and abs(us) >= 0.005 - EPS and abs(us) < abs(d):
