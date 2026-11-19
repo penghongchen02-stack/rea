@@ -1201,3 +1201,26 @@ def test_ten_underdog_versions_and_live_copies():
     # Held to the end: no exit on the plain versions.
     assert registry.BOTS["ud-2usd"].step(_view(_tennis(), _book(0.19, 0.21), 0.20, live=True, held=10.0),
                                          _held_long(10, 0.30)) == []
+
+
+def test_thirty_live_clock_bots_switch_bot_by_time_of_day():
+    from psb import clock
+    assert len(clock.CLOCKS) == 30 and len({b.key for b in clock.CLOCKS}) == 30
+    plans = {tuple(b.plan.values()) for b in clock.CLOCKS}
+    assert len(plans) == 30
+    used = {k for p in plans for k in p}
+    assert used == {k for k, _ in clock.MORNING + clock.AFTERNOON + clock.NIGHT}
+    assert all(k in registry.BOTS for k in used)
+    for b in clock.CLOCKS:
+        assert registry.BOTS[b.key] is b and b.live_sim
+    bot = registry.BOTS["Live_clock-01"]
+    m = _m(league="itfme", event="itfme-aa-bb-2026-11-19", name="A", title="A vs. B",
+           teams=("A", "B"), start=NOW - timedelta(minutes=20))
+    for hour, want in ((8, bot.plan["morning"]), (14, bot.plan["afternoon"]),
+                       (20, bot.plan["night"]), (2, bot.plan["night"])):
+        v = _view(m, _book(0.60, 0.61), 0.65, prev=0.63, live=True, now=NOW.replace(hour=hour))
+        assert bot.choose(v, {}) == want
+    # At night it acts as its night #15 version would on a 2c jump.
+    st = {}
+    v = _view(m, _book(0.60, 0.61), 0.65, prev=0.63, live=True, now=NOW.replace(hour=20))
+    assert bot.step(v, st) and st["via"] == bot.plan["night"]
