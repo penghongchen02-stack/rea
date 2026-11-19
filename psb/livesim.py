@@ -24,6 +24,7 @@ from . import fees, usmarket
 from .bots import SwissTonyV2
 from .exits import S19Lock70
 from .simple_bots import S15Momentum, S19TennisSetFade
+from .variants import VARIANTS
 
 DELAY_S = 0.0   # no added wait: buy as soon as the price looks good
 COMPETITION = 0.5
@@ -52,14 +53,19 @@ def _twin(base, key: str, title: str):
     return cls()
 
 
+_VARIANT = {type(b)().key: type(b) for b in VARIANTS}
+
 TWINS = (
     _twin(S19TennisSetFade, "Live_19", "Live_19"),
     _twin(S15Momentum, "Live_15", "Live_15"),
     _twin(SwissTonyV2, "Live_swisstony-v2", "Live_swisstony-v2"),
     _twin(S19Lock70, "Live_19-lock70", "Live_19-lock70"),
+    _twin(_VARIANT["s15-x06"], "Live_15-x06", "Live_15-x06"),
+    _twin(_VARIANT["swisstony-x01"], "Live_swisstony-x01", "Live_swisstony-x01"),
 )
 BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
-           "Live_swisstony-v2": "swisstony-v2", "Live_19-lock70": "s19-lock70"}
+           "Live_swisstony-v2": "swisstony-v2", "Live_19-lock70": "s19-lock70",
+           "Live_15-x06": "s15-x06", "Live_swisstony-x01": "swisstony-x01"}
 # Keys these copies had before 2026-11-18 17:50 UTC (see migrate_keys).
 OLD_KEYS = {"s19-livesim": "Live_19", "s15-livesim": "Live_15",
             "swisstony-v2-livesim": "Live_swisstony-v2"}

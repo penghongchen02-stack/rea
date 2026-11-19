@@ -735,3 +735,12 @@ def test_stop_cuts_a_falling_bet_at_a_loss_and_then_stays_out():
     (a,) = bot.step(_view(_tennis(), _book(0.20, 0.22), 0.21, live=True, held=40.0), st)
     assert a.tag == "stop" and a.dollars / a.limit == pytest.approx(40.0)
     assert bot.step(_view(_tennis(), _book(0.10, 0.11), 0.12, live=True, held=0.0), st) == []
+
+
+def test_live_copies_of_15_x06_and_swisstony_x01_keep_their_settings():
+    from psb import livesim
+    for twin, base in (("Live_15-x06", "s15-x06"), ("Live_swisstony-x01", "swisstony-x01")):
+        a, b = registry.BOTS[twin], registry.BOTS[base]
+        assert a.live_sim and livesim.BASE_OF[twin] == base and a.rules_key == b.rules_key
+    assert registry.BOTS["Live_15-x06"].jump == 0.015 and registry.BOTS["Live_15-x06"].edge == 0.005
+    assert registry.BOTS["Live_swisstony-x01"].min_edge == 0.005
