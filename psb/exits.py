@@ -12,6 +12,10 @@ then make no new entries in it:
 
 Both lock only when the pair costs at most 97c after the fee, so the locked
 result is at least +3c per contract. Entries are #19's, unchanged.
+
+A stop (`stop_loss`, used by some Live_19 versions in live19.py) does the same
+buy when the held player falls that far below what we paid, accepting the
+loss it fixes; its buys are tagged "stop".
 """
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ from .bots import Take, View
 from .simple_bots import S19TennisSetFade
 
 LOCK_TAG = "lock"
+STOP_TAG = "stop"
 
 
 def _other(side: str) -> str:
@@ -32,23 +37,30 @@ class ProfitLock:
     trail_rise: float | None = None   # ...or once it rose this far above our cost
     trail_drop: float = 0.10          # ...and then fell this far from its peak
     min_profit: float = 0.03          # locked profit per contract, after the fee
+    stop_loss: float | None = None    # cut the bet once fair is this far under our cost
 
     def step(self, v: View, st: dict):
-        # Once triggered, a lock keeps buying the rest (a thin book or a part
-        # fill can leave some unlocked) and the match gets no new entries.
-        locking = st.get("locking", False)
+        # Once triggered, a lock or stop keeps buying the rest (a thin book or a
+        # part fill can leave some open) and the match gets no new entries.
+        # st["locking"] is True for a lock and "stop" for a stop.
+        mode = st.get("locking") or None
         side = v.held_side()
         if side is not None:
             n = abs(v.held)
             held_n, avg = self.leg(st, side)
             f = v.fair(side)
             st["peak"] = max(st.get("peak", f), f)
-            if locking or self._should_lock(f, avg, st["peak"]):
-                act = self._lock(v, side, n, held_n - self.spent(st))
+            want = mode
+            if want is None and self._should_lock(f, avg, st["peak"]):
+                want = True
+            if want is None and self.stop_loss is not None and f <= avg - self.stop_loss + 1e-9:
+                want = "stop"
+            if want is not None:
+                act = self._lock(v, side, n, held_n - self.spent(st), stop=want == "stop")
                 if act is not None:
-                    st["locking"] = True
+                    st["locking"] = want
                     return [act]
-        if locking:
+        if mode:
             return []
         return super().step(v, st)
 
@@ -58,19 +70,20 @@ class ProfitLock:
         return (self.trail_rise is not None and peak >= avg + self.trail_rise
                 and fair <= peak - self.trail_drop)
 
-    def _lock(self, v: View, side: str, n: float, margin: float) -> Take | None:
+    def _lock(self, v: View, side: str, n: float, margin: float, stop: bool = False) -> Take | None:
         """Buy n of the other side. `margin` is the held side's gross contracts
         minus everything spent on this match: after the lock every outcome pays
-        the gross contracts, so the result is margin minus what the lock costs."""
+        the gross contracts, so the result is margin minus what the lock costs.
+        A stop buys whatever result that fixes; a lock only a min_profit one."""
         o = _other(side)
         a = v.ask(o)
         if a is None or n < 1e-9:
             return None
-        if a + fees.taker_fee(1, a, v.taker_theta) > margin / n - self.min_profit + 1e-9:
+        if not stop and a + fees.taker_fee(1, a, v.taker_theta) > margin / n - self.min_profit + 1e-9:
             return None   # locking now would fix less than min_profit: keep holding
         # Buy at the best ask only, for at most n contracts; a thinner book is
         # finished on later polls rather than paying up a level.
-        return Take(o, n * a, a, LOCK_TAG)
+        return Take(o, n * a, a, STOP_TAG if stop else LOCK_TAG)
 
 
 def _make(key: str, title: str, **settings):

@@ -27,6 +27,22 @@ from .simple_bots import S15Momentum, S19TennisSetFade
 
 DELAY_S = 0.0   # no added wait: buy as soon as the price looks good
 COMPETITION = 0.5
+# Copies that order the same market within this many seconds share one fresh
+# read of its book, as orders sent together would arrive together; otherwise
+# dozens of copies acting on one price move would each wait for their own read.
+SHARE_READ_S = 1.0
+
+
+def _arrival_book(engine, slug: str):
+    """The book an order sent now would meet: read once per SHARE_READ_S per market."""
+    cache = engine.__dict__.setdefault("_livesim_books", {})
+    hit = cache.get(slug)
+    mono = time.monotonic()
+    if hit is not None and mono - hit[0] < SHARE_READ_S:
+        return hit[1]
+    bk = usmarket.book(slug)
+    cache[slug] = (mono, bk)
+    return bk
 
 
 def _twin(base, key: str, title: str):
@@ -84,7 +100,7 @@ def take(engine, key: str, bot, t, a, fair: float, now, st: dict) -> None:
     if DELAY_S:
         time.sleep(DELAY_S)
     try:
-        bk = usmarket.book(t.m.slug)   # the book as it is when the order would arrive
+        bk = _arrival_book(engine, t.m.slug)   # the book as it is when the order would arrive
     except Exception as e:
         engine.log(f"livesim book {t.m.slug}: {e}")
         stats["missed"] = stats.get("missed", 0) + 1

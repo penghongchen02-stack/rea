@@ -607,6 +607,7 @@ def test_live_like_copy_misses_a_price_that_is_gone_when_its_order_arrives(monke
            start=NOW - timedelta(minutes=30))
     t = paper.Tracked(m, None)
     monkeypatch.setattr(livesim.time, "sleep", lambda s: None)
+    monkeypatch.setattr(livesim, "SHARE_READ_S", 0.0)   # each order below is sent separately
     # The 12c offer is gone when the order arrives: nothing fills.
     monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.30, 0.40))
     eng._apply("Live_19", bot, t, _book(0.10, 0.12), 0.20,
@@ -686,3 +687,51 @@ def test_lock_fills_count_as_exempt_in_the_audit(tmp_path):
     led.record("s19-lock70", "m", "short", 0.26, 100, 0.0, "taker", "lock", 0.24, NOW)
     problems, _ = audit.audit(led, tmp_path)
     assert problems == []
+
+
+def test_copies_ordering_one_market_together_share_one_fresh_read(monkeypatch):
+    from psb import livesim
+    eng, led = _engine()
+    m = _tennis()
+    t = paper.Tracked(m, None)
+    reads = []
+    monkeypatch.setattr(livesim.usmarket, "book",
+                        lambda slug: reads.append(slug) or _book(0.10, 0.12, qty=200))
+    for key in ("Live_19", "Live_19-00", "Live_19-13"):
+        eng._apply(key, registry.BOTS[key], t, _book(0.10, 0.12), 0.20,
+                   [bots.Take("long", 10.0, 0.15, "entry")], NOW)
+    assert reads == [m.slug]                                        # one read, three orders
+    assert [f["contracts"] for f in led.fills] == [66, 66, 66]      # each its own half of the book
+
+
+# --- forty Live_19 versions -----------------------------------------------------
+
+def test_forty_live19_versions_and_a_control_with_their_own_settings():
+    from psb import live19
+    keys = [b.key for b in live19.LIVE19]
+    assert len(keys) == len(set(keys)) == 41 and all(k in registry.BOTS for k in keys)
+    assert all(registry.BOTS[k].live_sim for k in keys)
+    st = {"fair0": 0.30}
+    v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True)         # 15c fall to a 12c ask
+    assert registry.BOTS["Live_19-00"].step(v, dict(st))              # the control buys it
+    assert registry.BOTS["Live_19-23"].step(v, dict(st)) == []        # 15c-and-up skips it
+    v = _view(_tennis(), _book(0.16, 0.17), 0.20, live=True)          # only a 10c fall
+    assert registry.BOTS["Live_19-00"].step(v, dict(st)) == []
+    assert registry.BOTS["Live_19-01"].step(v, dict(st))              # the 10c version buys
+    m_nba = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=30))
+    v = _view(m_nba, _book(0.11, 0.12), 0.15, live=True)
+    assert registry.BOTS["Live_19-00"].step(v, dict(st)) == []        # tennis only
+    assert registry.BOTS["Live_19-31"].step(v, dict(st))              # all sports
+
+
+def test_stop_cuts_a_falling_bet_at_a_loss_and_then_stays_out():
+    bot = registry.BOTS["Live_19-19"]                                 # stop 15c under cost
+    st = _held_long(price=0.40)
+    assert bot.step(_view(_tennis(), _book(0.29, 0.31), 0.30, live=True, held=100.0), st) == []
+    (a,) = bot.step(_view(_tennis(), _book(0.24, 0.26), 0.25, live=True, held=100.0), st)
+    assert (a.side, a.tag, a.limit) == ("short", "stop", pytest.approx(0.76))
+    assert st["locking"] == "stop"
+    # Part-filled: the rest is still bought, at a loss, without a profit check.
+    (a,) = bot.step(_view(_tennis(), _book(0.20, 0.22), 0.21, live=True, held=40.0), st)
+    assert a.tag == "stop" and a.dollars / a.limit == pytest.approx(40.0)
+    assert bot.step(_view(_tennis(), _book(0.10, 0.11), 0.12, live=True, held=0.0), st) == []
