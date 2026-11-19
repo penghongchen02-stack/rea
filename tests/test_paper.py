@@ -711,7 +711,7 @@ def test_forty_live19_versions_and_a_control_with_their_own_settings():
     from psb import livesim
     keys = [b.key for b in live19.LIVE19]
     assert len(keys) == len(set(keys)) and all(k in registry.ALL_BOTS for k in keys)
-    assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 44
+    assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 45
     assert all(registry.ALL_BOTS[k].live_sim for k in keys)
     st = {"fair0": 0.30}
     v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True)         # 15c fall to a 12c ask
@@ -1291,3 +1291,12 @@ def test_live19_versions_sized_by_money_or_contracts():
     v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True, cash=400.0)
     (a,) = bots["41"].step(v, dict(st))
     assert a.dollars == pytest.approx(10.0)                 # shrinks after losses
+
+
+def test_live19_44_bets_ten_dollars_of_every_hundred_it_has():
+    bot = registry.ALL_BOTS["Live_19-44"]
+    st = {"fair0": 0.30}
+    for cash, want in ((100.0, 10.0), (1000.0, 100.0), (2500.0, 250.0)):
+        v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True, cash=cash)
+        (a,) = bot.step(v, dict(st))
+        assert a.dollars == pytest.approx(want)
