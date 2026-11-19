@@ -1956,3 +1956,6 @@
 2026-11-19T19:38:30Z stats {"polls": 10539, "takes": 720, "maker_fills": 119, "no_cash": 535} resting=919
 2026-11-19T19:40:31Z stats {"polls": 11386, "takes": 766, "maker_fills": 126, "no_cash": 603} resting=922
 2026-11-19T19:42:10Z final settle 1; stats {"polls": 11921, "takes": 804, "maker_fills": 129, "no_cash": 650}
+2026-11-19T19:42:25Z dropped 925 resting orders from the previous run
+2026-11-19T19:42:53Z stats {"polls": 11, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=35
+2026-11-19T19:43:21Z final settle 0; stats {"polls": 23, "takes": 0, "maker_fills": 0, "no_cash": 0}
