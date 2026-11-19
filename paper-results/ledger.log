@@ -2051,3 +2051,10 @@
 2026-11-19T22:04:42Z dropped 899 resting orders from the previous run
 2026-11-19T22:05:09Z stats {"polls": 11, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=35
 2026-11-19T22:06:08Z final settle 0; stats {"polls": 47, "takes": 0, "maker_fills": 0, "no_cash": 0}
+2026-11-19T22:06:19Z dropped 159 resting orders from the previous run
+2026-11-19T22:06:46Z stats {"polls": 11, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=35
+2026-11-19T22:08:22Z stats {"polls": 189, "takes": 6, "maker_fills": 0, "no_cash": 4} resting=367
+2026-11-19T22:11:41Z stats {"polls": 490, "takes": 26, "maker_fills": 7, "no_cash": 20} resting=857
+2026-11-19T22:13:03Z stats {"polls": 828, "takes": 60, "maker_fills": 9, "no_cash": 32} resting=894
+2026-11-19T22:13:22Z discovered 541 markets, 372 linked, 29 linked and live
+2026-11-19T22:14:26Z final settle 2; stats {"polls": 1096, "takes": 79, "maker_fills": 10, "no_cash": 34}
