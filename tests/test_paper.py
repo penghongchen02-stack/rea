@@ -1259,3 +1259,20 @@ def test_retired_bots_are_not_run_but_the_clock_and_hours_bots_they_copy_are():
     for b in clock.CLOCKS:
         assert all(k in registry.BOTS for k in b.plan.values()), b.key
     assert all(b.target in registry.BOTS for b in hours.HOURS)
+
+
+def test_a_connection_reset_while_reading_is_retried_then_reported(monkeypatch):
+    from psb import polydata
+    calls = []
+
+    def reset(req, timeout):
+        calls.append(1)
+        raise ConnectionResetError(104, "Connection reset by peer")
+    monkeypatch.setattr(polydata.urllib.request, "urlopen", reset)
+    monkeypatch.setattr(polydata.time, "sleep", lambda s: None)
+    with pytest.raises(polydata.FetchError):
+        polydata.get_json("https://example.invalid/x", retries=2)
+    assert len(calls) == 3
+    monkeypatch.setattr(reference.urllib.request, "urlopen", reset)
+    with pytest.raises(polydata.FetchError):
+        reference._post_json("https://example.invalid/y", {})

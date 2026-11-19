@@ -7,6 +7,7 @@ Sources:
 """
 from __future__ import annotations
 
+import http.client
 import json
 import time
 import urllib.parse
@@ -23,6 +24,11 @@ class FetchError(RuntimeError):
     pass
 
 
+# A dropped or garbled connection: worth retrying. OSError covers URLError,
+# timeouts and resets raised while reading the reply (ConnectionResetError).
+TRANSIENT = (OSError, http.client.HTTPException, json.JSONDecodeError)
+
+
 def get_json(url: str, params: list[tuple[str, str]] | None = None, retries: int = 4):
     if params:
         url = f"{url}?{urllib.parse.urlencode(params)}"
@@ -37,7 +43,7 @@ def get_json(url: str, params: list[tuple[str, str]] | None = None, retries: int
             last = e
             if e.code != 429 and e.code < 500:
                 raise FetchError(f"{e.code} for {url}") from e
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+        except TRANSIENT as e:
             last = e
         time.sleep(delay)
         delay *= 2

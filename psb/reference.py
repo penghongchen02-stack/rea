@@ -12,7 +12,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from .polydata import GAMMA_API, USER_AGENT, FetchError, get_json
+from .polydata import GAMMA_API, TRANSIENT, USER_AGENT, FetchError, get_json
 from .usmarket import UsMarket
 
 CLOB_API = "https://clob.polymarket.com"
@@ -202,7 +202,7 @@ def _post_json(url: str, body):
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.load(resp)
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+    except TRANSIENT as e:
         raise FetchError(f"POST {url}: {e}") from e
 
 
