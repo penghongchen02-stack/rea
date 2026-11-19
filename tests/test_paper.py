@@ -871,7 +871,7 @@ def test_every_live_copy_decides_exactly_like_its_paper_bot():
             ra, rb = a.step(v, sa), b.step(v, sb)
             assert ra == rb, (twin, v)
             acted += bool(rb)
-        if not twin.startswith(("Live_n", "Live_g")):   # these need context: see their own tests
+        if not twin.startswith(("Live_n", "Live_g", "Live_a")):   # these need context: see their own tests
             assert acted, f"{twin}: no test view made it act"
 
 
@@ -1108,3 +1108,61 @@ def test_eight_gap_bots_and_live_copies_act_and_extra_leagues_are_opt_in():
     v = jump(mk("nba", start=live))
     v.cash = 200.0
     assert registry.BOTS["g11-reserve"].step(v, {}) == []
+
+
+def test_fifteen_all_sports_bots_and_live_copies_act_on_their_own_data():
+    from psb import allsports
+    assert len(allsports.ALL15) == 15
+    nba = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=30))
+    jump = lambda **k: _ctx_view(nba, _book(0.60, 0.61), 0.65, prev=0.63, **k)
+    stats = {"by_cat": {"nba": [8, 12, 40.0, 3, 4, 12.0]}, "by_hour": {}, "orders_by_hour": {}}
+    calm = [(600 - i * 30, 0.50) for i in range(20)] + [(0, 0.53)]
+    spread = {"kind": "spreads", "long_name": "Knicks", "fair": 0.60, "prev": 0.55}
+    stale = [(1800, 0.50, None, None, 100), (900, 0.52, None, None, 100), (0, 0.54, None, None, 100)]
+    def ser(rows):
+        return _ser([(a, f, None, None, *r) if r else (a, f) for a, f, *r in rows])
+    cases = {
+        "a01-sport-switcher": lambda b: [jump(stats=stats)],
+        "a02-slow-sports": lambda b: [jump(stats=stats)],
+        "a03-busy-games": lambda b: [jump(series=_ser([(500, 0.6, None, None, 100), (0, 0.65, None, None, 900)]))],
+        "a04-confirmed": lambda b: [_ctx_view(nba, _book(0.60, 0.61), 0.65,
+                                              series=_ser([(8, 0.63, None, None, None, None, 0.595),
+                                                           (0, 0.65, None, None, None, None, 0.605)]))],
+        "a05-biggest-gap": lambda b: [_ctx_view(nba, _book(0.48, 0.50), 0.56)],
+        "a06-growing-gap": lambda b: [_ctx_view(nba, _book(0.48, 0.50), x) for x in (0.52, 0.54, 0.56)],
+        "a07-price-step": lambda b: [_ctx_view(nba, _book(0.48 + (i % 2) * 0.01, 0.50 + (i % 2) * 0.01), 0.56)
+                                     for i in range(25)],
+        "a08-spread-to-winner": lambda b: [_ctx_view(nba, _book(0.48, 0.50), 0.53, others=(spread,))] * 2,
+        "a09-calm-then-storm": lambda b: [_ctx_view(nba, _book(0.48, 0.50), 0.53, series=_ser(calm))],
+        "a10-self-hours": lambda b: [jump(stats=stats)],
+        "a11-same-time-pair": lambda b: [
+            _ctx_view(_m(**{**NBA_EVENT, "event": "nba-bos-mia-2026-11-17", "name": "Celtics"},
+                         start=NOW - timedelta(minutes=30)), _book(0.50, 0.51), 0.55,
+                      series=_ser([(250, 0.75), (0, 0.55)])),
+            _ctx_view(nba, _book(0.60, 0.62), 0.66)],
+        "a12-stale-market": lambda b: [_ctx_view(nba, _book(0.48, 0.50), 0.54, series=_ser(stale))],
+        "a13-price-lifetime": lambda b: [
+            _ctx_view(nba, _book(0.48, 0.50), 0.56, now=NOW - timedelta(seconds=40)),
+            _ctx_view(nba, _book(0.48, 0.50), 0.50, now=NOW - timedelta(seconds=10)),
+            _ctx_view(nba, _book(0.48, 0.50), 0.56)],
+        "a14-win-rate-leash": lambda b: [jump(stats=stats)],
+        "a15-size-by-sport": lambda b: [jump(stats=stats)],
+    }
+    assert sorted(cases) == sorted(b.key for b in allsports.ALL15)
+    for key, make in cases.items():
+        for k in (key, f"Live_{key}"):
+            bot = type(registry.BOTS[k])()          # fresh memory
+            st, acts = {}, []
+            for v in make(bot):
+                acts = bot.step(v, st)
+            assert acts, k
+    # Sizing from its own record: up today in the NBA -> $15; down -> $5.
+    (a,) = type(registry.BOTS["a01-sport-switcher"])().step(jump(stats=stats), {})
+    assert a.dollars == pytest.approx(15.0)
+    bad = {"by_cat": {"nba": [2, 12, -40.0, 0, 6, -30.0]}, "by_hour": {}, "orders_by_hour": {}}
+    assert type(registry.BOTS["a14-win-rate-leash"])().step(jump(stats=bad), {}) == []
+    (a,) = type(registry.BOTS["a15-size-by-sport"])().step(jump(stats=bad), {})
+    assert a.dollars == pytest.approx(5.0)
+    hours = {"by_cat": {}, "by_hour": {NOW.hour: (1, 6)}, "orders_by_hour": {}}
+    (a,) = type(registry.BOTS["a10-self-hours"])().step(jump(stats=hours), {})
+    assert a.dollars == pytest.approx(3.0)

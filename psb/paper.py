@@ -66,6 +66,7 @@ def allowed(bot, m) -> bool:
 LIVE_WINDOW = timedelta(hours=8)
 POLL_GROUP = 8            # markets per group: one international read, then their US books
 PREGAME_PER_POLL = 24     # upcoming markets per poll, so live games never wait long
+STATS_CACHE_S = 30.0      # seconds a bot's own results (bot_stats) are reused
 LEARN_EVERY_S = 600       # how often learn.learn() re-reads settled history
 SERIES_S = 75 * 60        # seconds of per-market samples kept in memory
 MAX_FAIR_AGE = 3.0        # seconds: an older international price is not acted on
@@ -212,6 +213,7 @@ class Engine:
         self.learned: dict = {}
         self._next_learn = 0.0
         self.removed: dict[str, str] = {}             # bots taken off this run, and why
+        self._stats_cache: dict[str, tuple[float, dict]] = {}
         ledger.states.setdefault(learn.MARKET, {}).setdefault("_meta", {"since": _iso(_now())})
         if livesim.migrate_keys(ledger):
             log("renamed live-like copies to Live_19, Live_15, Live_swisstony-v2")
@@ -416,20 +418,48 @@ class Engine:
         return n
 
     def bot_stats(self, key: str, now: datetime) -> dict:
-        """A bot's own results (see View.stats), from the ledger."""
+        """A bot's own results (see View.stats), from the ledger. Cached for
+        STATS_CACHE_S per bot: results change only as markets settle."""
+        mono = time.monotonic()
+        hit = self._stats_cache.get(key)
+        if hit is not None and mono - hit[0] < STATS_CACHE_S and hit[1]["day"] == now.strftime("%Y-%m-%d"):
+            return hit[1]
         today = now.strftime("%Y-%m-%d")
         done, open_by_cat = [], {}
+        by_cat: dict[str, list] = {}      # sport -> [wins, n, pnl, wins today, n today, pnl today]
+        by_hour: dict[int, list] = {}     # UTC hour of the first buy -> [wins, n]
+        states = self.ledger.states.get(key, {})
         for slug, p in self.ledger.positions.get(key, {}).items():
             if abs(p.cash) < 1e-9 and abs(p.contracts) < 1e-9:
                 continue
+            cat = category_of(slug.split("-", 1)[1]) if "-" in slug else "other"
             if slug in self.ledger.settled:
-                done.append((self.ledger.settled_at.get(slug, ""), p.cash + p.contracts * self.ledger.settled[slug]))
+                when = self.ledger.settled_at.get(slug, "")
+                v = p.cash + p.contracts * self.ledger.settled[slug]
+                done.append((when, v))
+                c = by_cat.setdefault(cat, [0, 0, 0.0, 0, 0, 0.0])
+                c[0] += v > 0
+                c[1] += 1
+                c[2] += v
+                if when.startswith(today):
+                    c[3] += v > 0
+                    c[4] += 1
+                    c[5] += v
+                first = (states.get(slug) or {}).get("first_fill")
+                if first:
+                    h = by_hour.setdefault(int(first[11:13]), [0, 0])
+                    h[0] += v > 0
+                    h[1] += 1
             else:
-                cat = category_of(slug.split("-", 1)[1]) if "-" in slug else "other"
                 open_by_cat[cat] = open_by_cat.get(cat, 0.0) + max(0.0, -p.cash)
         done.sort()
-        return {"pnl_today": sum(v for t, v in done if t.startswith(today)),
-                "last_results": [v for _, v in done[-10:]], "open_by_cat": open_by_cat}
+        orders = (livesim.counts(self.ledger, key).get("by_hour") or {})
+        out = {"pnl_today": sum(v for t, v in done if t.startswith(today)),
+               "last_results": [v for _, v in done[-10:]], "open_by_cat": open_by_cat,
+               "by_cat": by_cat, "by_hour": by_hour,
+               "orders_by_hour": {int(h): tuple(x) for h, x in orders.items()}, "day": today}
+        self._stats_cache[key] = (mono, out)
+        return out
 
     def cash_for(self, key: str) -> float:
         return self.ledger.available_cash(key)

@@ -24,6 +24,7 @@ from . import fees, usmarket
 from .bots import SwissTonyV2
 from .exits import S19Lock70
 from .simple_bots import S15Momentum, S19TennisSetFade
+from .allsports import ALL_CLASSES
 from .fifty import FIFTY_CLASSES
 from .gaps import GAP_CLASSES
 from .ideas import IDEA_CLASSES
@@ -75,6 +76,7 @@ TWINS = (
       if b.key.startswith("tn-maker")),
     *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in FIFTY_CLASSES),
     *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in GAP_CLASSES),
+    *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in ALL_CLASSES),
 )
 BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
            "Live_swisstony-v2": "swisstony-v2", "Live_19-lock70": "s19-lock70",
@@ -84,7 +86,8 @@ BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
            **{f"Live_{c.key}": c.key for c in IDEA_CLASSES},
            **{f"Live_{b.key}": b.key for b in TENNIS_BOTS if b.key.startswith("tn-maker")},
            **{f"Live_{c.key}": c.key for c in FIFTY_CLASSES},
-           **{f"Live_{c.key}": c.key for c in GAP_CLASSES}}
+           **{f"Live_{c.key}": c.key for c in GAP_CLASSES},
+           **{f"Live_{c.key}": c.key for c in ALL_CLASSES}}
 # Keys these copies had before 2026-11-18 17:50 UTC (see migrate_keys).
 OLD_KEYS = {"s19-livesim": "Live_19", "s15-livesim": "Live_15",
             "swisstony-v2-livesim": "Live_swisstony-v2"}
@@ -129,6 +132,8 @@ def take(engine, key: str, bot, t, a, fair: float, now, st: dict) -> None:
         stats["no_room"] = stats.get("no_room", 0) + 1
         return
     stats["orders"] = stats.get("orders", 0) + 1
+    hour = stats.setdefault("by_hour", {}).setdefault(str(now.hour), [0, 0])   # [orders, missed]
+    hour[0] += 1
     if DELAY_S:
         time.sleep(DELAY_S)
     try:
@@ -152,6 +157,7 @@ def take(engine, key: str, bot, t, a, fair: float, now, st: dict) -> None:
         left -= k
     if left == n:
         stats["missed"] = stats.get("missed", 0) + 1
+        hour[1] += 1
         # Why: the price was gone, or only the assumed competition took what was left.
         why = "missed_price_gone" if shown < 1e-9 else "missed_competition"
         stats[why] = stats.get(why, 0) + 1
