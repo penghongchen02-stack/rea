@@ -3,7 +3,9 @@
 Makers rest bids under the international price and wait for sellers, so a
 slower read only means a later quote, not a missed race. Pre-match value bots
 buy before the first serve, when prices barely move. Tennis only (ITF, ATP,
-WTA), $10 a bet, paper money.
+WTA), $10 a bet, paper money. Built to trade a lot: makers keep re-quoting
+until they hold $100 of one player, and pre-match bots buy up to 10 times a
+match, $60 at most.
 
   tn-maker-2c       rest a bid 2c under fair on both players, before and during play
   tn-maker-1c       the same, 1c under (more fills, less edge)
@@ -24,6 +26,8 @@ TENNIS = frozenset({"tennis"})
 
 
 class TennisMaker(Maker):
+    max_inventory = 100.0    # keep quoting until $100 of one player is held
+
     def step(self, v, st):
         if v.category not in TENNIS:
             return []
@@ -34,6 +38,8 @@ class TennisPregame(Simple):
     cats = TENNIS
     pregame_only = True
     edge = 0.01
+    max_entries = 10
+    max_market_frac = 0.06   # $60 a match
 
     def pick(self, v, st):
         s = best_edge_side(v)
