@@ -13,7 +13,7 @@ from .fifty import FIFTY
 from .gaps import GAPS
 from .ideas import IDEAS6
 from .tennis import TENNIS_BOTS
-from .underdog import UNDERDOG
+from .underdog import UD_VERSIONS, UNDERDOG
 from .variants import VARIANTS
 
-BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING + VARIANTS + EXITS + TWINS + LIVE19 + UNDERDOG + TENNIS_BOTS + IDEAS6 + FIFTY + GAPS + ALL15}
+BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING + VARIANTS + EXITS + TWINS + LIVE19 + UNDERDOG + TENNIS_BOTS + IDEAS6 + FIFTY + GAPS + ALL15 + UD_VERSIONS}

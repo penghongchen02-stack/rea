@@ -1166,3 +1166,27 @@ def test_fifteen_all_sports_bots_and_live_copies_act_on_their_own_data():
     hours = {"by_cat": {}, "by_hour": {NOW.hour: (1, 6)}, "orders_by_hour": {}}
     (a,) = type(registry.BOTS["a10-self-hours"])().step(jump(stats=hours), {})
     assert a.dollars == pytest.approx(3.0)
+
+
+def test_ten_underdog_versions_and_live_copies():
+    from psb import underdog
+    assert len(underdog.UD_VERSIONS) == 10
+    nba = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=30))
+    v = _view(nba, _book(0.68, 0.69), 0.65, prev=0.67, live=True)    # underdog 33c -> 35c, offered 32c
+    for b in underdog.UD_VERSIONS:
+        for k in (b.key, f"Live_{b.key}"):
+            bot = registry.BOTS[k]
+            vv = v if k.split("_")[-1] != "ud-jump25" else _view(nba, _book(0.70, 0.71), 0.65, prev=0.675,
+                                                                 live=True)
+            assert bot.wants(vv.m, vv.live) and bot.step(vv, {}), k
+    assert not registry.BOTS["ud-no-tennis"].wants(_tennis(), True)
+    assert registry.BOTS["ud-jump1"].step(_view(nba, _book(0.68, 0.69), 0.65, prev=0.66, live=True), {})
+    # Take profit at +10c and stop at 10c, on a held long underdog bought at 30c.
+    bot = registry.BOTS["ud-tp10-sl10"]
+    (a,) = bot.step(_view(_tennis(), _book(0.39, 0.41), 0.40, live=True, held=10.0), _held_long(10, 0.30))
+    assert a.tag == "lock"
+    (a,) = bot.step(_view(_tennis(), _book(0.19, 0.21), 0.20, live=True, held=10.0), _held_long(10, 0.30))
+    assert a.tag == "stop"
+    # Held to the end: no exit on the plain versions.
+    assert registry.BOTS["ud-2usd"].step(_view(_tennis(), _book(0.19, 0.21), 0.20, live=True, held=10.0),
+                                         _held_long(10, 0.30)) == []

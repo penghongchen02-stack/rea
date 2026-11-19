@@ -29,7 +29,7 @@ from .fifty import FIFTY_CLASSES
 from .gaps import GAP_CLASSES
 from .ideas import IDEA_CLASSES
 from .tennis import TENNIS_BOTS, TnPre1, TnPre2
-from .underdog import Underdog
+from .underdog import UD_CLASSES, Underdog
 from .variants import VARIANTS
 
 DELAY_S = 0.0   # no added wait: buy as soon as the price looks good
@@ -77,6 +77,7 @@ TWINS = (
     *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in FIFTY_CLASSES),
     *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in GAP_CLASSES),
     *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in ALL_CLASSES),
+    *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in UD_CLASSES),
 )
 BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
            "Live_swisstony-v2": "swisstony-v2", "Live_19-lock70": "s19-lock70",
@@ -87,7 +88,8 @@ BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
            **{f"Live_{b.key}": b.key for b in TENNIS_BOTS if b.key.startswith("tn-maker")},
            **{f"Live_{c.key}": c.key for c in FIFTY_CLASSES},
            **{f"Live_{c.key}": c.key for c in GAP_CLASSES},
-           **{f"Live_{c.key}": c.key for c in ALL_CLASSES}}
+           **{f"Live_{c.key}": c.key for c in ALL_CLASSES},
+           **{f"Live_{c.key}": c.key for c in UD_CLASSES}}
 # Keys these copies had before 2026-11-18 17:50 UTC (see migrate_keys).
 OLD_KEYS = {"s19-livesim": "Live_19", "s15-livesim": "Live_15",
             "swisstony-v2-livesim": "Live_swisstony-v2"}
