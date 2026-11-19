@@ -1,80 +1,16 @@
-2026-11-19T20:18:08Z dropped 936 resting orders from the previous run
-2026-11-19T20:18:35Z stats {"polls": 11, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=35
-2026-11-19T20:20:10Z stats {"polls": 177, "takes": 0, "maker_fills": 0, "no_cash": 3} resting=381
-2026-11-19T20:23:54Z stats {"polls": 558, "takes": 11, "maker_fills": 20, "no_cash": 16} resting=892
-2026-11-19T20:25:20Z stats {"polls": 973, "takes": 44, "maker_fills": 28, "no_cash": 32} resting=924
-2026-11-19T20:25:38Z discovered 550 markets, 371 linked, 41 linked and live
-2026-11-19T20:27:24Z stats {"polls": 1675, "takes": 84, "maker_fills": 35, "no_cash": 65} resting=927
-2026-11-19T20:29:24Z stats {"polls": 2303, "takes": 110, "maker_fills": 46, "no_cash": 98} resting=928
-2026-11-19T20:31:28Z stats {"polls": 3146, "takes": 120, "maker_fills": 56, "no_cash": 157} resting=926
-2026-11-19T20:33:30Z stats {"polls": 3973, "takes": 159, "maker_fills": 65, "no_cash": 215} resting=909
-2026-11-19T20:35:35Z stats {"polls": 4804, "takes": 227, "maker_fills": 73, "no_cash": 280} resting=922
-2026-11-19T20:37:38Z stats {"polls": 5617, "takes": 283, "maker_fills": 80, "no_cash": 353} resting=926
-2026-11-19T20:38:45Z settled 3 markets
-2026-11-19T20:39:46Z stats {"polls": 6285, "takes": 298, "maker_fills": 97, "no_cash": 417} resting=922
-2026-11-19T20:41:48Z stats {"polls": 6907, "takes": 327, "maker_fills": 109, "no_cash": 464} resting=911
-2026-11-19T20:43:51Z discovered 540 markets, 369 linked, 36 linked and live
-2026-11-19T20:44:01Z stats {"polls": 7740, "takes": 358, "maker_fills": 113, "no_cash": 566} resting=918
-2026-11-19T20:46:06Z stats {"polls": 8525, "takes": 367, "maker_fills": 119, "no_cash": 634} resting=897
-2026-11-19T20:48:11Z stats {"polls": 9350, "takes": 371, "maker_fills": 129, "no_cash": 722} resting=902
-2026-11-19T20:48:49Z settled 2 markets
-2026-11-19T20:50:13Z stats {"polls": 10026, "takes": 381, "maker_fills": 136, "no_cash": 792} resting=906
-2026-11-19T20:52:17Z stats {"polls": 10850, "takes": 427, "maker_fills": 147, "no_cash": 877} resting=912
-2026-11-19T20:54:19Z stats {"polls": 11666, "takes": 445, "maker_fills": 150, "no_cash": 957} resting=908
-2026-11-19T20:56:22Z stats {"polls": 12490, "takes": 465, "maker_fills": 158, "no_cash": 1063} resting=911
-2026-11-19T20:58:48Z settled 1 markets
-2026-11-19T20:58:50Z stats {"polls": 13152, "takes": 489, "maker_fills": 162, "no_cash": 1144} resting=901
-2026-11-19T21:00:35Z stats {"polls": 13823, "takes": 506, "maker_fills": 169, "no_cash": 1210} resting=885
-2026-11-19T21:01:21Z discovered 534 markets, 370 linked, 40 linked and live
-2026-11-19T21:02:44Z stats {"polls": 14662, "takes": 538, "maker_fills": 175, "no_cash": 1294} resting=891
-2026-11-19T21:04:49Z stats {"polls": 15437, "takes": 582, "maker_fills": 183, "no_cash": 1370} resting=894
-2026-11-19T21:06:50Z stats {"polls": 16242, "takes": 622, "maker_fills": 189, "no_cash": 1452} resting=905
-2026-11-19T21:08:51Z settled 1 markets
-2026-11-19T21:09:02Z stats {"polls": 16999, "takes": 632, "maker_fills": 198, "no_cash": 1524} resting=913
-2026-11-19T21:11:05Z stats {"polls": 17804, "takes": 685, "maker_fills": 207, "no_cash": 1621} resting=917
-2026-11-19T21:13:11Z stats {"polls": 18645, "takes": 752, "maker_fills": 214, "no_cash": 1702} resting=907
-2026-11-19T21:15:13Z stats {"polls": 19412, "takes": 837, "maker_fills": 221, "no_cash": 1786} resting=905
-2026-11-19T21:17:13Z stats {"polls": 19966, "takes": 856, "maker_fills": 230, "no_cash": 1832} resting=895
-2026-11-19T21:18:55Z settled 1 markets
-2026-11-19T21:19:12Z stats {"polls": 20623, "takes": 884, "maker_fills": 231, "no_cash": 1910} resting=909
-2026-11-19T21:19:25Z discovered 538 markets, 370 linked, 39 linked and live
-2026-11-19T21:21:22Z stats {"polls": 21455, "takes": 972, "maker_fills": 242, "no_cash": 2015} resting=900
-2026-11-19T21:23:28Z stats {"polls": 22264, "takes": 975, "maker_fills": 243, "no_cash": 2111} resting=906
-2026-11-19T21:25:36Z stats {"polls": 23110, "takes": 1002, "maker_fills": 250, "no_cash": 2199} resting=898
-2026-11-19T21:27:43Z stats {"polls": 23958, "takes": 1017, "maker_fills": 260, "no_cash": 2287} resting=893
-2026-11-19T21:29:46Z stats {"polls": 24655, "takes": 1068, "maker_fills": 263, "no_cash": 2350} resting=892
-2026-11-19T21:31:48Z stats {"polls": 25479, "takes": 1076, "maker_fills": 265, "no_cash": 2436} resting=901
-2026-11-19T21:34:06Z stats {"polls": 26197, "takes": 1082, "maker_fills": 272, "no_cash": 2514} resting=907
-2026-11-19T21:35:54Z stats {"polls": 26867, "takes": 1111, "maker_fills": 275, "no_cash": 2579} resting=897
-2026-11-19T21:37:03Z discovered 539 markets, 368 linked, 36 linked and live
-2026-11-19T21:37:58Z stats {"polls": 27671, "takes": 1113, "maker_fills": 278, "no_cash": 2668} resting=902
-2026-11-19T21:39:06Z settled 2 markets
-2026-11-19T21:39:59Z stats {"polls": 28286, "takes": 1123, "maker_fills": 285, "no_cash": 2743} resting=888
-2026-11-19T21:42:03Z stats {"polls": 29118, "takes": 1135, "maker_fills": 292, "no_cash": 2840} resting=905
-2026-11-19T21:44:08Z stats {"polls": 29942, "takes": 1161, "maker_fills": 299, "no_cash": 2933} resting=894
-2026-11-19T21:46:13Z stats {"polls": 30780, "takes": 1178, "maker_fills": 300, "no_cash": 3029} resting=888
-2026-11-19T21:48:14Z stats {"polls": 31594, "takes": 1193, "maker_fills": 306, "no_cash": 3142} resting=884
-2026-11-19T21:49:04Z settled 8 markets
-2026-11-19T21:50:14Z stats {"polls": 32221, "takes": 1205, "maker_fills": 315, "no_cash": 3215} resting=880
-2026-11-19T21:52:13Z stats {"polls": 32839, "takes": 1217, "maker_fills": 319, "no_cash": 3294} resting=873
-2026-11-19T21:54:14Z discovered 538 markets, 368 linked, 34 linked and live
-2026-11-19T21:54:23Z stats {"polls": 33673, "takes": 1223, "maker_fills": 324, "no_cash": 3403} resting=868
-2026-11-19T21:56:30Z stats {"polls": 34460, "takes": 1232, "maker_fills": 328, "no_cash": 3533} resting=875
-2026-11-19T21:58:33Z stats {"polls": 35272, "takes": 1246, "maker_fills": 338, "no_cash": 3678} resting=872
-2026-11-19T21:59:07Z settled 4 markets
-2026-11-19T22:00:41Z stats {"polls": 35991, "takes": 1250, "maker_fills": 349, "no_cash": 3767} resting=906
-2026-11-19T22:02:43Z stats {"polls": 36795, "takes": 1267, "maker_fills": 352, "no_cash": 3873} resting=919
-2026-11-19T22:04:30Z final settle 1; stats {"polls": 37352, "takes": 1295, "maker_fills": 361, "no_cash": 3972}
+2026-11-19T22:04:42Z dropped 899 resting orders from the previous run
+2026-11-19T22:05:09Z stats {"polls": 11, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=35
+2026-11-19T22:06:08Z final settle 0; stats {"polls": 47, "takes": 0, "maker_fills": 0, "no_cash": 0}
 Paper bankroll $1,000 per bot since 2026-11-17T11:03:25Z. No real orders.
 
 | Bot | Fills taker/maker | Markets traded | Open | Settled P&L | Fees | Equity (open at US mid, else cost) | Cash free | Both-sides markets (avg paired cost) |
 |---|---|---|---|---|---|---|---|---|
-| gamblingisallyourneed | 0/1163 | 230 | 29 | $44.82 | $0.00 | $1,053.92 | $17.57 | 140 ($0.995) |
-| ferrarichampions2026-v2 | 430/394 | 504 | 55 | $25.51 | $40.41 | $1,010.81 | $163.26 | 157 ($0.977) |
-| gamblingisallyourneed-v2 | 0/662 | 153 | 32 | $139.17 | $0.00 | $1,151.01 | $23.27 | 66 ($0.918) |
+| gamblingisallyourneed | 0/1163 | 230 | 29 | $44.82 | $0.00 | $1,053.92 | $307.57 | 140 ($0.995) |
+| ferrarichampions2026-v2 | 430/394 | 504 | 55 | $25.51 | $40.41 | $1,010.81 | $643.26 | 157 ($0.977) |
+| gamblingisallyourneed-v2 | 0/662 | 153 | 32 | $139.17 | $0.00 | $1,151.01 | $373.27 | 66 ($0.918) |
 | s01-us-intl-lag | 1204/0 | 386 | 8 | $512.78 | $289.33 | $1,607.19 | $1,390.50 | 158 ($0.959) |
 | s03-closing-line | 65/0 | 24 | 9 | $-15.82 | $16.16 | $986.30 | $823.51 | 0 |
-| s11-pregame-maker | 0/283 | 115 | 29 | $241.69 | $0.00 | $1,262.37 | $0.00 | 17 ($0.957) |
+| s11-pregame-maker | 0/283 | 115 | 29 | $241.69 | $0.00 | $1,262.37 | $653.83 | 17 ($0.957) |
 | s15-momentum | 1184/0 | 366 | 9 | $582.80 | $361.29 | $1,603.52 | $1,460.87 | 188 ($0.979) |
 | s18-tennis-momentum | 597/0 | 201 | 4 | $182.60 | $171.99 | $1,178.39 | $1,139.34 | 74 ($0.982) |
 | s19-tennis-set-fade | 570/0 | 186 | 4 | $676.26 | $206.82 | $1,780.32 | $1,636.95 | 14 ($0.486) |
@@ -117,8 +53,8 @@ Paper bankroll $1,000 per bot since 2026-11-17T11:03:25Z. No real orders.
 | Live_tn-set-loser | 59/0 | 19 | 3 | $-48.15 | $24.83 | $991.59 | $894.94 | 0 |
 | Live_pre-dog-lock | 13/0 | 5 | 1 | $-8.74 | $2.17 | $990.59 | $983.49 | 3 ($0.845) |
 | Live_x06-itfme | 153/0 | 49 | 5 | $7.15 | $52.52 | $1,020.49 | $958.97 | 30 ($0.963) |
-| Live_tn-maker-1c | 0/1092 | 112 | 22 | $17.08 | $0.00 | $1,068.59 | $52.26 | 75 ($0.896) |
-| Live_tn-maker-pre | 0/35 | 16 | 7 | $-31.32 | $0.00 | $968.22 | $1.00 | 3 ($0.976) |
+| Live_tn-maker-1c | 0/1092 | 112 | 22 | $17.08 | $0.00 | $1,068.59 | $914.42 | 75 ($0.896) |
+| Live_tn-maker-pre | 0/35 | 16 | 7 | $-31.32 | $0.00 | $968.22 | $941.00 | 3 ($0.976) |
 | Live_n01-pileup | 424/0 | 135 | 28 | $56.79 | $114.41 | $1,072.28 | $621.36 | 32 ($0.988) |
 | Live_n03-wall | 190/0 | 73 | 21 | $125.75 | $66.14 | $1,137.31 | $815.69 | 18 ($1.031) |
 | Live_n06-deep-book | 240/0 | 88 | 7 | $25.52 | $88.81 | $1,143.65 | $926.12 | 38 ($0.949) |
@@ -140,7 +76,7 @@ Paper bankroll $1,000 per bot since 2026-11-17T11:03:25Z. No real orders.
 | Live_n45-good-fills | 336/0 | 108 | 10 | $-157.03 | $114.08 | $862.01 | $723.78 | 60 ($0.989) |
 | Live_n50-even-money | 156/0 | 55 | 6 | $-38.96 | $54.02 | $982.92 | $843.54 | 17 ($0.931) |
 | Live_g02-darts | 7/0 | 2 | 1 | $-29.85 | $2.83 | $962.45 | $940.40 | 0 |
-| Live_g06-lines-maker | 0/19 | 11 | 3 | $9.74 | $0.00 | $1,009.29 | $10.00 | 4 ($0.904) |
+| Live_g06-lines-maker | 0/19 | 11 | 3 | $9.74 | $0.00 | $1,009.29 | $375.14 | 4 ($0.904) |
 | Live_a04-confirmed | 137/0 | 53 | 6 | $-14.39 | $37.25 | $993.14 | $952.62 | 17 ($0.984) |
 | Live_a05-biggest-gap | 219/0 | 79 | 11 | $-67.89 | $59.02 | $1,012.20 | $751.76 | 34 ($1.005) |
 | Live_a06-growing-gap | 256/0 | 91 | 10 | $-112.86 | $66.22 | $931.98 | $718.37 | 33 ($1.046) |
@@ -169,10 +105,12 @@ Paper bankroll $1,000 per bot since 2026-11-17T11:03:25Z. No real orders.
 | Live_19-42 | 11/0 | 9 | 4 | $55.99 | $22.58 | $1,263.51 | $877.45 | 0 |
 | Live_19-43 | 9/0 | 9 | 4 | $52.89 | $12.29 | $1,107.95 | $972.26 | 0 |
 | Live_19-44 | 11/0 | 9 | 4 | $112.26 | $41.49 | $1,507.08 | $782.64 | 0 |
+| Live_19-45 | 0/0 | 0 | 0 | $0.00 | $0.00 | $1,000.00 | $1,000.00 | 0 |
+| Live_19-46 | 0/0 | 0 | 0 | $0.00 | $0.00 | $1,000.00 | $1,000.00 | 0 |
 | underdog-1 | 313/0 | 101 | 10 | $9.66 | $14.90 | $1,014.76 | $988.27 | 9 ($0.778) |
-| tn-maker-2c | 0/644 | 108 | 13 | $-251.16 | $0.00 | $833.89 | $30.00 | 66 ($0.888) |
-| tn-maker-3c | 0/472 | 95 | 10 | $-162.93 | $0.00 | $874.35 | $18.00 | 55 ($0.852) |
-| tn-maker-pre | 0/93 | 38 | 15 | $-194.87 | $0.00 | $812.31 | $9.59 | 4 ($0.969) |
+| tn-maker-2c | 0/644 | 108 | 13 | $-251.16 | $0.00 | $833.89 | $649.34 | 66 ($0.888) |
+| tn-maker-3c | 0/472 | 95 | 10 | $-162.93 | $0.00 | $874.35 | $690.97 | 55 ($0.852) |
+| tn-maker-pre | 0/93 | 38 | 15 | $-194.87 | $0.00 | $812.31 | $662.23 | 4 ($0.969) |
 | tn-pre-1c | 60/0 | 10 | 6 | $14.83 | $10.68 | $1,021.61 | $853.98 | 0 |
 | tn-pre-2c | 23/0 | 5 | 2 | $12.07 | $6.03 | $1,027.64 | $938.71 | 0 |
 | fav-fade | 26/0 | 11 | 0 | $29.46 | $2.83 | $1,029.46 | $1,029.46 | 0 |
@@ -205,7 +143,7 @@ Paper bankroll $1,000 per bot since 2026-11-17T11:03:25Z. No real orders.
 | n49-re-entry | 276/0 | 52 | 2 | $277.48 | $122.11 | $1,405.28 | $1,359.01 | 28 ($0.662) |
 | n50-even-money | 184/0 | 59 | 7 | $-57.09 | $40.10 | $961.37 | $871.87 | 11 ($0.926) |
 | g02-darts | 7/0 | 2 | 1 | $-20.95 | $1.48 | $976.31 | $968.52 | 0 |
-| g06-lines-maker | 0/57 | 26 | 15 | $-3.02 | $0.00 | $997.52 | $20.00 | 7 ($0.933) |
+| g06-lines-maker | 0/57 | 26 | 15 | $-3.02 | $0.00 | $997.52 | $167.57 | 7 ($0.933) |
 | g09-take-profit | 395/0 | 102 | 4 | $-48.11 | $136.51 | $950.90 | $904.25 | 89 ($0.942) |
 | a04-confirmed | 154/0 | 56 | 6 | $-3.94 | $34.55 | $1,004.73 | $944.22 | 14 ($0.937) |
 | a06-growing-gap | 308/0 | 95 | 10 | $64.37 | $63.77 | $1,048.39 | $947.93 | 27 ($0.998) |
