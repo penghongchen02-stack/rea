@@ -711,7 +711,7 @@ def test_forty_live19_versions_and_a_control_with_their_own_settings():
     from psb import livesim
     keys = [b.key for b in live19.LIVE19]
     assert len(keys) == len(set(keys)) and all(k in registry.ALL_BOTS for k in keys)
-    assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 47
+    assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 45
     assert all(registry.ALL_BOTS[k].live_sim for k in keys)
     st = {"fair0": 0.30}
     v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True)         # 15c fall to a 12c ask
@@ -1303,7 +1303,7 @@ def test_live19_44_bets_ten_dollars_of_every_hundred_it_has():
 
 
 def test_profit_guard_cashes_out_at_half_of_a_100_dollar_gain():
-    bot = registry.ALL_BOTS["Live_19-46"]
+    bot = registry.ALL_BOTS["Live_19-44"]
     st = _held_long(n=250.0, price=0.10)     # 250 contracts for $25
     n = 250.0
     hold = lambda bid, ask, fair: bot.step(_view(_tennis(), _book(bid, ask), fair, live=True, held=n), st)
