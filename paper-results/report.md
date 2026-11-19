@@ -1,145 +1,142 @@
-2026-11-18T20:18:28Z dropped 599 resting orders from the previous run
-2026-11-18T20:19:08Z settled 4 markets
-2026-11-18T20:19:09Z stats {"polls": 24, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=51
-2026-11-18T20:20:34Z stats {"polls": 134, "takes": 0, "maker_fills": 0, "no_cash": 4} resting=361
-2026-11-18T20:22:45Z stats {"polls": 704, "takes": 0, "maker_fills": 2, "no_cash": 27} resting=455
-2026-11-18T20:25:49Z stats {"polls": 998, "takes": 15, "maker_fills": 9, "no_cash": 58} resting=560
-2026-11-18T20:26:40Z discovered 626 markets, 420 linked, 55 linked and live
-2026-11-18T20:27:53Z stats {"polls": 1757, "takes": 58, "maker_fills": 24, "no_cash": 131} resting=568
-2026-11-18T20:29:04Z settled 2 markets
-2026-11-18T20:30:02Z stats {"polls": 2436, "takes": 70, "maker_fills": 31, "no_cash": 207} resting=570
-2026-11-18T20:32:13Z stats {"polls": 3385, "takes": 90, "maker_fills": 43, "no_cash": 310} resting=568
-2026-11-18T20:34:13Z stats {"polls": 4261, "takes": 151, "maker_fills": 52, "no_cash": 409} resting=592
-2026-11-18T20:36:17Z stats {"polls": 5153, "takes": 159, "maker_fills": 56, "no_cash": 517} resting=594
-2026-11-18T20:38:17Z stats {"polls": 6026, "takes": 176, "maker_fills": 66, "no_cash": 617} resting=580
-2026-11-18T20:39:11Z settled 3 markets
-2026-11-18T20:40:19Z stats {"polls": 6741, "takes": 249, "maker_fills": 74, "no_cash": 692} resting=588
-2026-11-18T20:42:25Z stats {"polls": 7625, "takes": 332, "maker_fills": 79, "no_cash": 776, "stale": 8} resting=590
-2026-11-18T20:44:32Z stats {"polls": 8310, "takes": 375, "maker_fills": 94, "no_cash": 848, "stale": 8} resting=598
-2026-11-18T20:46:16Z discovered 622 markets, 413 linked, 51 linked and live
-2026-11-18T20:46:33Z stats {"polls": 9167, "takes": 430, "maker_fills": 103, "no_cash": 932, "stale": 8} resting=599
-2026-11-18T20:48:47Z stats {"polls": 10019, "takes": 497, "maker_fills": 114, "no_cash": 1011, "stale": 8} resting=591
-2026-11-18T20:49:23Z settled 3 markets
-2026-11-18T20:50:42Z stats {"polls": 10650, "takes": 552, "maker_fills": 118, "no_cash": 1065, "stale": 8} resting=589
-2026-11-18T20:52:44Z stats {"polls": 11520, "takes": 590, "maker_fills": 124, "no_cash": 1161, "stale": 8} resting=614
-2026-11-18T20:54:47Z stats {"polls": 12390, "takes": 645, "maker_fills": 129, "no_cash": 1272, "stale": 8} resting=601
-2026-11-18T20:56:50Z stats {"polls": 13276, "takes": 672, "maker_fills": 138, "no_cash": 1366, "stale": 8} resting=591
-2026-11-18T20:59:21Z settled 6 markets
-2026-11-18T20:59:21Z stats {"polls": 14205, "takes": 701, "maker_fills": 145, "no_cash": 1479, "stale": 8} resting=567
-2026-11-18T21:01:02Z stats {"polls": 14921, "takes": 739, "maker_fills": 153, "no_cash": 1537, "stale": 8} resting=581
-2026-11-18T21:03:09Z stats {"polls": 15595, "takes": 752, "maker_fills": 156, "no_cash": 1626, "stale": 8} resting=604
-2026-11-18T21:04:42Z discovered 613 markets, 413 linked, 50 linked and live
-2026-11-18T21:05:20Z stats {"polls": 16497, "takes": 773, "maker_fills": 164, "no_cash": 1762, "stale": 8} resting=602
-2026-11-18T21:07:29Z stats {"polls": 17333, "takes": 832, "maker_fills": 182, "no_cash": 1857, "stale": 8} resting=604
-2026-11-18T21:09:30Z settled 5 markets
-2026-11-18T21:09:41Z stats {"polls": 18099, "takes": 858, "maker_fills": 200, "no_cash": 1952, "stale": 8} resting=602
-2026-11-18T21:11:44Z stats {"polls": 18969, "takes": 887, "maker_fills": 206, "no_cash": 2079, "stale": 8} resting=595
-2026-11-18T21:13:47Z stats {"polls": 19845, "takes": 907, "maker_fills": 208, "no_cash": 2206, "stale": 8} resting=581
-2026-11-18T21:15:48Z stats {"polls": 20704, "takes": 935, "maker_fills": 210, "no_cash": 2302, "stale": 8} resting=595
-2026-11-18T21:17:55Z stats {"polls": 21619, "takes": 1013, "maker_fills": 215, "no_cash": 2411, "stale": 8} resting=593
-2026-11-18T21:19:30Z settled 3 markets
-2026-11-18T21:19:56Z stats {"polls": 22269, "takes": 1020, "maker_fills": 217, "no_cash": 2486, "stale": 8} resting=586
-2026-11-18T21:22:00Z stats {"polls": 22934, "takes": 1031, "maker_fills": 226, "no_cash": 2545, "stale": 8} resting=587
-2026-11-18T21:23:06Z discovered 606 markets, 413 linked, 50 linked and live
-2026-11-18T21:24:02Z stats {"polls": 23779, "takes": 1094, "maker_fills": 229, "no_cash": 2632, "stale": 8} resting=593
-2026-11-18T21:26:07Z stats {"polls": 24589, "takes": 1127, "maker_fills": 238, "no_cash": 2721, "stale": 8} resting=575
-2026-11-18T21:28:10Z stats {"polls": 25482, "takes": 1141, "maker_fills": 255, "no_cash": 2809, "stale": 8} resting=586
-2026-11-18T21:29:32Z settled 5 markets
-2026-11-18T21:30:18Z stats {"polls": 26247, "takes": 1173, "maker_fills": 269, "no_cash": 2879, "stale": 8} resting=603
-2026-11-18T21:32:21Z stats {"polls": 27139, "takes": 1190, "maker_fills": 280, "no_cash": 2967, "stale": 8} resting=603
-2026-11-18T21:34:24Z stats {"polls": 28012, "takes": 1204, "maker_fills": 293, "no_cash": 3054, "stale": 8} resting=600
-2026-11-18T21:36:27Z stats {"polls": 28844, "takes": 1208, "maker_fills": 313, "no_cash": 3150, "stale": 10} resting=586
-2026-11-18T21:38:54Z stats {"polls": 29651, "takes": 1219, "maker_fills": 323, "no_cash": 3239, "stale": 10} resting=578
-2026-11-18T21:39:34Z settled 4 markets
-2026-11-18T21:40:41Z stats {"polls": 30194, "takes": 1239, "maker_fills": 333, "no_cash": 3318, "stale": 10} resting=584
-2026-11-18T21:40:50Z discovered 586 markets, 400 linked, 40 linked and live
-2026-11-18T21:42:44Z stats {"polls": 31025, "takes": 1248, "maker_fills": 341, "no_cash": 3413, "stale": 10} resting=581
-2026-11-18T21:44:50Z stats {"polls": 31841, "takes": 1325, "maker_fills": 353, "no_cash": 3525, "stale": 10} resting=599
-2026-11-18T21:46:52Z stats {"polls": 32681, "takes": 1353, "maker_fills": 358, "no_cash": 3631, "stale": 10} resting=586
-2026-11-18T21:48:53Z stats {"polls": 33521, "takes": 1362, "maker_fills": 366, "no_cash": 3731, "stale": 10} resting=597
-2026-11-18T21:49:34Z settled 2 markets
-2026-11-18T21:51:02Z stats {"polls": 34241, "takes": 1370, "maker_fills": 378, "no_cash": 3812, "stale": 10} resting=564
-2026-11-18T21:53:03Z stats {"polls": 35097, "takes": 1396, "maker_fills": 388, "no_cash": 3939, "stale": 10} resting=571
-2026-11-18T21:55:06Z stats {"polls": 35952, "takes": 1477, "maker_fills": 393, "no_cash": 4051, "stale": 10} resting=584
-2026-11-18T21:57:11Z stats {"polls": 36582, "takes": 1498, "maker_fills": 402, "no_cash": 4139, "stale": 10} resting=603
-2026-11-18T21:58:50Z discovered 579 markets, 397 linked, 36 linked and live
-2026-11-18T21:59:33Z settled 4 markets
-2026-11-18T21:59:33Z stats {"polls": 37391, "takes": 1525, "maker_fills": 412, "no_cash": 4240, "stale": 10} resting=598
-2026-11-18T22:01:14Z stats {"polls": 38067, "takes": 1539, "maker_fills": 422, "no_cash": 4323, "stale": 10} resting=614
-2026-11-18T22:03:19Z stats {"polls": 38863, "takes": 1632, "maker_fills": 433, "no_cash": 4419, "stale": 10} resting=591
-2026-11-18T22:05:25Z stats {"polls": 39748, "takes": 1678, "maker_fills": 450, "no_cash": 4519, "stale": 10} resting=597
-2026-11-18T22:07:29Z stats {"polls": 40595, "takes": 1710, "maker_fills": 454, "no_cash": 4622, "stale": 10} resting=597
-2026-11-18T22:09:35Z settled 1 markets
-2026-11-18T22:09:44Z stats {"polls": 41356, "takes": 1769, "maker_fills": 460, "no_cash": 4737, "stale": 10} resting=600
-2026-11-18T22:11:45Z stats {"polls": 42189, "takes": 1804, "maker_fills": 461, "no_cash": 4848, "stale": 10} resting=613
-2026-11-18T22:13:57Z final settle 1; stats {"polls": 42899, "takes": 1950, "maker_fills": 461, "no_cash": 4937, "stale": 10}
+2026-11-18T22:17:54Z dropped 603 resting orders from the previous run
+2026-11-18T22:18:34Z stats {"polls": 24, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=67
+2026-11-18T22:20:01Z stats {"polls": 156, "takes": 0, "maker_fills": 0, "no_cash": 2} resting=383
+2026-11-18T22:22:07Z stats {"polls": 499, "takes": 0, "maker_fills": 1, "no_cash": 9} resting=478
+2026-11-18T22:24:25Z stats {"polls": 670, "takes": 10, "maker_fills": 7, "no_cash": 13} resting=551
+2026-11-18T22:25:05Z discovered 567 markets, 417 linked, 39 linked and live
+2026-11-18T22:26:22Z stats {"polls": 1395, "takes": 16, "maker_fills": 12, "no_cash": 45} resting=590
+2026-11-18T22:28:28Z settled 3 markets
+2026-11-18T22:28:37Z stats {"polls": 2103, "takes": 92, "maker_fills": 13, "no_cash": 85} resting=589
+2026-11-18T22:30:38Z stats {"polls": 2963, "takes": 128, "maker_fills": 16, "no_cash": 138} resting=574
+2026-11-18T22:32:39Z stats {"polls": 3825, "takes": 142, "maker_fills": 46, "no_cash": 197} resting=583
+2026-11-18T22:34:41Z stats {"polls": 4696, "takes": 142, "maker_fills": 58, "no_cash": 262} resting=591
+2026-11-18T22:36:47Z stats {"polls": 5584, "takes": 156, "maker_fills": 66, "no_cash": 326} resting=592
+2026-11-18T22:38:38Z settled 1 markets
+2026-11-18T22:38:55Z stats {"polls": 6317, "takes": 157, "maker_fills": 71, "no_cash": 382} resting=592
+2026-11-18T22:40:56Z stats {"polls": 6860, "takes": 163, "maker_fills": 78, "no_cash": 424} resting=588
+2026-11-18T22:42:25Z discovered 582 markets, 428 linked, 31 linked and live
+2026-11-18T22:43:06Z stats {"polls": 7708, "takes": 212, "maker_fills": 84, "no_cash": 517} resting=584
+2026-11-18T22:45:11Z stats {"polls": 8492, "takes": 229, "maker_fills": 92, "no_cash": 599} resting=593
+2026-11-18T22:47:12Z stats {"polls": 9323, "takes": 231, "maker_fills": 95, "no_cash": 714} resting=597
+2026-11-18T22:48:41Z settled 4 markets
+2026-11-18T22:49:17Z stats {"polls": 10011, "takes": 232, "maker_fills": 98, "no_cash": 803} resting=603
+2026-11-18T22:51:19Z stats {"polls": 10836, "takes": 238, "maker_fills": 105, "no_cash": 911} resting=603
+2026-11-18T22:53:20Z stats {"polls": 11630, "takes": 238, "maker_fills": 107, "no_cash": 1011} resting=581
+2026-11-18T22:55:20Z stats {"polls": 12432, "takes": 283, "maker_fills": 113, "no_cash": 1115} resting=597
+2026-11-18T22:57:24Z stats {"polls": 12992, "takes": 291, "maker_fills": 115, "no_cash": 1178} resting=612
+2026-11-18T22:58:43Z settled 1 markets
+2026-11-18T22:59:10Z discovered 583 markets, 430 linked, 29 linked and live
+2026-11-18T22:59:26Z stats {"polls": 13645, "takes": 339, "maker_fills": 119, "no_cash": 1260} resting=614
+2026-11-18T23:01:43Z stats {"polls": 14471, "takes": 439, "maker_fills": 124, "no_cash": 1374} resting=617
+2026-11-18T23:03:31Z stats {"polls": 15223, "takes": 444, "maker_fills": 131, "no_cash": 1480} resting=613
+2026-11-18T23:05:34Z stats {"polls": 16081, "takes": 466, "maker_fills": 141, "no_cash": 1592} resting=593
+2026-11-18T23:07:37Z stats {"polls": 16944, "takes": 539, "maker_fills": 148, "no_cash": 1696} resting=603
+2026-11-18T23:09:39Z stats {"polls": 17603, "takes": 581, "maker_fills": 154, "no_cash": 1779} resting=614
+2026-11-18T23:11:41Z stats {"polls": 18445, "takes": 588, "maker_fills": 165, "no_cash": 1887} resting=606
+2026-11-18T23:13:44Z stats {"polls": 19287, "takes": 693, "maker_fills": 174, "no_cash": 2003} resting=607
+2026-11-18T23:15:47Z stats {"polls": 19907, "takes": 737, "maker_fills": 177, "no_cash": 2097} resting=612
+2026-11-18T23:17:22Z discovered 588 markets, 432 linked, 31 linked and live
+2026-11-18T23:17:54Z stats {"polls": 20762, "takes": 903, "maker_fills": 190, "no_cash": 2226} resting=592
+2026-11-18T23:18:52Z settled 1 markets
+2026-11-18T23:20:05Z stats {"polls": 21379, "takes": 997, "maker_fills": 194, "no_cash": 2302} resting=598
+2026-11-18T23:21:54Z stats {"polls": 22127, "takes": 1019, "maker_fills": 195, "no_cash": 2406} resting=596
+2026-11-18T23:23:54Z stats {"polls": 22954, "takes": 1046, "maker_fills": 202, "no_cash": 2490} resting=598
+2026-11-18T23:25:58Z stats {"polls": 23804, "takes": 1105, "maker_fills": 209, "no_cash": 2623} resting=593
+2026-11-18T23:28:03Z stats {"polls": 24656, "takes": 1168, "maker_fills": 214, "no_cash": 2754} resting=601
+2026-11-18T23:28:55Z settled 1 markets
+2026-11-18T23:30:11Z stats {"polls": 25353, "takes": 1183, "maker_fills": 224, "no_cash": 2835} resting=587
+2026-11-18T23:32:16Z stats {"polls": 26207, "takes": 1197, "maker_fills": 231, "no_cash": 2944} resting=601
+2026-11-18T23:34:24Z stats {"polls": 26885, "takes": 1245, "maker_fills": 237, "no_cash": 3057} resting=595
+2026-11-18T23:34:58Z discovered 596 markets, 429 linked, 46 linked and live
+2026-11-18T23:36:30Z stats {"polls": 27764, "takes": 1337, "maker_fills": 249, "no_cash": 3214} resting=594
+2026-11-18T23:39:02Z stats {"polls": 28548, "takes": 1406, "maker_fills": 265, "no_cash": 3349} resting=614
+2026-11-18T23:40:36Z stats {"polls": 29232, "takes": 1452, "maker_fills": 289, "no_cash": 3445} resting=606
+2026-11-18T23:42:42Z stats {"polls": 30136, "takes": 1499, "maker_fills": 296, "no_cash": 3587} resting=582
+2026-11-18T23:44:48Z stats {"polls": 31048, "takes": 1519, "maker_fills": 303, "no_cash": 3711} resting=602
+2026-11-18T23:46:52Z stats {"polls": 31951, "takes": 1562, "maker_fills": 310, "no_cash": 3831} resting=600
+2026-11-18T23:49:20Z stats {"polls": 32759, "takes": 1640, "maker_fills": 328, "no_cash": 3950} resting=595
+2026-11-18T23:51:23Z stats {"polls": 33431, "takes": 1708, "maker_fills": 333, "no_cash": 4054} resting=591
+2026-11-18T23:52:05Z discovered 590 markets, 427 linked, 46 linked and live
+2026-11-18T23:53:27Z stats {"polls": 34303, "takes": 1746, "maker_fills": 339, "no_cash": 4180} resting=562
+2026-11-18T23:55:29Z stats {"polls": 35095, "takes": 1806, "maker_fills": 353, "no_cash": 4285} resting=570
+2026-11-18T23:57:34Z stats {"polls": 35983, "takes": 1844, "maker_fills": 366, "no_cash": 4391} resting=571
+2026-11-18T23:59:41Z stats {"polls": 36671, "takes": 1941, "maker_fills": 374, "no_cash": 4472} resting=569
+2026-11-19T00:02:00Z stats {"polls": 37719, "takes": 1960, "maker_fills": 386, "no_cash": 4611} resting=551
+2026-11-19T00:03:58Z stats {"polls": 38618, "takes": 2113, "maker_fills": 391, "no_cash": 4710} resting=550
+2026-11-19T00:06:12Z stats {"polls": 39646, "takes": 2311, "maker_fills": 426, "no_cash": 4839} resting=553
+2026-11-19T00:08:18Z stats {"polls": 40562, "takes": 2437, "maker_fills": 474, "no_cash": 4927} resting=545
+2026-11-19T00:09:57Z settled 7 markets
+2026-11-19T00:10:31Z stats {"polls": 41101, "takes": 2517, "maker_fills": 513, "no_cash": 4999} resting=534
+2026-11-19T00:12:10Z discovered 597 markets, 433 linked, 113 linked and live
+2026-11-19T00:12:40Z stats {"polls": 41993, "takes": 2739, "maker_fills": 545, "no_cash": 5090} resting=583
+2026-11-19T00:13:31Z final settle 1; stats {"polls": 42130, "takes": 2784, "maker_fills": 557, "no_cash": 5109}
 Paper bankroll $1,000 per bot since 2026-11-17T11:03:25Z. No real orders.
 
 | Bot | Fills taker/maker | Markets traded | Open | Settled P&L | Fees | Equity (open at US mid, else cost) | Cash free | Both-sides markets (avg paired cost) |
 |---|---|---|---|---|---|---|---|---|
-| ferrarichampions2026 | 241/280 | 335 | 87 | $-102.37 | $39.41 | $886.77 | $0.00 | 106 ($0.978) |
-| swisstony | 983/0 | 220 | 22 | $38.12 | $166.66 | $942.29 | $490.64 | 182 ($0.979) |
-| gamblingisallyourneed | 0/619 | 139 | 44 | $-106.84 | $0.00 | $912.50 | $13.51 | 74 ($0.994) |
-| sinenooneei | 1180/0 | 164 | 27 | $-205.40 | $158.25 | $701.21 | $218.69 | 0 |
-| kch123 | 120/0 | 22 | 3 | $19.61 | $23.17 | $1,015.91 | $942.82 | 0 |
-| randomgamebet | 180/45 | 53 | 1 | $-160.18 | $34.70 | $840.31 | $837.93 | 44 ($0.938) |
-| ferrarichampions2026-v2 | 201/184 | 245 | 74 | $40.75 | $21.28 | $1,029.36 | $-0.00 | 69 ($0.977) |
-| swisstony-v2 | 386/0 | 114 | 10 | $134.42 | $56.53 | $1,101.09 | $980.04 | 96 ($0.965) |
-| gamblingisallyourneed-v2 | 0/140 | 57 | 41 | $3.84 | $0.00 | $1,005.03 | $24.01 | 14 ($0.927) |
-| sinenooneei-v2 | 941/0 | 153 | 27 | $140.62 | $118.67 | $1,061.53 | $700.98 | 0 |
-| randomgamebet-v2 | 65/18 | 22 | 1 | $-40.68 | $12.94 | $959.19 | $952.26 | 21 ($0.928) |
-| s01-us-intl-lag | 436/0 | 141 | 20 | $248.02 | $116.22 | $1,255.22 | $992.24 | 60 ($0.953) |
-| s02-sportsbook-proxy | 41/0 | 15 | 6 | $-44.01 | $8.14 | $945.42 | $885.36 | 1 ($1.023) |
-| s03-closing-line | 33/0 | 11 | 8 | $0.16 | $6.88 | $997.28 | $884.42 | 0 |
-| s07-underpriced-pair | 451/0 | 218 | 32 | $-0.51 | $133.46 | $985.12 | $753.35 | 137 ($0.930) |
-| s09-two-sided-maker | 0/577 | 131 | 23 | $-291.79 | $0.00 | $717.74 | $2.53 | 75 ($0.901) |
-| s10-quiet-maker | 0/247 | 111 | 16 | $-45.73 | $0.00 | $961.12 | $205.08 | 23 ($0.842) |
-| s11-pregame-maker | 0/94 | 36 | 22 | $70.30 | $0.00 | $1,066.82 | $0.00 | 6 ($0.960) |
-| s12-volume-maker | 0/738 | 122 | 21 | $-202.13 | $0.00 | $871.99 | $39.33 | 76 ($0.917) |
-| s13-inventory-maker | 0/478 | 137 | 28 | $-280.77 | $0.00 | $743.66 | $0.00 | 76 ($0.904) |
-| s14-overreaction-fade | 70/0 | 34 | 1 | $-147.77 | $22.41 | $851.89 | $849.31 | 7 ($0.963) |
-| s15-momentum | 434/0 | 138 | 18 | $332.01 | $131.54 | $1,348.79 | $1,135.98 | 70 ($0.986) |
-| s16-garbage-time | 220/0 | 97 | 5 | $-1.53 | $7.93 | $984.04 | $937.34 | 1 ($1.900) |
-| s18-tennis-momentum | 261/0 | 89 | 11 | $246.25 | $73.64 | $1,261.05 | $1,090.11 | 32 ($0.990) |
-| s19-tennis-set-fade | 235/0 | 79 | 8 | $410.30 | $103.69 | $1,475.47 | $1,266.50 | 8 ($0.478) |
-| s38-kelly | 279/0 | 180 | 32 | $77.35 | $106.34 | $1,050.84 | $701.62 | 0 |
-| s39-flat-10 | 262/0 | 180 | 32 | $105.62 | $63.24 | $1,087.75 | $893.11 | 0 |
-| s40-daily-stop | 267/0 | 177 | 32 | $131.21 | $62.21 | $1,113.27 | $908.48 | 0 |
-| s41-streak-cooler | 260/0 | 180 | 32 | $41.62 | $60.30 | $1,021.24 | $850.16 | 0 |
-| s42-sport-budget | 254/0 | 172 | 32 | $72.03 | $59.99 | $1,054.15 | $859.52 | 0 |
-| s46-favourite | 388/0 | 133 | 20 | $-56.26 | $50.56 | $891.97 | $666.35 | 9 ($1.515) |
-| s47-mean-reversion | 71/0 | 29 | 2 | $42.00 | $18.12 | $1,033.88 | $1,007.62 | 1 ($0.710) |
-| s50-ensemble | 424/0 | 132 | 18 | $364.54 | $100.07 | $1,381.52 | $1,138.39 | 38 ($1.019) |
-| s19-x01 | 183/0 | 55 | 8 | $-223.88 | $57.81 | $819.79 | $678.57 | 5 ($0.640) |
-| s19-x02 | 193/0 | 60 | 10 | $-82.97 | $61.67 | $923.65 | $744.49 | 5 ($0.661) |
-| s19-x03 | 189/0 | 56 | 8 | $-287.82 | $74.11 | $790.21 | $556.20 | 3 ($0.562) |
-| s19-x04 | 254/0 | 58 | 10 | $-406.37 | $101.20 | $719.61 | $327.54 | 3 ($0.546) |
-| s19-x05 | 248/0 | 76 | 10 | $-259.87 | $77.42 | $788.31 | $610.59 | 7 ($0.642) |
-| s19-x06 | 292/0 | 85 | 13 | $-230.34 | $99.87 | $801.52 | $527.35 | 6 ($0.727) |
-| s19-x07 | 313/0 | 55 | 8 | $-220.13 | $52.55 | $833.00 | $689.09 | 8 ($0.613) |
-| s19-x08 | 139/0 | 45 | 7 | $-289.73 | $53.93 | $772.88 | $577.05 | 3 ($0.443) |
-| s19-x09 | 226/0 | 68 | 9 | $-217.11 | $70.14 | $830.97 | $674.70 | 7 ($0.642) |
-| s19-x10 | 334/0 | 73 | 10 | $-237.55 | $64.16 | $827.37 | $624.06 | 9 ($0.558) |
-| s15-x01 | 342/0 | 109 | 20 | $-117.92 | $94.46 | $908.90 | $636.58 | 50 ($1.006) |
-| s15-x02 | 355/0 | 114 | 21 | $-26.37 | $98.85 | $1,028.80 | $674.01 | 48 ($1.002) |
-| s15-x03 | 328/0 | 101 | 17 | $32.97 | $94.16 | $1,050.09 | $804.43 | 48 ($0.968) |
-| s15-x04 | 252/0 | 80 | 17 | $-149.91 | $74.65 | $882.30 | $672.52 | 41 ($1.005) |
-| s15-x05 | 609/0 | 109 | 20 | $-248.11 | $93.19 | $768.12 | $592.97 | 80 ($0.991) |
-| s15-x06 | 353/0 | 110 | 20 | $106.99 | $93.85 | $1,114.41 | $783.78 | 53 ($0.997) |
-| s15-x07 | 420/0 | 98 | 18 | $-113.25 | $126.79 | $907.76 | $645.91 | 66 ($0.979) |
-| s15-x08 | 304/0 | 95 | 18 | $-159.03 | $85.10 | $871.89 | $642.46 | 47 ($1.005) |
-| s15-x09 | 347/0 | 105 | 19 | $-21.54 | $88.80 | $938.67 | $717.89 | 43 ($1.000) |
-| s15-x10 | 354/0 | 114 | 23 | $-112.11 | $96.57 | $913.53 | $621.44 | 50 ($1.006) |
-| swisstony-x01 | 548/0 | 89 | 23 | $204.36 | $88.87 | $1,107.11 | $583.40 | 65 ($0.989) |
-| swisstony-x02 | 443/0 | 76 | 17 | $99.40 | $48.37 | $1,049.79 | $851.48 | 55 ($0.980) |
-| swisstony-x03 | 302/0 | 67 | 14 | $40.78 | $42.61 | $1,022.68 | $880.54 | 53 ($0.978) |
-| swisstony-x04 | 451/0 | 97 | 20 | $154.67 | $55.81 | $1,201.04 | $1,018.21 | 77 ($0.958) |
-| swisstony-x05 | 625/0 | 120 | 31 | $117.44 | $87.96 | $1,078.95 | $728.24 | 90 ($0.969) |
-| swisstony-x06 | 665/0 | 131 | 37 | $99.12 | $74.68 | $1,017.17 | $650.89 | 97 ($0.981) |
-| swisstony-x07 | 248/0 | 57 | 7 | $354.23 | $39.01 | $1,327.79 | $1,232.98 | 46 ($0.982) |
-| swisstony-x08 | 450/0 | 76 | 17 | $160.07 | $48.66 | $1,114.21 | $923.38 | 55 ($0.986) |
-| swisstony-x09 | 493/0 | 106 | 25 | $40.66 | $71.60 | $1,036.19 | $770.69 | 87 ($0.967) |
-| swisstony-x10 | 535/0 | 94 | 26 | $168.13 | $48.37 | $1,121.11 | $870.15 | 68 ($0.993) |
-| Live_19 | 59/0 | 21 | 7 | $-68.49 | $27.42 | $1,022.20 | $766.19 | 2 ($0.525) |
-| Live_15 | 154/0 | 55 | 18 | $-33.05 | $52.47 | $1,009.11 | $732.97 | 25 ($0.965) |
-| Live_swisstony-v2 | 57/0 | 21 | 7 | $13.42 | $7.56 | $997.13 | $936.29 | 14 ($0.948) |
+| ferrarichampions2026 | 254/303 | 363 | 102 | $-101.46 | $41.04 | $893.62 | $11.00 | 113 ($0.978) |
+| swisstony | 1106/0 | 247 | 38 | $-106.04 | $189.16 | $1,109.10 | $127.07 | 204 ($0.980) |
+| gamblingisallyourneed | 0/716 | 154 | 40 | $-102.00 | $0.00 | $919.06 | $32.42 | 94 ($0.990) |
+| sinenooneei | 1180/0 | 164 | 18 | $-387.08 | $158.25 | $631.08 | $271.77 | 0 |
+| kch123 | 142/0 | 32 | 11 | $20.17 | $27.53 | $1,022.27 | $864.59 | 0 |
+| randomgamebet | 180/45 | 53 | 0 | $-157.36 | $34.70 | $842.64 | $842.64 | 44 ($0.938) |
+| ferrarichampions2026-v2 | 206/196 | 260 | 80 | $50.98 | $21.53 | $1,040.06 | $24.71 | 70 ($0.978) |
+| swisstony-v2 | 455/0 | 130 | 18 | $33.18 | $65.33 | $1,096.81 | $843.16 | 108 ($0.966) |
+| gamblingisallyourneed-v2 | 0/226 | 78 | 45 | $-2.22 | $0.00 | $1,034.97 | $30.07 | 31 ($0.937) |
+| sinenooneei-v2 | 941/0 | 153 | 18 | $17.27 | $118.67 | $1,034.91 | $754.06 | 0 |
+| randomgamebet-v2 | 65/18 | 22 | 0 | $-47.74 | $12.94 | $952.26 | $952.26 | 21 ($0.928) |
+| s01-us-intl-lag | 486/0 | 159 | 27 | $221.94 | $129.58 | $1,199.53 | $894.56 | 64 ($0.955) |
+| s02-sportsbook-proxy | 42/0 | 16 | 6 | $-67.77 | $8.16 | $934.30 | $885.01 | 1 ($1.023) |
+| s03-closing-line | 34/0 | 12 | 9 | $0.16 | $6.88 | $997.32 | $884.37 | 0 |
+| s07-underpriced-pair | 524/0 | 261 | 59 | $-9.80 | $158.77 | $989.29 | $503.78 | 154 ($0.931) |
+| s09-two-sided-maker | 0/680 | 153 | 29 | $-295.06 | $0.00 | $714.62 | $0.00 | 90 ($0.910) |
+| s10-quiet-maker | 0/268 | 119 | 17 | $-9.39 | $0.00 | $988.88 | $36.81 | 25 ($0.837) |
+| s11-pregame-maker | 0/119 | 46 | 29 | $57.46 | $0.00 | $1,101.19 | $0.00 | 9 ($0.963) |
+| s12-volume-maker | 0/836 | 147 | 30 | $-138.14 | $0.00 | $859.15 | $10.00 | 87 ($0.921) |
+| s13-inventory-maker | 0/570 | 163 | 35 | $-227.16 | $0.00 | $773.24 | $0.00 | 90 ($0.910) |
+| s14-overreaction-fade | 70/0 | 34 | 1 | $-147.77 | $22.41 | $851.59 | $849.31 | 7 ($0.963) |
+| s15-momentum | 492/0 | 160 | 30 | $263.85 | $153.64 | $1,318.81 | $880.09 | 81 ($0.983) |
+| s16-garbage-time | 238/0 | 106 | 7 | $-22.69 | $8.48 | $975.17 | $886.89 | 1 ($1.900) |
+| s18-tennis-momentum | 271/0 | 93 | 9 | $312.08 | $78.26 | $1,309.53 | $1,161.13 | 34 ($0.986) |
+| s19-tennis-set-fade | 250/0 | 85 | 8 | $500.67 | $111.45 | $1,566.09 | $1,330.83 | 8 ($0.478) |
+| s38-kelly | 323/0 | 209 | 49 | $68.02 | $127.71 | $1,136.43 | $356.16 | 0 |
+| s39-flat-10 | 301/0 | 209 | 49 | $188.23 | $76.18 | $1,268.94 | $800.86 | 0 |
+| s40-daily-stop | 306/0 | 206 | 49 | $213.82 | $75.16 | $1,293.45 | $816.23 | 0 |
+| s41-streak-cooler | 299/0 | 209 | 49 | $122.50 | $73.24 | $1,202.35 | $751.06 | 0 |
+| s42-sport-budget | 293/0 | 201 | 49 | $154.63 | $72.93 | $1,235.34 | $767.27 | 0 |
+| s46-favourite | 431/0 | 148 | 24 | $-137.94 | $59.58 | $865.25 | $426.62 | 10 ($1.504) |
+| s47-mean-reversion | 72/0 | 30 | 1 | $36.42 | $18.12 | $1,036.42 | $1,036.41 | 1 ($0.710) |
+| s50-ensemble | 465/0 | 149 | 25 | $369.82 | $113.39 | $1,358.59 | $1,084.26 | 44 ($1.008) |
+| s19-x01 | 200/0 | 61 | 8 | $-138.08 | $66.26 | $926.61 | $712.11 | 5 ($0.640) |
+| s19-x02 | 210/0 | 66 | 10 | $-28.88 | $70.12 | $1,027.49 | $774.40 | 5 ($0.661) |
+| s19-x03 | 207/0 | 62 | 8 | $-164.86 | $83.36 | $929.91 | $654.38 | 3 ($0.562) |
+| s19-x04 | 275/0 | 64 | 8 | $-373.65 | $115.77 | $715.08 | $370.95 | 4 ($0.557) |
+| s19-x05 | 274/0 | 86 | 12 | $-105.92 | $89.31 | $945.85 | $670.83 | 7 ($0.642) |
+| s19-x06 | 322/0 | 97 | 17 | $-88.59 | $114.63 | $957.11 | $583.55 | 6 ($0.727) |
+| s19-x07 | 339/0 | 61 | 8 | $-132.40 | $59.08 | $906.35 | $749.92 | 9 ($0.609) |
+| s19-x08 | 150/0 | 50 | 6 | $-218.29 | $59.61 | $838.60 | $655.00 | 4 ($0.458) |
+| s19-x09 | 243/0 | 74 | 8 | $-112.16 | $78.60 | $952.54 | $738.04 | 7 ($0.642) |
+| s19-x10 | 366/0 | 80 | 9 | $-66.03 | $72.30 | $977.25 | $806.15 | 11 ($0.554) |
+| s15-x01 | 418/0 | 136 | 36 | $-151.08 | $119.44 | $923.64 | $359.24 | 60 ($1.000) |
+| s15-x02 | 434/0 | 142 | 37 | $146.41 | $125.55 | $1,277.97 | $617.47 | 59 ($0.994) |
+| s15-x03 | 391/0 | 125 | 31 | $-13.95 | $118.50 | $1,025.15 | $610.04 | 59 ($0.965) |
+| s15-x04 | 274/0 | 87 | 16 | $-115.14 | $80.02 | $927.30 | $685.07 | 43 ($1.004) |
+| s15-x05 | 725/0 | 136 | 36 | $-238.53 | $113.75 | $794.78 | $473.27 | 97 ($0.986) |
+| s15-x06 | 423/0 | 137 | 35 | $270.68 | $117.43 | $1,346.61 | $829.98 | 61 ($0.988) |
+| s15-x07 | 484/0 | 120 | 30 | $-176.00 | $150.65 | $888.67 | $413.16 | 79 ($0.976) |
+| s15-x08 | 326/0 | 102 | 16 | $-145.20 | $90.47 | $897.24 | $655.01 | 49 ($1.005) |
+| s15-x09 | 415/0 | 129 | 32 | $114.91 | $108.74 | $1,158.35 | $664.02 | 47 ($0.992) |
+| s15-x10 | 434/0 | 141 | 39 | $-145.27 | $121.85 | $928.19 | $333.73 | 60 ($1.000) |
+| swisstony-x01 | 707/0 | 123 | 47 | $131.64 | $117.80 | $1,120.03 | $98.26 | 91 ($0.993) |
+| swisstony-x02 | 575/0 | 104 | 35 | $40.24 | $66.29 | $1,179.37 | $603.24 | 78 ($0.982) |
+| swisstony-x03 | 388/0 | 89 | 27 | $-32.22 | $55.78 | $1,054.88 | $698.50 | 72 ($0.978) |
+| swisstony-x04 | 513/0 | 114 | 26 | $147.04 | $64.52 | $1,211.97 | $995.74 | 90 ($0.960) |
+| swisstony-x05 | 737/0 | 149 | 45 | $98.52 | $108.56 | $1,233.42 | $520.35 | 114 ($0.973) |
+| swisstony-x06 | 803/0 | 168 | 59 | $2.44 | $90.40 | $997.56 | $398.61 | 123 ($0.987) |
+| swisstony-x07 | 320/0 | 73 | 16 | $211.86 | $50.51 | $1,319.78 | $1,033.40 | 58 ($0.980) |
+| swisstony-x08 | 577/0 | 104 | 35 | $111.85 | $66.43 | $1,255.90 | $701.06 | 78 ($0.984) |
+| swisstony-x09 | 578/0 | 129 | 35 | $18.11 | $87.08 | $1,100.12 | $646.52 | 106 ($0.969) |
+| swisstony-x10 | 728/0 | 134 | 55 | $124.37 | $66.38 | $1,122.40 | $555.35 | 96 ($0.992) |
+| Live_19 | 73/0 | 27 | 7 | $71.74 | $34.73 | $1,129.95 | $911.80 | 2 ($0.525) |
+| Live_15 | 212/0 | 77 | 30 | $-43.99 | $71.32 | $1,013.72 | $566.74 | 35 ($0.969) |
+| Live_swisstony-v2 | 113/0 | 35 | 14 | $-66.63 | $15.44 | $964.01 | $802.35 | 27 ($0.963) |
