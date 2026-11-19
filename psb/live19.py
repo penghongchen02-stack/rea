@@ -76,9 +76,27 @@ SPECS: list[tuple[int, str, dict]] = [
     (39, "2c edge + trail 25/10 + stop 15c", {"edge": 0.02, **TRAIL, "stop_loss": 0.15}),
     (40, "12c drop, 0.5c edge, 15c and up, lock at 75c",
      {"drop": 0.12, "edge": 0.005, "price_floor": 0.15, "lock_at": 0.75}),
+    # One bet per match like 29, sized by the money the bot has (added 2026-11-19)
+    (41, "1 bet of 2.5% of its cash", {"max_entries": 1, "cash_frac": 0.025, "max_market_frac": 0.10}),
+    (42, "1 bet of 5% of its cash", {"max_entries": 1, "cash_frac": 0.05, "max_market_frac": 0.10}),
+    (43, "1 bet of 80 contracts", {"max_entries": 1, "contracts": 80, "max_market_frac": 0.10}),
 ]
 
 _EXIT_SETTINGS = {"lock_at", "trail_rise", "trail_drop", "stop_loss"}
+_SIZE_SETTINGS = {"cash_frac", "contracts"}
+
+
+class _SizeByMoney:
+    """Bet a share of the cash the bot has now, or a fixed number of contracts."""
+    cash_frac: float | None = None
+    contracts: int | None = None
+
+    def size(self, v, st, side):
+        if self.cash_frac is not None:
+            return self.cash_frac * v.cash
+        if self.contracts is not None:
+            return self.contracts * v.ask(side)
+        return super().size(v, st, side)
 
 
 def _make(num: int, desc: str, settings: dict):
@@ -89,6 +107,8 @@ def _make(num: int, desc: str, settings: dict):
         settings["cats"] = None
     if _EXIT_SETTINGS & settings.keys():
         bases = (ProfitLock,) + bases
+    if _SIZE_SETTINGS & settings.keys():
+        bases = (_SizeByMoney,) + bases
     key = f"Live_19-{num:02d}"
     cls = type(f"Live19_{num:02d}", bases,
                {"key": key, "title": f"{key}: {desc}", "live_sim": True, "needs_stats": True,

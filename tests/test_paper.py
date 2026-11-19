@@ -711,7 +711,7 @@ def test_forty_live19_versions_and_a_control_with_their_own_settings():
     from psb import livesim
     keys = [b.key for b in live19.LIVE19]
     assert len(keys) == len(set(keys)) and all(k in registry.ALL_BOTS for k in keys)
-    assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 41
+    assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 44
     assert all(registry.ALL_BOTS[k].live_sim for k in keys)
     st = {"fair0": 0.30}
     v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True)         # 15c fall to a 12c ask
@@ -1276,3 +1276,18 @@ def test_a_connection_reset_while_reading_is_retried_then_reported(monkeypatch):
     monkeypatch.setattr(reference.urllib.request, "urlopen", reset)
     with pytest.raises(polydata.FetchError):
         reference._post_json("https://example.invalid/y", {})
+
+
+def test_live19_versions_sized_by_money_or_contracts():
+    bots = {k: registry.ALL_BOTS[f"Live_19-{k}"] for k in ("41", "42", "43")}
+    st = {"fair0": 0.30}
+    v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True, cash=2000.0)
+    (a,) = bots["41"].step(v, dict(st))
+    assert a.dollars == pytest.approx(50.0)                 # 2.5% of $2,000
+    (a,) = bots["42"].step(v, dict(st))
+    assert a.dollars == pytest.approx(100.0)                # 5%, capped at 10% of $1,000
+    (a,) = bots["43"].step(v, dict(st))
+    assert a.dollars == pytest.approx(80 * 0.12)            # 80 contracts at 12c
+    v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True, cash=400.0)
+    (a,) = bots["41"].step(v, dict(st))
+    assert a.dollars == pytest.approx(10.0)                 # shrinks after losses
