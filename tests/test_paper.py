@@ -744,3 +744,19 @@ def test_live_copies_of_15_x06_and_swisstony_x01_keep_their_settings():
         assert a.live_sim and livesim.BASE_OF[twin] == base and a.rules_key == b.rules_key
     assert registry.BOTS["Live_15-x06"].jump == 0.015 and registry.BOTS["Live_15-x06"].edge == 0.005
     assert registry.BOTS["Live_swisstony-x01"].min_edge == 0.005
+
+
+def test_underdog_buys_one_dollar_of_the_underdog_in_any_live_game():
+    nba = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=30))
+    for key in ("underdog-1", "Live_underdog"):
+        bot = registry.BOTS[key]
+        # Knicks 65c: the underdog is the other side, offered at 1 - 0.68 = 32c (fair 35c).
+        (a,) = bot.step(_view(nba, _book(0.68, 0.69), 0.65, live=True), {})
+        assert a.side == "short" and a.dollars == pytest.approx(1.0) and a.limit <= 0.50
+    bot = registry.BOTS["underdog-1"]
+    assert not bot.wants(nba, False) and bot.wants(nba, True)                      # live only
+    assert bot.step(_view(nba, _book(0.50, 0.60), 0.65, live=True), {}) == []       # US dearer
+    draw = _m(name="Draw", is_draw=True, start=NOW - timedelta(minutes=30))
+    assert not bot.wants(draw, True)
+    st = {"fills_by_tag": {"entry": 1}}
+    assert bot.step(_view(nba, _book(0.68, 0.69), 0.65, live=True), st) == []       # once per game

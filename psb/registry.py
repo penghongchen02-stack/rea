@@ -8,6 +8,7 @@ from .exits import EXITS
 from .live19 import LIVE19
 from .simple_bots import RUNNING
 from .livesim import TWINS
+from .underdog import UNDERDOG
 from .variants import VARIANTS
 
-BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING + VARIANTS + EXITS + TWINS + LIVE19}
+BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING + VARIANTS + EXITS + TWINS + LIVE19 + UNDERDOG}
