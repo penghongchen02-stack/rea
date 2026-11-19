@@ -1730,3 +1730,22 @@
 2026-11-19T13:42:51Z stats {"polls": 10986, "takes": 4405, "maker_fills": 846, "no_cash": 2466, "stale": 2} resting=1298
 2026-11-19T13:44:55Z stats {"polls": 11776, "takes": 4503, "maker_fills": 875, "no_cash": 2651, "stale": 2} resting=1315
 2026-11-19T13:46:16Z final settle 4; stats {"polls": 12149, "takes": 4531, "maker_fills": 893, "no_cash": 2760, "stale": 2}
+2026-11-19T13:46:27Z dropped 1313 resting orders from the previous run
+2026-11-19T13:46:53Z stats {"polls": 12, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=58
+2026-11-19T13:48:28Z stats {"polls": 159, "takes": 0, "maker_fills": 0, "no_cash": 3} resting=380
+2026-11-19T13:51:59Z stats {"polls": 423, "takes": 61, "maker_fills": 12, "no_cash": 23} resting=1458
+2026-11-19T13:53:33Z stats {"polls": 774, "takes": 451, "maker_fills": 26, "no_cash": 51} resting=1455
+2026-11-19T13:54:07Z discovered 506 markets, 350 linked, 41 linked and live
+2026-11-19T13:55:41Z stats {"polls": 1353, "takes": 649, "maker_fills": 64, "no_cash": 136} resting=1515
+2026-11-19T13:57:04Z settled 1 markets
+2026-11-19T13:57:38Z stats {"polls": 1913, "takes": 893, "maker_fills": 110, "no_cash": 244} resting=1525
+2026-11-19T13:59:43Z stats {"polls": 2677, "takes": 1188, "maker_fills": 132, "no_cash": 348} resting=1502
+2026-11-19T14:01:54Z stats {"polls": 3483, "takes": 1498, "maker_fills": 163, "no_cash": 439} resting=1582
+2026-11-19T14:04:07Z stats {"polls": 4311, "takes": 1683, "maker_fills": 193, "no_cash": 528} resting=1642
+2026-11-19T14:06:13Z stats {"polls": 5067, "takes": 1791, "maker_fills": 220, "no_cash": 651} resting=1659
+2026-11-19T14:07:15Z settled 2 markets
+2026-11-19T14:08:10Z stats {"polls": 5659, "takes": 1870, "maker_fills": 287, "no_cash": 712} resting=1687
+2026-11-19T14:10:24Z stats {"polls": 6215, "takes": 2059, "maker_fills": 357, "no_cash": 813} resting=1699
+2026-11-19T14:12:34Z stats {"polls": 6926, "takes": 2350, "maker_fills": 414, "no_cash": 972} resting=1721
+2026-11-19T14:13:18Z discovered 507 markets, 343 linked, 49 linked and live
+2026-11-19T14:14:30Z final settle 3; stats {"polls": 7426, "takes": 2547, "maker_fills": 450, "no_cash": 1050}
