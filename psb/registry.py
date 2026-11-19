@@ -4,8 +4,9 @@ reports read it from here."""
 from __future__ import annotations
 
 from .bots import FIXED, ORIGINALS, Bot
+from .exits import EXITS
 from .simple_bots import RUNNING
 from .livesim import TWINS
 from .variants import VARIANTS
 
-BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING + VARIANTS + TWINS}
+BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING + VARIANTS + EXITS + TWINS}

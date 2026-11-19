@@ -24,8 +24,8 @@ from pathlib import Path
 from .registry import BOTS
 from .paper import Ledger
 
-# Legs that may pay above fair by design (closing a pair or exiting).
-EXEMPT_TAGS = {"hedge", "second", "terminal_exit", "reversal_exit", "rally_exit", "quote"}
+# Legs that may pay above fair by design (closing a pair, exiting or locking in).
+EXEMPT_TAGS = {"hedge", "second", "terminal_exit", "reversal_exit", "rally_exit", "quote", "lock"}
 SLACK = 0.005   # half a cent: book prices are on a 1c tick, fair is a midpoint
 
 

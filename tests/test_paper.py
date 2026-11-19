@@ -636,3 +636,53 @@ def test_old_live_like_keys_move_to_the_live_names():
     assert "s19-livesim" not in led.positions and led.positions["Live_19"]["m"].contracts == 40
     assert led.states["Live_19"]["m"]["fair0"] == 0.3 and led.fills[0]["bot"] == "Live_19"
     assert led.bot_started["Live_19"] == "2026-11-18T17:40:13Z"
+
+
+# --- profit lock-in versions of #19 ---------------------------------------------
+
+def _held_long(n=100.0, price=0.12):
+    return {"fair0": 0.30, "legs": {"long": {"contracts": n, "cost": n * price}},
+            "fills_by_tag": {"entry": 1}}
+
+
+def _tennis():
+    return _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B",
+              teams=("A", "B"), start=NOW - timedelta(minutes=30))
+
+
+def test_lock70_buys_the_other_player_once_the_held_one_reaches_70c():
+    bot = registry.BOTS["s19-lock70"]
+    st = _held_long()
+    v = _view(_tennis(), _book(0.74, 0.76), 0.76, live=True, held=100.0)
+    (a,) = bot.step(v, st)
+    assert (a.side, a.tag, a.limit) == ("short", "lock", pytest.approx(0.26))
+    assert a.dollars / a.limit == pytest.approx(100.0)        # exactly the held contracts
+    assert st["locking"]
+    # Fully locked: no new entries in this match, even on a fresh 15c fall.
+    v = _view(_tennis(), _book(0.10, 0.11), 0.12, live=True, held=0.0)
+    assert bot.step(v, st) == []
+
+
+def test_lock70_holds_when_locking_would_not_fix_a_profit():
+    st = _held_long(price=0.65)                                # paid 65c, other side costs 30c+
+    v = _view(_tennis(), _book(0.69, 0.71), 0.72, live=True, held=100.0)
+    assert registry.BOTS["s19-lock70"].step(v, st) == []
+    assert not st.get("locking")
+
+
+def test_trail_locks_only_after_a_10c_fall_from_the_peak():
+    bot = registry.BOTS["s19-trail"]
+    st = _held_long()
+    assert bot.step(_view(_tennis(), _book(0.59, 0.61), 0.60, live=True, held=100.0), st) == []
+    assert st["peak"] == pytest.approx(0.60)                   # rising: keep holding
+    (a,) = bot.step(_view(_tennis(), _book(0.49, 0.51), 0.50, live=True, held=100.0), st)
+    assert (a.side, a.tag) == ("short", "lock")
+
+
+def test_lock_fills_count_as_exempt_in_the_audit(tmp_path):
+    from psb import audit
+    led = paper.Ledger(1000.0)
+    led.record("s19-lock70", "m", "long", 0.12, 100, 0.0, "taker", "entry", 0.15, NOW)
+    led.record("s19-lock70", "m", "short", 0.26, 100, 0.0, "taker", "lock", 0.24, NOW)
+    problems, _ = audit.audit(led, tmp_path)
+    assert problems == []
