@@ -82,9 +82,14 @@ SPECS: list[tuple[int, str, dict]] = [
     (43, "1 bet of 80 contracts", {"max_entries": 1, "contracts": 80, "max_market_frac": 0.10}),
     # $10 of every $100 it has: the per-match cap is loose so the 10% rule sets the size.
     (44, "1 bet of 10% of its cash", {"max_entries": 1, "cash_frac": 0.10, "max_market_frac": 0.50}),
+    # Profit guard: once a bet is up $100, cash it out if it falls back to half that.
+    (45, "10% of its cash + cash out at half of a $100+ gain",
+     {"max_entries": 1, "cash_frac": 0.10, "max_market_frac": 0.50, "guard_at": 100.0, "guard_keep": 0.5}),
+    (46, "1 bet of $25 + cash out at half of a $100+ gain",
+     {"max_entries": 1, "clip": 25.0, "guard_at": 100.0, "guard_keep": 0.5}),
 ]
 
-_EXIT_SETTINGS = {"lock_at", "trail_rise", "trail_drop", "stop_loss"}
+_EXIT_SETTINGS = {"lock_at", "trail_rise", "trail_drop", "stop_loss", "guard_at"}
 _SIZE_SETTINGS = {"cash_frac", "contracts"}
 
 

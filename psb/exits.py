@@ -16,6 +16,11 @@ result is at least +3c per contract. Entries are #19's, unchanged.
 A stop (`stop_loss`, used by some Live_19 versions in live19.py) does the same
 buy when the held player falls that far below what we paid, accepting the
 loss it fixes; its buys are tagged "stop".
+
+A profit guard (`guard_at`, `guard_keep`) is a trailing lock in dollars: once a
+bet is up `guard_at` dollars at the international price, it is cashed out (a
+normal lock) if that profit falls to `guard_keep` of its best, e.g. up $100 and
+back to $50.
 """
 from __future__ import annotations
 
@@ -38,6 +43,8 @@ class ProfitLock:
     trail_drop: float = 0.10          # ...and then fell this far from its peak
     min_profit: float = 0.03          # locked profit per contract, after the fee
     stop_loss: float | None = None    # cut the bet once fair is this far under our cost
+    guard_at: float | None = None     # dollars of profit that arm the profit guard
+    guard_keep: float = 0.5           # ...which locks once profit falls to this share of its best
 
     def step(self, v: View, st: dict):
         # Once triggered, a lock or stop keeps buying the rest (a thin book or a
@@ -53,6 +60,11 @@ class ProfitLock:
             want = mode
             if want is None and self._should_lock(f, avg, st["peak"]):
                 want = True
+            if want is None and self.guard_at is not None:
+                usd = n * f - self.spent(st)
+                st["peak_usd"] = max(st.get("peak_usd", usd), usd)
+                if st["peak_usd"] >= self.guard_at - 1e-9 and usd <= self.guard_keep * st["peak_usd"] + 1e-9:
+                    want = True
             if want is None and self.stop_loss is not None and f <= avg - self.stop_loss + 1e-9:
                 want = "stop"
             if want is not None:
