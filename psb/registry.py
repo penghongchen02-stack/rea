@@ -9,9 +9,10 @@ from .live19 import LIVE19
 from .simple_bots import RUNNING
 from .livesim import TWINS
 from .fifty import FIFTY
+from .gaps import GAPS
 from .ideas import IDEAS6
 from .tennis import TENNIS_BOTS
 from .underdog import UNDERDOG
 from .variants import VARIANTS
 
-BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING + VARIANTS + EXITS + TWINS + LIVE19 + UNDERDOG + TENNIS_BOTS + IDEAS6 + FIFTY}
+BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING + VARIANTS + EXITS + TWINS + LIVE19 + UNDERDOG + TENNIS_BOTS + IDEAS6 + FIFTY + GAPS}

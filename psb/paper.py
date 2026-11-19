@@ -55,6 +55,14 @@ DEFAULT_LEAGUES = [
     # tennis, darts, esports
     "atp", "wta", "itfme", "itfwo", "pdcdarts", "cs2", "dota2", "valorant", "lol",
 ]
+# Leagues only the bots that name them (Bot.extra_leagues) may trade, so adding
+# them does not change what the other bots trade.
+EXTRA_LEAGUES = ["boxing", "bkfc", "modus"]
+
+
+def allowed(bot, m) -> bool:
+    """Whether `bot` may trade market `m` at all (an extra league needs opting in)."""
+    return m.league not in EXTRA_LEAGUES or m.league in getattr(bot, "extra_leagues", ())
 LIVE_WINDOW = timedelta(hours=8)
 POLL_GROUP = 8            # markets per group: one international read, then their US books
 PREGAME_PER_POLL = 24     # upcoming markets per poll, so live games never wait long
@@ -286,7 +294,8 @@ class Engine:
         live_due, pre_due = [], []
         for t in self.markets.values():
             live = t.m.start <= now
-            if t.link is None or not any(b.wants(t.m, live) for b in self.bots.values()):
+            if t.link is None or not any(allowed(b, t.m) and b.wants(t.m, live)
+                                         for b in self.bots.values()):
                 continue
             if mono - t.last_poll >= (fast if live else slow):
                 (live_due if live else pre_due).append(t)
@@ -341,7 +350,7 @@ class Engine:
 
     def _step_bot(self, key, bot, t: "Tracked", bk, fair: float, live: bool, now: datetime,
                   ctx: dict) -> None:
-        if not bot.wants(t.m, live):
+        if not allowed(bot, t.m) or not bot.wants(t.m, live):
             self._cancel(t.m.slug, key)
             return
         pos = self.ledger.positions.get(key, {}).get(t.m.slug)   # read only
@@ -578,7 +587,7 @@ def main(argv=None):
     p.add_argument("--slow", type=float, default=180.0, help="seconds between polls of upcoming games")
     p.add_argument("--discover", type=float, default=900.0, help="seconds between market discovery")
     p.add_argument("--horizon", type=float, default=24.0, help="hours ahead to trade upcoming games")
-    p.add_argument("--leagues", nargs="*", default=DEFAULT_LEAGUES)
+    p.add_argument("--leagues", nargs="*", default=DEFAULT_LEAGUES + EXTRA_LEAGUES)
     p.add_argument("--bankroll", type=float, default=1000.0, help="paper dollars per bot")
     p.add_argument("--taker-theta", type=float, default=fees.WORST_TAKER_THETA)
     p.add_argument("--ledger", default=str(STATE / "ledger.json"))

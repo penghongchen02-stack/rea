@@ -871,7 +871,7 @@ def test_every_live_copy_decides_exactly_like_its_paper_bot():
             ra, rb = a.step(v, sa), b.step(v, sb)
             assert ra == rb, (twin, v)
             acted += bool(rb)
-        if not twin.startswith("Live_n"):   # the fifty need context: see their own test
+        if not twin.startswith(("Live_n", "Live_g")):   # these need context: see their own tests
             assert acted, f"{twin}: no test view made it act"
 
 
@@ -1071,3 +1071,40 @@ def test_a_bot_that_errors_is_taken_off_and_the_others_keep_trading(monkeypatch)
     assert "n50-even-money" not in eng.bots and "ZeroDivisionError" in eng.removed["n50-even-money"]
     assert "Live_n50-even-money" not in eng.bots          # same class, also broken
     assert "n01-pileup" in eng.bots and eng.stats["polls"] == 1
+
+
+def test_eight_gap_bots_and_live_copies_act_and_extra_leagues_are_opt_in():
+    from psb import gaps
+    assert len(gaps.GAPS) == 8
+    mk = lambda lg, **k: _m(league=lg, event=f"{lg}-aa-bb-2026-11-19", name="A", title="A vs. B",
+                            teams=("A", "B"), **k)
+    live, pre = NOW - timedelta(minutes=20), NOW + timedelta(hours=1)
+    jump = lambda m: _view(m, _book(0.60, 0.61), 0.65, prev=0.63, live=True)
+    value = lambda m: _view(m, _book(0.48, 0.50), 0.56)
+    cases = {
+        "g01-fights": [value(mk("boxing", start=pre)), jump(mk("ufc", start=live))],
+        "g02-darts": [value(mk("modus", start=pre)), jump(mk("pdcdarts", start=live))],
+        "g04-mlb": [value(mk("mlb", start=pre)), jump(mk("mlb", kind="totals", line=8.5, start=live))],
+        "g06-lines-maker": [_view(mk("nba", kind="spreads", line=-3.5, start=pre), _book(0.50, 0.60), 0.55)],
+        "g08-draw": [_view(_m(name="Draw", is_draw=True, start=pre), _book(0.20, 0.22), 0.26)],
+        "g09-take-profit": [jump(mk("nba", start=live))],
+        "g11-reserve": [jump(mk("nba", start=live))],
+        "g12-clock": [jump(mk("itfme", start=live))],
+    }
+    for key, views in cases.items():
+        for k in (key, f"Live_{key}"):
+            for v in views:
+                assert registry.BOTS[k].wants(v.m, v.live), (k, v.m.slug)
+                assert registry.BOTS[k].step(v, {}), (k, v.m.slug)
+    # Extra leagues: only bots that opt in may trade them.
+    box = mk("boxing", start=live)
+    assert paper.allowed(registry.BOTS["g01-fights"], box)
+    assert not paper.allowed(registry.BOTS["s15-x06"], box)
+    # Take-profit cashes out at +10c; the reserve wants 3c once 70% is at risk.
+    st = _held_long(price=0.40)
+    (a,) = registry.BOTS["g09-take-profit"].step(_view(mk("nba", start=live), _book(0.49, 0.51), 0.50,
+                                                       live=True, held=100.0), st)
+    assert a.tag == "lock"
+    v = jump(mk("nba", start=live))
+    v.cash = 200.0
+    assert registry.BOTS["g11-reserve"].step(v, {}) == []
