@@ -1679,3 +1679,7 @@
 2026-11-19T12:31:09Z settled 2 markets
 2026-11-19T12:31:19Z stats {"polls": 2278, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
 2026-11-19T12:32:32Z final settle 0; stats {"polls": 2635, "takes": 0, "maker_fills": 0, "no_cash": 0}
+2026-11-19T12:32:44Z dropped 17 resting orders from the previous run
+2026-11-19T12:33:13Z stats {"polls": 13, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=0
+2026-11-19T12:34:50Z stats {"polls": 109, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=19
+2026-11-19T12:37:19Z final settle 2; stats {"polls": 243, "takes": 0, "maker_fills": 0, "no_cash": 0}
