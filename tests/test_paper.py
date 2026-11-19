@@ -152,7 +152,7 @@ def test_take_walks_the_book_up_to_limit_and_pays_fee():
     m = _m()
     t = paper.Tracked(m, None)
     bk = Book((), ((0.40, 10), (0.41, 10), (0.50, 100)), "MARKET_STATE_OPEN", None, None)
-    eng._apply("swisstony", registry.BOTS["swisstony"], t, bk, 0.6,
+    eng._apply("swisstony", registry.ALL_BOTS["swisstony"], t, bk, 0.6,
                [bots.Take("long", 100.0, 0.45, "probe")], NOW)
     got = [(f["price"], f["contracts"]) for f in led.fills]
     assert got == [(0.40, 10), (0.41, 10)]
@@ -164,7 +164,7 @@ def test_rest_fills_only_on_trades_through_its_price_after_placement():
     eng, led = _engine()
     m = _m()
     t = paper.Tracked(m, None)
-    eng._apply("ferrarichampions2026", registry.BOTS["ferrarichampions2026"], t,
+    eng._apply("ferrarichampions2026", registry.ALL_BOTS["ferrarichampions2026"], t,
                _book(0.40, 0.45, traded=500), 0.5, [bots.Rest("long", 0.42, 4.2, "dominant")], NOW)
     assert len(led.orders) == 1 and led.orders[0].contracts == pytest.approx(10)
     eng._settle_orders(t, _book(0.40, 0.45, last=0.44, traded=520), NOW)   # trade above our bid
@@ -177,7 +177,7 @@ def test_rest_fills_only_on_trades_through_its_price_after_placement():
 def test_short_rest_fills_on_trades_at_or_above_its_offer():
     eng, led = _engine()
     t = paper.Tracked(_m(), None)
-    eng._apply("gamblingisallyourneed", registry.BOTS["gamblingisallyourneed"], t,
+    eng._apply("gamblingisallyourneed", registry.ALL_BOTS["gamblingisallyourneed"], t,
                _book(0.40, 0.45, traded=0), 0.5, [bots.Rest("short", 0.55, 5.5, "quote")], NOW)
     eng._settle_orders(t, _book(0.40, 0.45, last=0.45, traded=3), NOW)     # offer at 0.45 hit
     assert led.fills[0]["side"] == "short" and led.fills[0]["contracts"] == pytest.approx(3)
@@ -186,7 +186,7 @@ def test_short_rest_fills_on_trades_at_or_above_its_offer():
 # --- bots --------------------------------------------------------------------
 
 def test_ferrari_enters_dominant_then_hedges_only_below_one_dollar():
-    b, st = registry.BOTS["ferrarichampions2026"], {}
+    b, st = registry.ALL_BOTS["ferrarichampions2026"], {}
     m = _m(name="Manchester City")
     acts = b.step(_view(m, _book(0.60, 0.62), 0.66), st)
     assert acts and acts[0].side == "long" and acts[0].tag == "dominant"
@@ -203,11 +203,11 @@ def test_ferrari_enters_dominant_then_hedges_only_below_one_dollar():
 
 def test_ferrari_skips_nhl():
     m = _m(league="nhl", event="nhl-a-b-2026-11-17", title="A vs. B")
-    assert registry.BOTS["ferrarichampions2026"].step(_view(m, _book(0.5, 0.52), 0.6), {}) == []
+    assert registry.ALL_BOTS["ferrarichampions2026"].step(_view(m, _book(0.5, 0.52), 0.6), {}) == []
 
 
 def test_randomgamebet_is_live_esports_only_and_hedges_below_0975():
-    b = registry.BOTS["randomgamebet"]
+    b = registry.ALL_BOTS["randomgamebet"]
     m = _m(league="cs2", name="Hype Tech", event="cs2-ht-tlr-2026-11-17",
            title="Hype Tech vs. The Last Resort", start=NOW - timedelta(minutes=30))
     assert not b.wants(m, live=False) and b.wants(m, live=True)
@@ -225,7 +225,7 @@ def test_randomgamebet_is_live_esports_only_and_hedges_below_0975():
 
 
 def test_swisstony_probes_then_sizes_anchor_by_edge_and_never_buys_nba():
-    b, st = registry.BOTS["swisstony"], {}
+    b, st = registry.ALL_BOTS["swisstony"], {}
     m = _m(name="Manchester City")
     a1 = b.step(_view(m, _book(0.55, 0.56), 0.62), st)
     assert a1[0].tag == "probe" and a1[0].dollars == 5
@@ -239,7 +239,7 @@ def test_swisstony_probes_then_sizes_anchor_by_edge_and_never_buys_nba():
 
 
 def test_sinenooneei_anchor_cap_and_live_confirmation():
-    b = registry.BOTS["sinenooneei"]
+    b = registry.ALL_BOTS["sinenooneei"]
     m = _m(league="cs2", name="Hype Tech", event="cs2-ht-tlr-2026-11-17",
            title="Hype Tech vs. The Last Resort", start=NOW - timedelta(minutes=20))
     st = {}
@@ -255,7 +255,7 @@ def test_sinenooneei_anchor_cap_and_live_confirmation():
 
 
 def test_kch123_bursts_small_buys_on_football_only():
-    b = registry.BOTS["kch123"]
+    b = registry.ALL_BOTS["kch123"]
     nfl = _m(league="nfl", kind="spreads", name="IND Colts", line=13.5,
              event="nfl-ind-hou-2026-11-19", title="IND Colts vs. HOU Texans")
     acts = b.step(_view(nfl, _book(0.50, 0.51), 0.58), {})
@@ -264,7 +264,7 @@ def test_kch123_bursts_small_buys_on_football_only():
 
 
 def test_gambling_quotes_both_sides_and_exits_what_it_holds():
-    b = registry.BOTS["gamblingisallyourneed"]
+    b = registry.ALL_BOTS["gamblingisallyourneed"]
     m = _m(name="Manchester City", start=NOW + timedelta(hours=5))
     acts = b.step(_view(m, _book(0.60, 0.66), 0.65, now=NOW.replace(hour=15)), {})
     assert {a.side for a in acts} == {"long", "short"}
@@ -276,12 +276,12 @@ def test_gambling_quotes_both_sides_and_exits_what_it_holds():
 def test_probe_bots_skip_long_shots():
     # Observed 2026-11-17: swisstony bought 320 contracts at $0.01 on a 2.45% fair value.
     m = _m(league="cbb", event="cbb-sacred-prov-2026-11-17", title="Sacred Heart vs. Providence")
-    assert registry.BOTS["swisstony"].step(_view(m, _book(None, 0.01), 0.0245), {}) == []
+    assert registry.ALL_BOTS["swisstony"].step(_view(m, _book(None, 0.01), 0.0245), {}) == []
 
 
 def test_randomgamebet_precheck_skips_unhedgeable_entries():
     # Observed 2026-11-17: dominant buys at $0.97-0.98 can never pair below $0.975.
-    b = registry.BOTS["randomgamebet"]
+    b = registry.ALL_BOTS["randomgamebet"]
     m = _m(league="cs2", name="WBT", event="cs2-wba-eex-2026-11-17", title="WBT vs. ex-ENCE",
            start=NOW - timedelta(hours=1))
     assert b.step(_view(m, _book(0.97, 0.98), 0.985, live=True), {}) == []
@@ -291,13 +291,13 @@ def test_unmarked_open_position_is_carried_at_cost():
     led = paper.Ledger()
     led.record("swisstony", "m", "long", 0.01, 320, 0.30, "taker", "probe", None, NOW)
     out = paper.report(led)
-    row = [r for r in out.splitlines() if r.startswith("| swisstony")][0]
+    row = [r for r in out.splitlines() if r.startswith("| swisstony |")][0]
     assert "$999.70" in row        # bankroll minus the fee, no phantom mark at 0.50
 
 
 def test_swisstony_skips_esports():
     m = _m(league="cs2", name="ICE", event="cs2-ice-bca-2026-11-17", title="ICE vs. BCA")
-    assert registry.BOTS["swisstony"].step(_view(m, _book(0.60, 0.61), 0.70), {}) == []
+    assert registry.ALL_BOTS["swisstony"].step(_view(m, _book(0.60, 0.61), 0.70), {}) == []
 
 
 def test_orders_from_a_previous_run_do_not_survive_restart():
@@ -334,7 +334,7 @@ def test_unmarked_partly_closed_position_keeps_its_realized_cash():
     led.record("swisstony", "m", "long", 0.50, 20, 0.0, "taker", "x", None, NOW)
     led.record("swisstony", "m", "short", 0.40, 10, 0.0, "taker", "x", None, NOW)   # 10 pairs at $0.90
     # 10 longs left, carried at their 0.50 entry, plus $1.00 locked in on the pairs.
-    row = [r for r in paper.report(led).splitlines() if r.startswith("| swisstony")][0]
+    row = [r for r in paper.report(led).splitlines() if r.startswith("| swisstony |")][0]
     assert "$1,001.00" in row
 
 
@@ -342,11 +342,11 @@ def test_unmarked_partly_closed_position_keeps_its_realized_cash():
 
 def test_every_v2_bot_keeps_its_original_entry_filters():
     for b in bots.FIXED:
-        assert b.rules_key == b.key[:-3] and b.rules_key in registry.BOTS
+        assert b.rules_key == b.key[:-3] and b.rules_key in registry.ALL_BOTS
 
 
 def test_ferrari_v2_trades_one_line_per_game_and_caps_dominance():
-    old, new = registry.BOTS["ferrarichampions2026"], registry.BOTS["ferrarichampions2026-v2"]
+    old, new = registry.ALL_BOTS["ferrarichampions2026"], registry.ALL_BOTS["ferrarichampions2026-v2"]
     m = _m(name="Manchester City")
     # 10c raw edge: the original clips 5x ($50), the fix at most 2.5x ($25).
     assert old.step(_view(m, _book(0.55, 0.56), 0.66), {})[0].dollars == 50
@@ -370,7 +370,7 @@ def test_engine_counts_other_lines_of_the_same_game():
 
 
 def test_gambling_v2_skips_extreme_prices_and_never_closes_above_its_pair_cap():
-    old, new = registry.BOTS["gamblingisallyourneed"], registry.BOTS["gamblingisallyourneed-v2"]
+    old, new = registry.ALL_BOTS["gamblingisallyourneed"], registry.ALL_BOTS["gamblingisallyourneed-v2"]
     m = _m(name="Fulham", start=NOW + timedelta(hours=5))
     at = NOW.replace(hour=15)
     # Fair 3.5c: the original quotes the long shot at 1.9c (rounded 2c), the fix does not.
@@ -388,13 +388,13 @@ def test_gambling_v2_skips_extreme_prices_and_never_closes_above_its_pair_cap():
 def test_swisstony_v2_needs_two_cents_after_fee():
     m = _m(league="cbb", event="cbb-a-b-2026-11-17", title="A vs. B")
     # Ask 0.56, fee ~2.3c, fair 0.595: ~1.2c edge after fee.
-    assert registry.BOTS["swisstony"].step(_view(m, _book(0.55, 0.56), 0.595), {})
-    assert registry.BOTS["swisstony-v2"].step(_view(m, _book(0.55, 0.56), 0.595), {}) == []
-    assert registry.BOTS["kch123"].step(_view(m, _book(0.55, 0.56), 0.595), {})
+    assert registry.ALL_BOTS["swisstony"].step(_view(m, _book(0.55, 0.56), 0.595), {})
+    assert registry.ALL_BOTS["swisstony-v2"].step(_view(m, _book(0.55, 0.56), 0.595), {}) == []
+    assert registry.ALL_BOTS["kch123"].step(_view(m, _book(0.55, 0.56), 0.595), {})
 
 
 def test_sinenooneei_v2_anchors_small_and_only_after_a_real_move():
-    b = registry.BOTS["sinenooneei-v2"]
+    b = registry.ALL_BOTS["sinenooneei-v2"]
     m = _m(league="cs2", name="Hype Tech", event="cs2-ht-tlr-2026-11-17",
            title="Hype Tech vs. The Last Resort", start=NOW - timedelta(minutes=20))
     st = {"thesis": "long", "thesis_fair": 0.60}
@@ -412,15 +412,15 @@ def test_randomgamebet_v2_caps_the_unhedged_dominant_leg():
     m = _m(league="cs2", name="Hype Tech", event="cs2-ht-tlr-2026-11-17",
            title="Hype Tech vs. The Last Resort", start=NOW - timedelta(minutes=30))
     v = _view(m, _book(0.55, 0.56), 0.62, live=True)
-    assert registry.BOTS["randomgamebet"].step(v, {})[0].dollars == 50
-    assert registry.BOTS["randomgamebet-v2"].step(v, {})[0].dollars == 15
+    assert registry.ALL_BOTS["randomgamebet"].step(v, {})[0].dollars == 50
+    assert registry.ALL_BOTS["randomgamebet-v2"].step(v, {})[0].dollars == 15
 
 
 def test_bots_added_later_get_their_own_start_time():
     led = paper.Ledger(started_at="2026-11-17T11:03:25Z")
     led.record("kch123", "m", "long", 0.5, 10, 0.0, "taker", "probe", 0.55, NOW)
     paper.Engine(led, [], fees.WORST_TAKER_THETA, _Log(), 24)
-    assert set(led.bot_started) == set(registry.BOTS)
+    assert set(led.bot_started) == set(registry.ALL_BOTS)
     assert led.bot_started["kch123"] == "2026-11-17T11:03:25Z"      # traded since the start
     assert led.bot_started["swisstony-v2"] > "2026-11-17T11:03:25Z"  # joined now
 
@@ -472,7 +472,7 @@ from psb import simple_bots
 def test_ideas_cover_1_to_50_and_each_running_idea_has_a_bot():
     assert [i.n for i in simple_bots.IDEAS] == list(range(1, 51))
     for i in simple_bots.IDEAS:
-        assert (i.key in registry.BOTS) == (i.status in ("running", "proxy"))
+        assert (i.key in registry.ALL_BOTS) == (i.status in ("running", "proxy"))
     assert not any(i.key for i in simple_bots.IDEAS if i.status == "removed")
 
 
@@ -496,7 +496,7 @@ def test_every_simple_bot_steps_without_error_and_respects_its_limits(bot):
 
 
 def test_flat_bot_buys_once_with_edge_and_skips_without():
-    b = registry.BOTS["s39-flat-10"]
+    b = registry.ALL_BOTS["s39-flat-10"]
     m = _m(name="Manchester City")
     st = {}
     acts = b.step(_view(m, _book(0.50, 0.52), 0.60), st)
@@ -510,14 +510,14 @@ def test_daily_stop_and_sport_budget_use_the_bots_own_results():
     m = _m(name="Manchester City")
     v = _view(m, _book(0.50, 0.52), 0.60)
     v.stats = {"pnl_today": -60.0, "last_results": [], "open_by_cat": {"soccer": 200.0}}
-    assert registry.BOTS["s40-daily-stop"].step(v, {}) == []
-    assert registry.BOTS["s42-sport-budget"].step(v, {}) == []
+    assert registry.ALL_BOTS["s40-daily-stop"].step(v, {}) == []
+    assert registry.ALL_BOTS["s42-sport-budget"].step(v, {}) == []
     v.stats = {"pnl_today": 0.0, "last_results": [5, 5, 5], "open_by_cat": {}}
-    assert registry.BOTS["s41-streak-cooler"].step(v, {})[0].dollars == 5
+    assert registry.ALL_BOTS["s41-streak-cooler"].step(v, {})[0].dollars == 5
 
 
 def test_sequential_pair_buys_the_second_side_only_under_98c():
-    b, st = registry.BOTS["s07-underpriced-pair"], {}
+    b, st = registry.ALL_BOTS["s07-underpriced-pair"], {}
     m = _m(name="Manchester City")
     assert b.step(_view(m, _book(0.50, 0.52), 0.55), st)[0].tag == "first"
     b.on_fill(st, bots.Fill("long", 0.52, 19, "first"), NOW)
@@ -530,9 +530,9 @@ def test_sequential_pair_buys_the_second_side_only_under_98c():
 def test_a_buy_never_walks_the_book_past_the_price_cap():
     # Observed 2026-11-18: swisstony filled a level at 0.96 after checking a 0.94 ask.
     m = _m(league="cbb", event="cbb-a-b-2026-11-17", title="A vs. B")
-    acts = registry.BOTS["swisstony"].step(_view(m, _book(0.93, 0.94), 0.995), {})
+    acts = registry.ALL_BOTS["swisstony"].step(_view(m, _book(0.93, 0.94), 0.995), {})
     assert acts and acts[0].limit <= 0.95
-    acts = registry.BOTS["s39-flat-10"].step(_view(_m(), _book(0.93, 0.94), 0.995), {})
+    acts = registry.ALL_BOTS["s39-flat-10"].step(_view(_m(), _book(0.93, 0.94), 0.995), {})
     assert acts and acts[0].limit <= 0.95
 
 
@@ -578,11 +578,11 @@ from psb import variants
 def test_ten_versions_each_with_unique_keys_and_the_base_filters():
     assert len(variants.S19) == len(variants.S15) == len(variants.SWISS) == 10
     keys = [b.key for b in variants.VARIANTS]
-    assert len(set(keys)) == 30 and all(k in registry.BOTS for k in keys)
+    assert len(set(keys)) == 30 and all(k in registry.ALL_BOTS for k in keys)
     m_nba = _m(**{**NBA_EVENT, "name": "Knicks"})
     v = _view(m_nba, _book(0.55, 0.56), 0.62)
-    assert registry.BOTS["swisstony-x01"].step(v, {}) == []          # swisstony skips the NBA
-    assert registry.BOTS["swisstony-x05"].step(v, {})                # the all-sports version trades it
+    assert registry.ALL_BOTS["swisstony-x01"].step(v, {}) == []          # swisstony skips the NBA
+    assert registry.ALL_BOTS["swisstony-x05"].step(v, {})                # the all-sports version trades it
 
 
 def test_looser_versions_trade_where_the_base_does_not():
@@ -590,11 +590,11 @@ def test_looser_versions_trade_where_the_base_does_not():
            start=NOW - timedelta(minutes=30))
     st = {"fair0": 0.60}
     v = _view(m, _book(0.45, 0.46), 0.50, live=True)                  # 10c fall, 4c+ edge
-    assert registry.BOTS["s19-tennis-set-fade"].step(v, dict(st)) == []   # needs 15c
-    assert registry.BOTS["s19-x01"].step(v, dict(st))                     # 10c is enough
+    assert registry.ALL_BOTS["s19-tennis-set-fade"].step(v, dict(st)) == []   # needs 15c
+    assert registry.ALL_BOTS["s19-x01"].step(v, dict(st))                     # 10c is enough
     v = _view(m, _book(0.45, 0.46), 0.52, prev=0.50, live=True)       # 2c jump
-    assert registry.BOTS["s15-momentum"].step(v, {}) == []                # needs 3c
-    assert registry.BOTS["s15-x01"].step(v, {})
+    assert registry.ALL_BOTS["s15-momentum"].step(v, {}) == []                # needs 3c
+    assert registry.ALL_BOTS["s15-x01"].step(v, {})
 
 
 # --- live-like copies -----------------------------------------------------------
@@ -602,7 +602,7 @@ def test_looser_versions_trade_where_the_base_does_not():
 def test_live_like_copy_misses_a_price_that_is_gone_when_its_order_arrives(monkeypatch):
     from psb import livesim
     eng, led = _engine()
-    bot = registry.BOTS["Live_19"]
+    bot = registry.ALL_BOTS["Live_19"]
     m = _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B", teams=("A", "B"),
            start=NOW - timedelta(minutes=30))
     t = paper.Tracked(m, None)
@@ -652,7 +652,7 @@ def _tennis():
 
 
 def test_lock70_buys_the_other_player_once_the_held_one_reaches_70c():
-    bot = registry.BOTS["s19-lock70"]
+    bot = registry.ALL_BOTS["s19-lock70"]
     st = _held_long()
     v = _view(_tennis(), _book(0.74, 0.76), 0.76, live=True, held=100.0)
     (a,) = bot.step(v, st)
@@ -667,12 +667,12 @@ def test_lock70_buys_the_other_player_once_the_held_one_reaches_70c():
 def test_lock70_holds_when_locking_would_not_fix_a_profit():
     st = _held_long(price=0.65)                                # paid 65c, other side costs 30c+
     v = _view(_tennis(), _book(0.69, 0.71), 0.72, live=True, held=100.0)
-    assert registry.BOTS["s19-lock70"].step(v, st) == []
+    assert registry.ALL_BOTS["s19-lock70"].step(v, st) == []
     assert not st.get("locking")
 
 
 def test_trail_locks_only_after_a_10c_fall_from_the_peak():
-    bot = registry.BOTS["s19-trail"]
+    bot = registry.ALL_BOTS["s19-trail"]
     st = _held_long()
     assert bot.step(_view(_tennis(), _book(0.59, 0.61), 0.60, live=True, held=100.0), st) == []
     assert st["peak"] == pytest.approx(0.60)                   # rising: keep holding
@@ -698,7 +698,7 @@ def test_copies_ordering_one_market_together_share_one_fresh_read(monkeypatch):
     monkeypatch.setattr(livesim.usmarket, "book",
                         lambda slug: reads.append(slug) or _book(0.10, 0.12, qty=200))
     for key in ("Live_19", "Live_19-00", "Live_19-10"):
-        eng._apply(key, registry.BOTS[key], t, _book(0.10, 0.12), 0.20,
+        eng._apply(key, registry.ALL_BOTS[key], t, _book(0.10, 0.12), 0.20,
                    [bots.Take("long", 10.0, 0.15, "entry")], NOW)
     assert reads == [m.slug]                                        # one read, three orders
     assert [f["contracts"] for f in led.fills] == [66, 66, 66]      # each its own half of the book
@@ -710,20 +710,20 @@ def test_forty_live19_versions_and_a_control_with_their_own_settings():
     from psb import live19
     from psb import livesim
     keys = [b.key for b in live19.LIVE19]
-    assert len(keys) == len(set(keys)) and all(k in registry.BOTS for k in keys)
+    assert len(keys) == len(set(keys)) and all(k in registry.ALL_BOTS for k in keys)
     assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 41
-    assert all(registry.BOTS[k].live_sim for k in keys)
+    assert all(registry.ALL_BOTS[k].live_sim for k in keys)
     st = {"fair0": 0.30}
     v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True)         # 15c fall to a 12c ask
-    assert registry.BOTS["Live_19-00"].step(v, dict(st))              # the control buys it
+    assert registry.ALL_BOTS["Live_19-00"].step(v, dict(st))              # the control buys it
     assert live19._make(*live19.SPECS[23]).step(v, dict(st)) == []    # 15c-and-up skips it
     v = _view(_tennis(), _book(0.16, 0.17), 0.20, live=True)          # only a 10c fall
-    assert registry.BOTS["Live_19-00"].step(v, dict(st)) == []
+    assert registry.ALL_BOTS["Live_19-00"].step(v, dict(st)) == []
     assert live19._make(*live19.SPECS[1]).step(v, dict(st))           # the 10c version buys
     m_nba = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=30))
     v = _view(m_nba, _book(0.11, 0.12), 0.15, live=True)
-    assert registry.BOTS["Live_19-00"].step(v, dict(st)) == []        # tennis only
-    assert registry.BOTS["Live_19-31"].step(v, dict(st))              # all sports
+    assert registry.ALL_BOTS["Live_19-00"].step(v, dict(st)) == []        # tennis only
+    assert registry.ALL_BOTS["Live_19-31"].step(v, dict(st))              # all sports
 
 
 def test_stop_cuts_a_falling_bet_at_a_loss_and_then_stays_out():
@@ -745,10 +745,10 @@ def test_live_copies_of_15_x06_and_swisstony_x01_keep_their_settings():
     for twin, base in (("Live_15-x06", "s15-x06"), ("Live_swisstony-x01", "swisstony-x01")):
         if twin in livesim.PAUSED:
             continue
-        a, b = registry.BOTS[twin], registry.BOTS[base]
+        a, b = registry.ALL_BOTS[twin], registry.ALL_BOTS[base]
         assert a.live_sim and livesim.BASE_OF[twin] == base and a.rules_key == b.rules_key
-    assert registry.BOTS["Live_15-x06"].jump == 0.015 and registry.BOTS["Live_15-x06"].edge == 0.005
-    assert registry.BOTS["swisstony-x01"].min_edge == 0.005
+    assert registry.ALL_BOTS["Live_15-x06"].jump == 0.015 and registry.ALL_BOTS["Live_15-x06"].edge == 0.005
+    assert registry.ALL_BOTS["swisstony-x01"].min_edge == 0.005
 
 
 def test_underdog_buys_one_dollar_when_the_underdog_jumps_in_any_live_game():
@@ -756,9 +756,9 @@ def test_underdog_buys_one_dollar_when_the_underdog_jumps_in_any_live_game():
     # Knicks fall 67c -> 65c: the other side, the underdog, jumps 33c -> 35c and is
     # offered at 1 - 0.68 = 32c.
     for key in ("underdog-1", "Live_underdog"):
-        (a,) = registry.BOTS[key].step(_view(nba, _book(0.68, 0.69), 0.65, prev=0.67, live=True), {})
+        (a,) = registry.ALL_BOTS[key].step(_view(nba, _book(0.68, 0.69), 0.65, prev=0.67, live=True), {})
         assert a.side == "short" and a.dollars == pytest.approx(1.0) and a.limit <= 0.50
-    bot = registry.BOTS["underdog-1"]
+    bot = registry.ALL_BOTS["underdog-1"]
     assert not bot.wants(nba, False) and bot.wants(nba, True)                      # live only
     # The favourite jumping up is not bought.
     assert bot.step(_view(nba, _book(0.60, 0.61), 0.65, prev=0.63, live=True), {}) == []
@@ -772,28 +772,28 @@ def test_underdog_buys_one_dollar_when_the_underdog_jumps_in_any_live_game():
 
 def test_tennis_makers_quote_only_tennis_and_prematch_bots_buy_only_before_play():
     from psb import tennis
-    assert len(tennis.TENNIS_BOTS) == 7 and all(b.key in registry.BOTS for b in tennis.TENNIS_BOTS)
+    assert len(tennis.TENNIS_BOTS) == 7 and all(b.key in registry.ALL_BOTS for b in tennis.TENNIS_BOTS)
     pre = _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B",
              teams=("A", "B"), start=NOW + timedelta(hours=1))
     nba = _m(**{**NBA_EVENT, "name": "Knicks"})
-    mk = registry.BOTS["tn-maker-2c"]
+    mk = registry.ALL_BOTS["tn-maker-2c"]
     acts = mk.step(_view(pre, _book(0.50, 0.60), 0.55), {})
     assert {(a.side, a.price) for a in acts} == {("long", 0.53), ("short", 0.43)}
     assert mk.step(_view(nba, _book(0.50, 0.60), 0.55), {}) == []         # tennis only
-    assert not registry.BOTS["tn-maker-pre"].wants(_tennis(), True)        # before play only
+    assert not registry.ALL_BOTS["tn-maker-pre"].wants(_tennis(), True)        # before play only
     for key in ("tn-pre-1c", "Live_tn-pre-1c"):
-        b = registry.BOTS[key]
+        b = registry.ALL_BOTS[key]
         assert not b.wants(_tennis(), True) and b.wants(pre, False)
         (a,) = b.step(_view(pre, _book(0.48, 0.50), 0.55), {})            # 5c under fair
         assert a.side == "long" and a.tag == "entry"
-    assert registry.BOTS["tn-pre-2c"].step(_view(pre, _book(0.53, 0.54), 0.55), {}) == []
+    assert registry.ALL_BOTS["tn-pre-2c"].step(_view(pre, _book(0.53, 0.54), 0.55), {}) == []
 
 
 def test_live_maker_waits_behind_others_at_its_price_and_gets_its_queue_share():
     eng, led = _engine()
     t = paper.Tracked(_tennis(), None)
     for key in ("tn-maker-2c", "Live_tn-maker-2c"):
-        eng._apply(key, registry.BOTS[key], t, _book(0.40, 0.45, traded=500), 0.5,
+        eng._apply(key, registry.ALL_BOTS[key], t, _book(0.40, 0.45, traded=500), 0.5,
                    [bots.Rest("long", 0.42, 4.2, "quote")], NOW)
     eng._settle_orders(t, _book(0.40, 0.45, last=0.42, traded=504), NOW)   # 4 traded at our price
     assert {f["bot"]: f["contracts"] for f in led.fills} == {"tn-maker-2c": pytest.approx(4)}
@@ -806,28 +806,28 @@ def test_six_ideas_and_their_live_copies():
     from psb import ideas
     assert len(ideas.IDEAS6) == 6
     for b in ideas.IDEAS6:
-        assert b.key in registry.BOTS and registry.BOTS[f"Live_{b.key}"].live_sim
+        assert b.key in registry.ALL_BOTS and registry.ALL_BOTS[f"Live_{b.key}"].live_sim
     nba = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=30))
     # Comeback fade: the Knicks (favourite) fall 67c -> 65c, offered at 62c.
-    (a,) = registry.BOTS["fav-fade"].step(_view(nba, _book(0.61, 0.62), 0.65, prev=0.67, live=True), {})
+    (a,) = registry.ALL_BOTS["fav-fade"].step(_view(nba, _book(0.61, 0.62), 0.65, prev=0.67, live=True), {})
     assert a.side == "long"
     # Late underdog: only once the game is late.
     late = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=120))
     v = _view(late, _book(0.63, 0.64), 0.60, live=True)                  # underdog 40c, offered 37c
-    assert registry.BOTS["late-underdog"].step(v, {})
-    assert registry.BOTS["late-underdog"].step(_view(nba, _book(0.63, 0.64), 0.60, live=True), {}) == []
+    assert registry.ALL_BOTS["late-underdog"].step(v, {})
+    assert registry.ALL_BOTS["late-underdog"].step(_view(nba, _book(0.63, 0.64), 0.60, live=True), {}) == []
     # Big jump needs 5c.
-    assert registry.BOTS["big-jump"].step(_view(nba, _book(0.60, 0.61), 0.65, prev=0.62, live=True), {}) == []
-    assert registry.BOTS["big-jump"].step(_view(nba, _book(0.60, 0.61), 0.68, prev=0.62, live=True), {})
+    assert registry.ALL_BOTS["big-jump"].step(_view(nba, _book(0.60, 0.61), 0.65, prev=0.62, live=True), {}) == []
+    assert registry.ALL_BOTS["big-jump"].step(_view(nba, _book(0.60, 0.61), 0.68, prev=0.62, live=True), {})
     # Set loser: favourite at 70c before play, 45c now and offered at 40c.
-    bot, st = registry.BOTS["tn-set-loser"], {}
+    bot, st = registry.ALL_BOTS["tn-set-loser"], {}
     pre = _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B",
              teams=("A", "B"), start=NOW + timedelta(hours=1))
     bot.step(_view(pre, _book(0.69, 0.71), 0.70), st)
     (a,) = bot.step(_view(_tennis(), _book(0.39, 0.40), 0.45, live=True), st)
     assert a.side == "long"
     # Pre-game underdog, then a lock once it is 15c above cost.
-    bot = registry.BOTS["pre-dog-lock"]
+    bot = registry.ALL_BOTS["pre-dog-lock"]
     (a,) = bot.step(_view(pre, _book(0.27, 0.28), 0.32), {})
     assert a.side == "long"
     st = _held_long(price=0.28)
@@ -837,7 +837,7 @@ def test_six_ideas_and_their_live_copies():
     itf = _m(league="itfme", event="itfme-a-b-2026-11-18", name="A", title="A vs. B",
              teams=("A", "B"), start=NOW - timedelta(minutes=30))
     v = lambda m: _view(m, _book(0.60, 0.61), 0.65, prev=0.63, live=True)
-    assert registry.BOTS["x06-itfme"].step(v(itf), {}) and registry.BOTS["x06-itfme"].step(v(_tennis()), {}) == []
+    assert registry.ALL_BOTS["x06-itfme"].step(v(itf), {}) and registry.ALL_BOTS["x06-itfme"].step(v(_tennis()), {}) == []
 
 
 def _grid_views():
@@ -865,7 +865,7 @@ def test_every_live_copy_decides_exactly_like_its_paper_bot():
     from psb import livesim
     views = _grid_views()
     for twin, base in livesim.BASE_OF.items():
-        a, b = registry.BOTS[twin], registry.BOTS[base]
+        a, b = registry.ALL_BOTS[twin], registry.ALL_BOTS[base]
         assert a.live_sim and isinstance(a, type(b)), twin
         acted = 0
         for v in views:
@@ -886,7 +886,7 @@ def test_every_live_copy_fills_through_the_engine(monkeypatch):
     for twin in livesim.BASE_OF:
         eng, led = _engine()
         t = paper.Tracked(_tennis(), None)
-        bot = registry.BOTS[twin]
+        bot = registry.ALL_BOTS[twin]
         eng._apply(twin, bot, t, _book(0.29, 0.30), 0.40, [bots.Take("long", 10.0, 0.35, "entry")], NOW)
         eng._apply(twin, bot, t, _book(0.29, 0.30, traded=0), 0.40,
                    [bots.Rest("short", 0.60, 6.0, "quote")], NOW)
@@ -1053,9 +1053,9 @@ def test_each_of_the_fifty_and_its_live_copy_acts_in_its_scenario():
     assert sorted(S) == sorted(b.key for b in fifty.FIFTY)
     for key, steps in S.items():
         for k in (key, f"Live_{key}"):
-            if k not in registry.BOTS:    # a paused Live_ copy (livesim.PAUSED)
+            if k not in registry.ALL_BOTS:    # a paused Live_ copy (livesim.PAUSED)
                 continue
-            bot, st, acts = registry.BOTS[k], None, []
+            bot, st, acts = registry.ALL_BOTS[k], None, []
             for v, st0 in steps:
                 if st0 is not None:
                     st = copy.deepcopy(st0)
@@ -1072,7 +1072,7 @@ def test_a_bot_that_errors_is_taken_off_and_the_others_keep_trading(monkeypatch)
     monkeypatch.setattr(paper, "_now", lambda: NOW)
     monkeypatch.setattr(paper.reference, "live_mids", lambda links: {"t0": 0.6})
     monkeypatch.setattr(paper.usmarket, "book", lambda slug: _book(0.5, 0.52))
-    broken = registry.BOTS["n50-even-money"]
+    broken = registry.ALL_BOTS["n50-even-money"]
     monkeypatch.setattr(type(broken), "step", lambda self, v, st: 1 / 0)
     eng.poll(5, 60)
     assert "n50-even-money" not in eng.bots and "ZeroDivisionError" in eng.removed["n50-even-money"]
@@ -1100,23 +1100,23 @@ def test_eight_gap_bots_and_live_copies_act_and_extra_leagues_are_opt_in():
     }
     for key, views in cases.items():
         for k in (key, f"Live_{key}"):
-            if k not in registry.BOTS:    # a paused Live_ copy
+            if k not in registry.ALL_BOTS:    # a paused Live_ copy
                 continue
             for v in views:
-                assert registry.BOTS[k].wants(v.m, v.live), (k, v.m.slug)
-                assert registry.BOTS[k].step(v, {}), (k, v.m.slug)
+                assert registry.ALL_BOTS[k].wants(v.m, v.live), (k, v.m.slug)
+                assert registry.ALL_BOTS[k].step(v, {}), (k, v.m.slug)
     # Extra leagues: only bots that opt in may trade them.
     box = mk("boxing", start=live)
-    assert paper.allowed(registry.BOTS["g01-fights"], box)
-    assert not paper.allowed(registry.BOTS["s15-x06"], box)
+    assert paper.allowed(registry.ALL_BOTS["g01-fights"], box)
+    assert not paper.allowed(registry.ALL_BOTS["s15-x06"], box)
     # Take-profit cashes out at +10c; the reserve wants 3c once 70% is at risk.
     st = _held_long(price=0.40)
-    (a,) = registry.BOTS["g09-take-profit"].step(_view(mk("nba", start=live), _book(0.49, 0.51), 0.50,
+    (a,) = registry.ALL_BOTS["g09-take-profit"].step(_view(mk("nba", start=live), _book(0.49, 0.51), 0.50,
                                                        live=True, held=100.0), st)
     assert a.tag == "lock"
     v = jump(mk("nba", start=live))
     v.cash = 200.0
-    assert registry.BOTS["g11-reserve"].step(v, {}) == []
+    assert registry.ALL_BOTS["g11-reserve"].step(v, {}) == []
 
 
 def test_fifteen_all_sports_bots_and_live_copies_act_on_their_own_data():
@@ -1160,22 +1160,22 @@ def test_fifteen_all_sports_bots_and_live_copies_act_on_their_own_data():
     assert sorted(cases) == sorted(b.key for b in allsports.ALL15)
     for key, make in cases.items():
         for k in (key, f"Live_{key}"):
-            if k not in registry.BOTS:    # a paused Live_ copy
+            if k not in registry.ALL_BOTS:    # a paused Live_ copy
                 continue
-            bot = type(registry.BOTS[k])()          # fresh memory
+            bot = type(registry.ALL_BOTS[k])()          # fresh memory
             st, acts = {}, []
             for v in make(bot):
                 acts = bot.step(v, st)
             assert acts, k
     # Sizing from its own record: up today in the NBA -> $15; down -> $5.
-    (a,) = type(registry.BOTS["a01-sport-switcher"])().step(jump(stats=stats), {})
+    (a,) = type(registry.ALL_BOTS["a01-sport-switcher"])().step(jump(stats=stats), {})
     assert a.dollars == pytest.approx(15.0)
     bad = {"by_cat": {"nba": [2, 12, -40.0, 0, 6, -30.0]}, "by_hour": {}, "orders_by_hour": {}}
-    assert type(registry.BOTS["a14-win-rate-leash"])().step(jump(stats=bad), {}) == []
-    (a,) = type(registry.BOTS["a15-size-by-sport"])().step(jump(stats=bad), {})
+    assert type(registry.ALL_BOTS["a14-win-rate-leash"])().step(jump(stats=bad), {}) == []
+    (a,) = type(registry.ALL_BOTS["a15-size-by-sport"])().step(jump(stats=bad), {})
     assert a.dollars == pytest.approx(5.0)
     hours = {"by_cat": {}, "by_hour": {NOW.hour: (1, 6)}, "orders_by_hour": {}}
-    (a,) = type(registry.BOTS["a10-self-hours"])().step(jump(stats=hours), {})
+    (a,) = type(registry.ALL_BOTS["a10-self-hours"])().step(jump(stats=hours), {})
     assert a.dollars == pytest.approx(3.0)
 
 
@@ -1186,20 +1186,20 @@ def test_ten_underdog_versions_and_live_copies():
     v = _view(nba, _book(0.68, 0.69), 0.65, prev=0.67, live=True)    # underdog 33c -> 35c, offered 32c
     for b in underdog.UD_VERSIONS:
         for k in (b.key, f"Live_{b.key}"):
-            bot = registry.BOTS[k]
+            bot = registry.ALL_BOTS[k]
             vv = v if k.split("_")[-1] != "ud-jump25" else _view(nba, _book(0.70, 0.71), 0.65, prev=0.675,
                                                                  live=True)
             assert bot.wants(vv.m, vv.live) and bot.step(vv, {}), k
-    assert not registry.BOTS["ud-no-tennis"].wants(_tennis(), True)
-    assert registry.BOTS["ud-jump1"].step(_view(nba, _book(0.68, 0.69), 0.65, prev=0.66, live=True), {})
+    assert not registry.ALL_BOTS["ud-no-tennis"].wants(_tennis(), True)
+    assert registry.ALL_BOTS["ud-jump1"].step(_view(nba, _book(0.68, 0.69), 0.65, prev=0.66, live=True), {})
     # Take profit at +10c and stop at 10c, on a held long underdog bought at 30c.
-    bot = registry.BOTS["ud-tp10-sl10"]
+    bot = registry.ALL_BOTS["ud-tp10-sl10"]
     (a,) = bot.step(_view(_tennis(), _book(0.39, 0.41), 0.40, live=True, held=10.0), _held_long(10, 0.30))
     assert a.tag == "lock"
     (a,) = bot.step(_view(_tennis(), _book(0.19, 0.21), 0.20, live=True, held=10.0), _held_long(10, 0.30))
     assert a.tag == "stop"
     # Held to the end: no exit on the plain versions.
-    assert registry.BOTS["ud-2usd"].step(_view(_tennis(), _book(0.19, 0.21), 0.20, live=True, held=10.0),
+    assert registry.ALL_BOTS["ud-2usd"].step(_view(_tennis(), _book(0.19, 0.21), 0.20, live=True, held=10.0),
                                          _held_long(10, 0.30)) == []
 
 
@@ -1210,10 +1210,10 @@ def test_thirty_live_clock_bots_switch_bot_by_time_of_day():
     assert len(plans) == 30
     used = {k for p in plans for k in p}
     assert used == {k for k, _ in clock.MORNING + clock.AFTERNOON + clock.NIGHT}
-    assert all(k in registry.BOTS for k in used)
+    assert all(k in registry.ALL_BOTS for k in used)
     for b in clock.CLOCKS:
-        assert registry.BOTS[b.key] is b and b.live_sim
-    bot = registry.BOTS["Live_clock-01"]
+        assert registry.ALL_BOTS[b.key] is b and b.live_sim
+    bot = registry.ALL_BOTS["Live_clock-01"]
     m = _m(league="itfme", event="itfme-aa-bb-2026-11-19", name="A", title="A vs. B",
            teams=("A", "B"), start=NOW - timedelta(minutes=20))
     for hour, want in ((8, bot.plan["morning"]), (14, bot.plan["afternoon"]),
@@ -1230,8 +1230,8 @@ def test_best_hours_bots_buy_only_in_their_window_and_still_exit():
     import copy
     from psb import hours
     assert len(hours.HOURS) == 10
-    assert all(b.target in registry.BOTS and registry.BOTS[b.key] is b and b.live_sim for b in hours.HOURS)
-    bot = registry.BOTS["Live_hrs-19-29"]
+    assert all(b.target in registry.ALL_BOTS and registry.ALL_BOTS[b.key] is b and b.live_sim for b in hours.HOURS)
+    bot = registry.ALL_BOTS["Live_hrs-19-29"]
     assert bot.window == (10, 14)
     st0 = {"sub": {"Live_19-29": {"fair0": 0.30}}}
     at = lambda h: _view(_tennis(), _book(0.11, 0.12), 0.15, live=True, now=NOW.replace(hour=h))
@@ -1239,8 +1239,20 @@ def test_best_hours_bots_buy_only_in_their_window_and_still_exit():
     assert bot.step(at(14), copy.deepcopy(st0)) == [] and bot.step(at(20), copy.deepcopy(st0)) == []
     assert hours.in_window(23, (22, 2)) and hours.in_window(1, (22, 2)) and not hours.in_window(2, (22, 2))
     # A trailing-stop version still exits outside its window.
-    trail = registry.BOTS["Live_hrs-19-39"]
+    trail = registry.ALL_BOTS["Live_hrs-19-39"]
     st = {"sub": {"Live_19-39": _held_long(price=0.40)}}
     v = lambda h: _view(_tennis(), _book(0.24, 0.26), 0.25, live=True, held=100.0, now=NOW.replace(hour=h))
     (a,) = trail.step(v(3), st)
     assert a.tag == "stop"
+
+
+@pytest.mark.running_bots
+def test_retired_bots_are_not_run_but_the_clock_and_hours_bots_they_copy_are():
+    from psb import clock, hours, retired
+    assert retired.RETIRED and not retired.RETIRED & registry.BOTS.keys()
+    assert retired.RETIRED <= registry.ALL_BOTS.keys()
+    eng, _ = _engine()
+    assert not retired.RETIRED & eng.bots.keys()
+    for b in clock.CLOCKS:
+        assert all(k in registry.BOTS for k in b.plan.values()), b.key
+    assert all(b.target in registry.BOTS for b in hours.HOURS)
