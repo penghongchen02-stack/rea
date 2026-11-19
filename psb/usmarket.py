@@ -165,6 +165,7 @@ class Book:
     state: str | None
     last_trade: float | None
     shares_traded: float | None
+    open_interest: float | None = None
 
     @property
     def bid(self) -> float | None:
@@ -179,6 +180,12 @@ class Book:
         if side == "long":
             return self.asks
         return tuple((round(1 - p, 6), q) for p, q in self.bids)
+
+    def side_bids(self, side: str) -> tuple[tuple[float, float], ...]:
+        """Resting buyers of `side`: long bids, or long asks seen as short bids."""
+        if side == "long":
+            return self.bids
+        return tuple((round(1 - p, 6), q) for p, q in self.asks)
 
     def side_best_bid(self, side: str) -> float | None:
         """Best resting price someone already pays for `side`."""
@@ -209,7 +216,8 @@ def book(slug: str) -> Book:
 
     stats = md.get("stats") or {}
     return Book(levels(md.get("bids"), True), levels(md.get("offers"), False), md.get("state"),
-                _amount(stats.get("lastTradePx")), _amount(stats.get("sharesTraded")))
+                _amount(stats.get("lastTradePx")), _amount(stats.get("sharesTraded")),
+                _amount(stats.get("openInterest")))
 
 
 def settlement(slug: str) -> float | None:

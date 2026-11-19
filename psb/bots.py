@@ -50,6 +50,18 @@ class View:
     # today, UTC), last_results (settled P&L per market, oldest first) and
     # open_by_cat (cash at risk in unsettled markets, by sport).
     stats: dict | None = None
+    # Context the engine adds for bots that read more than one book (all optional):
+    # intl: international best bid/ask and sizes for the long side;
+    # others: latest record of each other market of the same game;
+    # market: this market's persisted record (pre-match price, live low/high...);
+    # series: recent (t, fair_long, ask_long, ask_short, shares, open_interest, mid,
+    #         intl_spread) samples, oldest first, kept in memory for ~75 minutes;
+    # learned: summaries of settled history (learn.py).
+    intl: dict | None = None
+    others: tuple = ()
+    market: dict | None = None
+    series: tuple = ()
+    learned: dict | None = None
 
     @property
     def hour(self) -> int:

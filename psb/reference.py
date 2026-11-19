@@ -206,6 +206,11 @@ def _post_json(url: str, body):
         raise FetchError(f"POST {url}: {e}") from e
 
 
+# Best international bid and ask with their sizes, by token id, from the last
+# live_mids() read: (bid, ask, bid size, ask size).
+INTL_TOP: dict[str, tuple[float | None, float | None, float, float]] = {}
+
+
 def live_mids(links: list[Link]) -> dict[str, float]:
     """Current midpoints from the international order books, keyed by token id."""
     tokens = sorted({t for t in (ln.token_id for ln in links) if t})
@@ -217,12 +222,29 @@ def live_mids(links: list[Link]) -> dict[str, float]:
         except FetchError:
             continue
         for b in books or []:
-            bids = [float(x["price"]) for x in b.get("bids") or []]
-            asks = [float(x["price"]) for x in b.get("asks") or []]
-            mid = _tight_mid(max(bids) if bids else None, min(asks) if asks else None)
+            bids = [(float(x["price"]), float(x.get("size") or 0)) for x in b.get("bids") or []]
+            asks = [(float(x["price"]), float(x.get("size") or 0)) for x in b.get("asks") or []]
+            bb = max(bids) if bids else None
+            ba = min(asks) if asks else None
+            if b.get("asset_id"):
+                INTL_TOP[b["asset_id"]] = (bb[0] if bb else None, ba[0] if ba else None,
+                                           bb[1] if bb else 0.0, ba[1] if ba else 0.0)
+            mid = _tight_mid(bb[0] if bb else None, ba[0] if ba else None)
             if mid is not None:
                 out[b["asset_id"]] = mid
     return out
+
+
+def live_top(ln: Link | None) -> dict | None:
+    """The international best bid and ask for the US long side, with sizes."""
+    t = ln.token_id if ln is not None else None
+    top = INTL_TOP.get(t) if t else None
+    if top is None or top[0] is None or top[1] is None:
+        return None
+    bid, ask, bsz, asz = top
+    if ln.complement:
+        bid, ask, bsz, asz = 1 - ask, 1 - bid, asz, bsz
+    return {"bid": bid, "ask": ask, "bid_size": bsz, "ask_size": asz, "spread": ask - bid}
 
 
 def live_fair(ln: Link, mids: dict[str, float]) -> float | None:

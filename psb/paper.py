@@ -33,7 +33,9 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import fees, livesim, reference, usmarket
+from collections import deque
+
+from . import fees, learn, livesim, reference, usmarket
 from .bots import Fill, Rest, Take, View
 from .registry import BOTS
 from .markets import category_of
@@ -56,6 +58,8 @@ DEFAULT_LEAGUES = [
 LIVE_WINDOW = timedelta(hours=8)
 POLL_GROUP = 8            # markets per group: one international read, then their US books
 PREGAME_PER_POLL = 24     # upcoming markets per poll, so live games never wait long
+LEARN_EVERY_S = 600       # how often learn.learn() re-reads settled history
+SERIES_S = 75 * 60        # seconds of per-market samples kept in memory
 MAX_FAIR_AGE = 3.0        # seconds: an older international price is not acted on
 _BOOK_POOL = ThreadPoolExecutor(max_workers=4)   # usmarket's throttle still caps the rate
 
@@ -193,6 +197,13 @@ class Engine:
         self.events: dict[str, dict | None] = {}
         self.stats = {"polls": 0, "takes": 0, "maker_fills": 0, "no_cash": 0}
         self.bots = dict(BOTS)   # the live runner narrows this to one bot
+        # Shared context some bots read (View.intl/others/market/series/learned).
+        self.latest: dict[str, dict] = {}            # slug -> last observation
+        self.by_event: dict[str, set[str]] = {}      # event slug -> slugs seen
+        self.series: dict[str, deque] = {}           # slug -> recent samples
+        self.learned: dict = {}
+        self._next_learn = 0.0
+        ledger.states.setdefault(learn.MARKET, {}).setdefault("_meta", {"since": _iso(_now())})
         if livesim.migrate_keys(ledger):
             log("renamed live-like copies to Live_19, Live_15, Live_swisstony-v2")
         for key in self.bots:   # a bot added to an existing ledger starts its own clock
@@ -281,6 +292,12 @@ class Engine:
         live_due.sort(key=lambda t: t.last_poll)
         pre_due.sort(key=lambda t: t.last_poll)
         due = live_due + pre_due[:PREGAME_PER_POLL]
+        if mono >= self._next_learn:
+            try:
+                self.learned = learn.learn(self.ledger)
+            except Exception as e:   # a summary must never stop trading
+                self.log(f"learn: {e}")
+            self._next_learn = mono + LEARN_EVERY_S
         for i in range(0, len(due), POLL_GROUP):
             self._poll_group(due[i:i + POLL_GROUP])
 
@@ -310,6 +327,7 @@ class Engine:
                     t.prev_fair_long = fair
                 continue
             live = t.m.start <= now
+            ctx = self._observe(t, bk, fair, live, now)
             for key, bot in self.bots.items():
                 if not bot.wants(t.m, live):
                     self._cancel(t.m.slug, key)
@@ -319,13 +337,48 @@ class Engine:
                 sib = self.siblings(key, t.m) if bot.one_line_per_game else 0
                 stats = self.bot_stats(key, now) if bot.needs_stats else None
                 v = View(t.m, bk, fair, t.prev_fair_long, live, now, self.ledger.bankroll,
-                         self.cash_for(key), pos.contracts if pos else 0.0, self.theta, sib, stats)
+                         self.cash_for(key), pos.contracts if pos else 0.0, self.theta, sib, stats,
+                         **ctx)
                 acts = bot.step(v, st)
                 if acts:   # remember the game and market type (see siblings())
                     st.setdefault("event", t.m.event_slug)
                     st.setdefault("kind", t.m.kind)
                 self._apply(key, bot, t, bk, fair, acts, now)
             t.prev_fair_long = fair
+
+    def _observe(self, t: "Tracked", bk, fair: float, live: bool, now: datetime) -> dict:
+        """Record this poll for the bots that read history or other markets."""
+        m = t.m
+        short = bk.side_asks("short")
+        mid = (bk.bid + bk.ask) / 2 if bk.bid is not None and bk.ask is not None else None
+        intl = reference.live_top(t.link)
+        self.latest[m.slug] = {"slug": m.slug, "kind": m.kind, "long_name": m.long_name,
+                               "line": m.line, "is_draw": m.is_draw, "fair": fair,
+                               "prev": t.prev_fair_long, "ask_long": bk.ask,
+                               "ask_short": short[0][0] if short else None, "mid": mid}
+        self.by_event.setdefault(m.event_slug, set()).add(m.slug)
+        ts = now.timestamp()
+        q = self.series.setdefault(m.slug, deque())
+        q.append((ts, fair, bk.ask, short[0][0] if short else None, bk.shares_traded,
+                  bk.open_interest, mid, intl["spread"] if intl else None))
+        while q and ts - q[0][0] > SERIES_S:
+            q.popleft()
+        rec = self.ledger.state(learn.MARKET, m.slug)
+        if not rec:
+            rec.update({"first_seen": _iso(now), "start": _iso(m.start), "league": m.league})
+        if live:
+            if "lo" not in rec:
+                rec["first_live"] = fair
+                rec["from_start"] = now - m.start <= timedelta(minutes=15)
+                rec["lo"] = rec["hi"] = fair
+            rec["lo"], rec["hi"] = min(rec["lo"], fair), max(rec["hi"], fair)
+            rec["last_live"] = _iso(now)
+        else:
+            rec["pre"] = fair
+        others = tuple(self.latest[s] for s in self.by_event[m.event_slug]
+                       if s != m.slug and s in self.latest)
+        return {"intl": intl, "others": others, "market": rec, "series": tuple(q),
+                "learned": self.learned}
 
     def siblings(self, key: str, m: usmarket.UsMarket) -> int:
         """Other lines of m's game and market type this bot has traded or rests on.

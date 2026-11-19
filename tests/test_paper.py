@@ -871,7 +871,8 @@ def test_every_live_copy_decides_exactly_like_its_paper_bot():
             ra, rb = a.step(v, sa), b.step(v, sb)
             assert ra == rb, (twin, v)
             acted += bool(rb)
-        assert acted, f"{twin}: no test view made it act"
+        if not twin.startswith("Live_n"):   # the fifty need context: see their own test
+            assert acted, f"{twin}: no test view made it act"
 
 
 def test_every_live_copy_fills_through_the_engine(monkeypatch):
@@ -888,3 +889,169 @@ def test_every_live_copy_fills_through_the_engine(monkeypatch):
         kinds = {f["kind"] for f in led.fills}
         assert kinds == {"taker", "maker"}, (twin, led.fills)
         assert all(f["contracts"] == int(f["contracts"]) for f in led.fills), twin
+
+
+# --- the fifty (n01-n50): one scenario each that must make both copies act --------
+
+def _ctx_view(m, bk, fair, prev=None, live=True, held=0.0, now=NOW, **ctx):
+    v = _view(m, bk, fair, prev=prev, live=live, held=held, now=now)
+    for k, val in ctx.items():
+        setattr(v, k, val)
+    return v
+
+
+def _lvl(*levels):
+    return tuple(levels)
+
+
+def _bk(bids, asks, last=None, traded=None, oi=None):
+    from psb.usmarket import Book
+    return Book(bids, asks, "MARKET_STATE_OPEN", last, traded, oi)
+
+
+def _ser(points, t0=None):
+    """(seconds_ago, fair_long, extra...) -> series ending at NOW."""
+    end = NOW.timestamp()
+    out = []
+    for p in points:
+        ago, f = p[0], p[1]
+        rest = list(p[2:]) + [None] * (6 - len(p[2:]))
+        out.append((end - ago, f, *rest))
+    return tuple(out)
+
+
+def _scenarios():
+    from psb.learn import band
+    live = _tennis()                                           # ATP, 30 min in
+    nba = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=30))
+    pre_t = _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B",
+               teams=("A", "B"), start=NOW + timedelta(minutes=50))
+    slug_t = lambda lg, st: _m(league=lg, event=f"{lg}-aaa-bbb-2026-11-18", name="A",
+                               title="A vs. B", teams=("A", "B"), start=st,
+                               slug=f"aec-{lg}-aaa-bbb-2026-11-18")
+    gap = _book(0.48, 0.50)                                    # long ask 50c
+    S = {}
+    S["n01-pileup"] = [(_ctx_view(nba, _bk(_lvl((0.49, 900)), _lvl((0.50, 100))), 0.53), {})]
+    S["n02-snipe"] = [(_ctx_view(nba, _bk(_lvl((0.48, 500)), _lvl((0.50, 10), (0.53, 500))), 0.53), {})]
+    S["n03-wall"] = [(_ctx_view(nba, _bk(_lvl((0.49, 2000), (0.47, 50), (0.46, 50), (0.45, 40)),
+                                          _lvl((0.50, 100))), 0.53), {})]
+    S["n04-spread-snap"] = [(_ctx_view(nba, _bk(_lvl((0.44, 100)), _lvl((0.50, 100))), 0.53), {}),
+                            (_ctx_view(nba, _bk(_lvl((0.50, 100)), _lvl((0.51, 100))), 0.54), None)]
+    S["n05-empty-shelf"] = [(_ctx_view(nba, _bk((), _lvl((0.60, 100))), 0.55), {})]
+    S["n06-deep-book"] = [(_ctx_view(nba, _bk(_lvl((0.48, 2000)), _lvl((0.50, 2000))), 0.56), {})]
+    S["n07-whale"] = [(_ctx_view(nba, _bk(_lvl((0.48, 100)), _lvl((0.50, 100)), 0.49, 1000), 0.53), {}),
+                      (_ctx_view(nba, _bk(_lvl((0.48, 100)), _lvl((0.50, 100)), 0.50, 1600), 0.53), None)]
+    S["n08-volume-spike"] = [(_ctx_view(nba, _bk(_lvl((0.46, 100)), _lvl((0.48, 100)), 0.47, 1000), 0.53), {}),
+                             (_ctx_view(nba, _bk(_lvl((0.46, 100)), _lvl((0.48, 100)), 0.47, 1010), 0.53), None),
+                             (_ctx_view(nba, _bk(_lvl((0.48, 100)), _lvl((0.50, 100)), 0.50, 1200), 0.53), None)]
+    S["n09-silence"] = [(_ctx_view(nba, _bk(_lvl((0.47, 100)), _lvl((0.49, 100)), 0.48, 1000), 0.53,
+                                   now=NOW - timedelta(minutes=12)), {}),
+                        (_ctx_view(nba, _bk(_lvl((0.47, 100)), _lvl((0.49, 100)), 0.48, 1000), 0.53,
+                                   now=NOW - timedelta(minutes=11)), None),
+                        (_ctx_view(nba, _bk(_lvl((0.48, 100)), _lvl((0.50, 100)), 0.50, 1010), 0.53), None)]
+    agg = lambda tr, lt: (_ctx_view(nba, _bk(_lvl((0.48, 100)), _lvl((0.50, 100)), lt, tr), 0.53), None)
+    S["n10-aggressive"] = [(_ctx_view(nba, _bk(_lvl((0.48, 100)), _lvl((0.50, 100)), 0.49, 100), 0.53), {}),
+                           agg(110, 0.50), agg(120, 0.50), agg(130, 0.50)]
+    S["n11-open-interest"] = [(_ctx_view(nba, _bk(_lvl((0.48, 100)), _lvl((0.50, 100)), oi=1200), 0.53,
+                                         series=_ser([(400, 0.50, None, None, None, 1000), (0, 0.53)])), {})]
+    S["n12-intl-wall"] = [(_ctx_view(nba, gap, 0.53, intl={"bid": 0.52, "ask": 0.54, "bid_size": 5000,
+                                                            "ask_size": 100, "spread": 0.02}), {})]
+    S["n13-intl-confidence"] = [(_ctx_view(nba, gap, 0.53, intl={"bid": 0.525, "ask": 0.535, "bid_size": 1,
+                                                                  "ask_size": 1, "spread": 0.01},
+                                           series=_ser([(200, 0.51, None, None, None, None, None, 0.04),
+                                                        (0, 0.53, None, None, None, None, None, 0.01)])), {})]
+    S["n14-busy-abroad"] = [(_ctx_view(nba, gap, 0.53, series=_ser(
+        [(15, 0.50, None, None, 100), (10, 0.51, None, None, 100), (5, 0.52, None, None, 100),
+         (0, 0.53, None, None, 100)])), {})]
+    spr = _m(**{**NBA_EVENT, "name": "Knicks"}, kind="spreads", line=-3.5, start=NOW - timedelta(minutes=30))
+    ml = {"kind": "moneyline", "long_name": "Knicks", "fair": 0.60, "prev": 0.55}
+    S["n15-spread-lag"] = [(_ctx_view(spr, gap, 0.53, others=(ml,)), {"mid_last": 0.49}),
+                           (_ctx_view(spr, gap, 0.53, others=(ml,)), None)]
+    epl = lambda name, draw: _m(name=name, is_draw=draw, start=NOW - timedelta(minutes=30))
+    legs = ({"kind": "moneyline", "ask_long": 0.28, "is_draw": False},
+            {"kind": "moneyline", "ask_long": 0.25, "is_draw": True})
+    S["n16-three-way"] = [(_ctx_view(epl("Fulham", False), _book(0.33, 0.35), 0.40, others=legs), {})]
+    S["n17-womens-dog"] = [(_ctx_view(slug_t("wta", NOW + timedelta(hours=1)), _book(0.65, 0.66), 0.60,
+                                      live=False), {})]
+    rec = {"from_start": True, "lo": 0.75, "hi": 0.92, "pre": 0.65, "first_live": 0.66}
+    S["n18-dominant-closer"] = [(_ctx_view(live, _book(0.87, 0.88), 0.91, market=rec), {})]
+    S["n19-competitive-dog"] = [(_ctx_view(live, _book(0.39, 0.40), 0.43,
+                                           market={"pre": 0.40, "from_start": True, "lo": 0.36, "hi": 0.50}), {})]
+    t_pre = slug_t("atp", NOW + timedelta(hours=1))
+    t_live = slug_t("atp", NOW - timedelta(minutes=10))
+    ago = lambda h: (NOW - timedelta(hours=h)).isoformat()
+    learned = {"wins": {"aaa": [(ago(5), "atp"), (ago(20), "atp")]}, "best_pre": {"aaa": 0.85},
+               "league_day": {"nba": (4, 6)}, "league_last": {"nba": [True, True, True]},
+               "long_today": {"bbb"}, "h2h": {("aaa", "bbb"): [("2026-11-10", "aaa")]},
+               "calib": {("nba", band(0.53)): (25, 40)}, "dog": {("nba", band(0.40)): (15, 25)},
+               "best_by_cat": {"nba": "s15-x06"}, "best": "s15-x06", "worst": "s14-overreaction-fade",
+               "fill_ratio": {"nba": 0.8}, "since": (NOW - timedelta(hours=5)).isoformat()}
+    S["n20-player-form"] = [(_ctx_view(t_pre, gap, 0.53, live=False, learned=learned), {})]
+    S["n21-strong-discount"] = [(_ctx_view(t_pre, gap, 0.53, live=False, learned=learned), {})]
+    nba_pre = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW + timedelta(hours=1))
+    S["n22-league-mood"] = [(_ctx_view(nba_pre, _book(0.65, 0.66), 0.60, live=False, learned=learned), {})]
+    S["n23-upset-bounce"] = [(_ctx_view(nba_pre, _book(0.58, 0.60), 0.65, live=False, learned=learned), {})]
+    S["n24-tired"] = [(_ctx_view(t_pre, gap, 0.53, live=False, learned=learned), {})]
+    S["n25-rematch"] = [(_ctx_view(t_pre, gap, 0.53, live=False, learned=learned), {})]
+    S["n26-hot-tournament"] = [(_ctx_view(t_pre, gap, 0.53, live=False, learned=learned), {})]
+    S["n27-range"] = [(_ctx_view(nba, _book(0.40, 0.41), 0.45,
+                                 series=_ser([(590, 0.60), (300, 0.44), (0, 0.45)])), {})]
+    S["n28-calm-favourite"] = [(_ctx_view(nba, _book(0.62, 0.63), 0.66,
+                                          series=_ser([(1190, 0.66), (600, 0.665), (0, 0.66)])), {})]
+    hi_rec = {"from_start": True, "first_live": 0.50, "lo": 0.48, "hi": 0.63}
+    S["n29-game-high"] = [(_ctx_view(nba, _book(0.60, 0.62), 0.62, market=hi_rec), {}),
+                          (_ctx_view(nba, _book(0.60, 0.61), 0.65, market=hi_rec), None)]
+    S["n30-second-wind"] = [(_ctx_view(nba, _book(0.60, 0.62), 0.70), {}),
+                            (_ctx_view(nba, _book(0.40, 0.42), 0.45), None),
+                            (_ctx_view(nba, _book(0.55, 0.57), 0.60), None)]
+    S["n31-fake-move"] = [(_ctx_view(nba, _book(0.58, 0.59), 0.62,
+                                     series=_ser([(110, 0.62), (60, 0.55), (0, 0.62)])), {})]
+    S["n32-kickoff-carry"] = [(_ctx_view(_m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW + timedelta(minutes=60)),
+                                         gap, 0.50, live=False), {}),
+                              (_ctx_view(_m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=2)),
+                                         gap, 0.54), None)]
+    S["n33-steam-fade"] = [(_ctx_view(pre_t, _book(0.67, 0.68), 0.64, live=False,
+                                      series=_ser([(3700, 0.56), (1800, 0.60), (0, 0.64)])), {})]
+    long_m = _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B",
+                teams=("A", "B"), start=NOW - timedelta(minutes=160))
+    S["n34-stamina"] = [(_ctx_view(long_m, _book(0.47, 0.48), 0.52, market={"pre": 0.70}), {})]
+    soon = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW + timedelta(minutes=5))
+    S["n35-pre-start-squeeze"] = [(_ctx_view(soon, _book(0.48, 0.50), 0.53, live=False,
+                                             series=_ser([(320, 0.53, 0.53, 0.50), (0, 0.53, 0.50, 0.52)])), {})]
+    S["n36-first-to-60"] = [(_ctx_view(live, _book(0.57, 0.58), 0.61,
+                                       market={"pre": 0.50, "from_start": True}), {})]
+    itf = _m(league="itfme", event="itfme-a-b-2026-11-18", name="A", title="A vs. B",
+             teams=("A", "B"), start=NOW - timedelta(minutes=30))
+    S["n37-split"] = [(_ctx_view(itf, _book(0.60, 0.61), 0.65, prev=0.63), {})]
+    S["n38-steam-chase"] = [(_ctx_view(nba_pre, gap, 0.56, live=False,
+                                       series=_ser([(1900, 0.51), (0, 0.56)])), {})]
+    S["n39-new-listing"] = [(_ctx_view(nba, gap, 0.56, learned=learned,
+                                       market={"first_seen": (NOW - timedelta(minutes=10)).isoformat()}), {})]
+    S["n40-calibration"] = [(_ctx_view(nba, gap, 0.53, learned=learned), {})]
+    S["n41-league-dog"] = [(_ctx_view(nba, _book(0.64, 0.65), 0.60, learned=learned), {})]
+    S["n42-low-fee"] = [(_ctx_view(nba, _book(0.87, 0.88), 0.90), {})]
+    S["n43-best-per-sport"] = [(_ctx_view(nba, _book(0.60, 0.61), 0.65, prev=0.63, learned=learned), {})]
+    S["n44-best-vs-worst"] = [(_ctx_view(nba, _book(0.60, 0.61), 0.65, prev=0.63, learned=learned), {})]
+    S["n45-good-fills"] = [(_ctx_view(nba, _book(0.60, 0.61), 0.65, prev=0.63, learned=learned), {})]
+    S["n46-rounding"] = [(_ctx_view(live, _book(0.40, 0.50), 0.456), {})]
+    S["n47-scale-in"] = [(_ctx_view(nba, _book(0.60, 0.61), 0.65, prev=0.63), {})]
+    S["n48-half-lock"] = [(_ctx_view(live, _book(0.44, 0.46), 0.45, held=100.0), _held_long(price=0.28))]
+    S["n49-re-entry"] = [(_ctx_view(live, _book(0.11, 0.12), 0.15), {"fair0": 0.30, "locking": True})]
+    S["n50-even-money"] = [(_ctx_view(nba, gap, 0.55), {})]
+    return S
+
+
+def test_each_of_the_fifty_and_its_live_copy_acts_in_its_scenario():
+    import copy
+    from psb import fifty
+    S = _scenarios()
+    assert sorted(S) == sorted(b.key for b in fifty.FIFTY)
+    for key, steps in S.items():
+        for k in (key, f"Live_{key}"):
+            bot, st, acts = registry.BOTS[k], None, []
+            for v, st0 in steps:
+                if st0 is not None:
+                    st = copy.deepcopy(st0)
+                assert bot.wants(v.m, v.live), (k, "does not want its market")
+                acts = bot.step(v, st)
+            assert acts, f"{k}: did not act in its scenario"
