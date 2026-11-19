@@ -763,3 +763,22 @@ def test_underdog_buys_one_dollar_when_the_underdog_jumps_in_any_live_game():
     assert not bot.wants(draw, True)
     st = {"fills_by_tag": {"entry": 3}}
     assert bot.step(_view(nba, _book(0.68, 0.69), 0.65, prev=0.67, live=True), st) == []   # 3 a game
+
+
+def test_tennis_makers_quote_only_tennis_and_prematch_bots_buy_only_before_play():
+    from psb import tennis
+    assert len(tennis.TENNIS_BOTS) == 7 and all(b.key in registry.BOTS for b in tennis.TENNIS_BOTS)
+    pre = _m(league="atp", event="atp-a-b-2026-11-18", name="A", title="A vs. B",
+             teams=("A", "B"), start=NOW + timedelta(hours=1))
+    nba = _m(**{**NBA_EVENT, "name": "Knicks"})
+    mk = registry.BOTS["tn-maker-2c"]
+    acts = mk.step(_view(pre, _book(0.50, 0.60), 0.55), {})
+    assert {(a.side, a.price) for a in acts} == {("long", 0.53), ("short", 0.43)}
+    assert mk.step(_view(nba, _book(0.50, 0.60), 0.55), {}) == []         # tennis only
+    assert not registry.BOTS["tn-maker-pre"].wants(_tennis(), True)        # before play only
+    for key in ("tn-pre-1c", "Live_tn-pre-1c"):
+        b = registry.BOTS[key]
+        assert not b.wants(_tennis(), True) and b.wants(pre, False)
+        (a,) = b.step(_view(pre, _book(0.48, 0.50), 0.55), {})            # 5c under fair
+        assert a.side == "long" and a.tag == "entry"
+    assert registry.BOTS["tn-pre-2c"].step(_view(pre, _book(0.53, 0.54), 0.55), {}) == []
