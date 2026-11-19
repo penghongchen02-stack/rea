@@ -1224,3 +1224,23 @@ def test_thirty_live_clock_bots_switch_bot_by_time_of_day():
     st = {}
     v = _view(m, _book(0.60, 0.61), 0.65, prev=0.63, live=True, now=NOW.replace(hour=20))
     assert bot.step(v, st) and st["via"] == bot.plan["night"]
+
+
+def test_best_hours_bots_buy_only_in_their_window_and_still_exit():
+    import copy
+    from psb import hours
+    assert len(hours.HOURS) == 10
+    assert all(b.target in registry.BOTS and registry.BOTS[b.key] is b and b.live_sim for b in hours.HOURS)
+    bot = registry.BOTS["Live_hrs-19-29"]
+    assert bot.window == (10, 14)
+    st0 = {"sub": {"Live_19-29": {"fair0": 0.30}}}
+    at = lambda h: _view(_tennis(), _book(0.11, 0.12), 0.15, live=True, now=NOW.replace(hour=h))
+    assert bot.step(at(10), copy.deepcopy(st0)) and bot.step(at(13), copy.deepcopy(st0))
+    assert bot.step(at(14), copy.deepcopy(st0)) == [] and bot.step(at(20), copy.deepcopy(st0)) == []
+    assert hours.in_window(23, (22, 2)) and hours.in_window(1, (22, 2)) and not hours.in_window(2, (22, 2))
+    # A trailing-stop version still exits outside its window.
+    trail = registry.BOTS["Live_hrs-19-39"]
+    st = {"sub": {"Live_19-39": _held_long(price=0.40)}}
+    v = lambda h: _view(_tennis(), _book(0.24, 0.26), 0.25, live=True, held=100.0, now=NOW.replace(hour=h))
+    (a,) = trail.step(v(3), st)
+    assert a.tag == "stop"
