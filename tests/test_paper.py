@@ -1222,11 +1222,14 @@ def test_thirty_live_clock_bots_switch_bot_by_time_of_day():
         assert bot.choose(v, {}) == want
         if want is None:
             assert bot.step(v, {}) == []
-    # At night it trades other sports as its night #15 version would on a 2c jump.
+    # Every clock bot has a night bot of its own, so no two trade alike at night.
+    assert len({b.plan["night"] for b in clock.CLOCKS}) == 30
+    # At night it hands other sports to its own night bot.
     nba = _m(**{**NBA_EVENT, "name": "Knicks"}, start=NOW - timedelta(minutes=30))
-    st = {}
     v = _view(nba, _book(0.60, 0.61), 0.65, prev=0.63, live=True, now=NOW.replace(hour=20))
-    assert bot.step(v, st) and st["via"] == bot.plan["night"]
+    st = {}
+    bot.step(v, st)
+    assert bot.choose(v, {}) == bot.plan["night"] == "s19-x10" and st["via"] == "s19-x10"
 
 
 def test_best_hours_bots_buy_only_in_their_window_and_still_exit():
