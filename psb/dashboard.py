@@ -6,13 +6,20 @@ bots.json     one row per original and v2 bot: totals as in the report
 games.json    one row per bot and settled market: P&L and when it settled
 fills.json    the most recent fills, with the fair value each was judged against
 ideas.json    the 50 simple bot ideas: status, rule, and totals for those that trade
+
+    python3 -m psb.dashboard --live live-results [--config live.json]
+
+live.json         the live runner, one row per mode (real money, shadow): bot, limits,
+                  last status, exposure and results
+live-orders.json  the latest orders it sent (real) or would have sent (shadow)
 Each file is {"rows": [...], "meta": [...]}; meta carries this script so a
-reader can see how every number was made. Paper only: nothing here trades.
+reader can see how every number was made. Nothing here trades.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from .bots import FIXED, ORIGINALS
@@ -131,11 +138,109 @@ def fill_rows(led: Ledger) -> list[dict]:
     return rows
 
 
+# --- the live runner (psb.live) ------------------------------------------------
+# Its state stays on the machine it runs on (live-results/ is git-ignored), so
+# these files are written next to it and attached to the dashboard by hand.
+
+LIVE_MODES = (("real", "Real money", "ledger.json", "orders.jsonl"),
+              ("shadow", "Shadow (no orders sent)", "shadow-ledger.json", "shadow-orders.jsonl"))
+RECENT_ORDERS = 200
+_START = re.compile(r"^(\S+) (ARMED: REAL MONEY|SHADOW: no orders sent); bot (\S+); .*?"
+                    r"(?:; not armed because: (.*))?$")
+_STATS = re.compile(r"^(\S+) stats (\{.*\}) open_orders=(\d+) exposure=\$(-?[\d.]+)$")
+_HALT = re.compile(r"^(\S+) HALT: (.*)$")
+
+
+def _read_log(path: Path) -> dict[str, dict]:
+    """Per mode: the latest start, stats and halt lines of live.log."""
+    seen: dict[str, dict] = {}
+    mode = None
+    if not path.exists():
+        return seen
+    for line in path.read_text().splitlines():
+        if m := _START.match(line):
+            mode = "real" if m[2].startswith("ARMED") else "shadow"
+            seen[mode] = {"started": m[1], "last_seen": m[1], "bot": m[3],
+                          "not_armed_because": m[4], "halted": None}
+        elif mode and (m := _STATS.match(line)):
+            s = json.loads(m[2])
+            seen[mode].update(last_seen=m[1], open_orders=int(m[3]), exposure=float(m[4]),
+                              polls=s.get("polls"), no_cash=s.get("no_cash"))
+        elif mode and (m := _HALT.match(line)):
+            seen[mode].update(last_seen=m[1], halted=m[2])
+    return seen
+
+
+def live_rows(state: Path, config: dict | None) -> list[dict]:
+    """One row per mode: whether it has run, its bot, limits and results."""
+    seen = _read_log(state / "live.log")
+    limits = (config or {}).get("limits") or {}
+    rows = []
+    for mode, label, ledger_name, _ in LIVE_MODES:
+        s = seen.get(mode, {})
+        row = {"mode": label, "has_run": bool(s), "bot": s.get("bot"),
+               "started": s.get("started"), "last_seen": s.get("last_seen"),
+               "halted": s.get("halted"), "not_armed_because": s.get("not_armed_because"),
+               "exposure": s.get("exposure"), "open_orders": s.get("open_orders"),
+               "polls": s.get("polls"), "no_cash": s.get("no_cash"),
+               "max_order_usd": limits.get("max_order_usd"),
+               "max_exposure_usd": limits.get("max_exposure_usd"),
+               "max_daily_loss_usd": limits.get("max_daily_loss_usd"),
+               "config_armed": (config or {}).get("armed"), "config_bot": (config or {}).get("bot")}
+        totals = {}
+        if s.get("bot") and (state / ledger_name).exists():
+            led = Ledger.load(state / ledger_name, 1000.0)
+            totals = bot_rows(led, [s["bot"]])[0]
+        for k in ("settled_pnl", "equity", "fees", "taker_fills", "maker_fills", "markets",
+                  "open", "settled_markets", "won_markets", "cash_free"):
+            row[k] = totals.get(k)
+        rows.append(row)
+    return rows
+
+
+def live_order_rows(state: Path) -> list[dict]:
+    """The latest orders the runner sent (real) or would have sent (shadow), newest first."""
+    rows = []
+    for mode, label, _, orders_name in LIVE_MODES:
+        path = state / orders_name
+        if not path.exists():
+            continue
+        for line in path.read_text().splitlines():
+            if not line.strip():
+                continue
+            o = json.loads(line)
+            rows.append({"t": o["t"], "mode": label, "sent": o.get("sent", False),
+                         "bot": o["bot"], "market": o["slug"], "kind": o["kind"],
+                         "side": o["side"], "price": o["price"], "contracts": o["contracts"],
+                         "dollars": round(o["contracts"] * o["price"], 2), "tag": o.get("tag"),
+                         "order_id": o.get("order_id")})
+    rows.sort(key=lambda r: r["t"], reverse=True)
+    return [dict(r, id=i) for i, r in enumerate(rows[:RECENT_ORDERS])]
+
+
+def export_live(state: Path, config_path: Path, out: Path, code: str) -> None:
+    config = json.loads(config_path.read_text()) if config_path.exists() else None
+    meta = [{"label": "dashboard.py", "value": code, "type": "code", "lang": "python"},
+            {"label": "Input", "value": f"{state.name}/live.log, ledger.json, shadow-ledger.json, "
+                                        f"orders.jsonl, shadow-orders.jsonl and {config_path.name}"}]
+    out.mkdir(parents=True, exist_ok=True)
+    for name, rows in (("live", live_rows(state, config)), ("live-orders", live_order_rows(state))):
+        (out / f"{name}.json").write_text(json.dumps({"rows": rows, "meta": meta}))
+        print(f"{out / name}.json: {len(rows)} rows")
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--ledger", default="paper-results/ledger.json")
     ap.add_argument("--out", default="paper-results/dashboard")
+    ap.add_argument("--live", metavar="DIR", help="instead export the live runner's state in DIR "
+                    "(e.g. live-results) to DIR/dashboard: live.json and live-orders.json")
+    ap.add_argument("--config", default="live.json", help="with --live: the runner's config")
     a = ap.parse_args(argv)
+    if a.live:
+        state = Path(a.live)
+        export_live(state, Path(a.config), state / "dashboard", Path(__file__).read_text())
+        return
     led = Ledger.load(Path(a.ledger), 1000.0)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
