@@ -244,3 +244,29 @@ def test_dropped_market_cancels_its_real_orders(tmp_path, monkeypatch):
     eng.leagues = ["epl"]
     eng.discover()
     assert eng.live == {} and ex.orders["o1"]["state"] == "ORDER_STATE_CANCELED"
+
+
+# --- every running Live_ bot can be the live bot ---------------------------------
+
+from psb import registry  # noqa: E402
+
+LIVE_KEYS = sorted(k for k in registry.BOTS if k.startswith("Live_"))
+
+
+def test_there_are_live_bots_to_choose_from():
+    assert len(LIVE_KEYS) > 100
+
+
+@pytest.mark.running_bots
+@pytest.mark.parametrize("key", LIVE_KEYS)
+def test_each_running_live_bot_loads_from_the_config_and_sends_capped_orders(tmp_path, key):
+    cfg_path = tmp_path / "live.json"
+    cfg_path.write_text(json.dumps({"armed": False, "bot": key}))
+    assert live.LiveConfig.load(cfg_path).bot == key
+    eng, led, ex = _engine(tmp_path, live.Limits(max_order_usd=5), key=key)
+    ex.take_fill = (10, 0.45)
+    eng._apply(key, eng.bots[key], paper.Tracked(_m(), None), _book(0.40, 0.45), 0.6,
+               [bots.Take("long", 25.0, 0.46, "entry")], NOW)
+    (body,) = ex.sent()
+    assert body["quantity"] == 10 and body["tif"] == "TIME_IN_FORCE_IMMEDIATE_OR_CANCEL"
+    assert led.fills[-1]["bot"] == key and led.fills[-1]["contracts"] == 10
