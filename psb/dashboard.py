@@ -4,6 +4,9 @@
 
 bots.json     one row per original and v2 bot: totals as in the report
 all-bots.json one row per bot in the registry, running or taken off, with its group
+bot-info.json what each bot is: title, what it does, markets it trades
+holdings.json what each bot holds now in unsettled markets, and its resting orders
+bot-fills.json the latest 40 fills of every bot
 games.json    one row per bot and settled market: P&L and when it settled
 fills.json    the most recent fills, with the fair value each was judged against
 ideas.json    the 50 simple bot ideas: status, rule, and totals for those that trade
@@ -105,6 +108,82 @@ def all_bot_rows(led: Ledger) -> list[dict]:
     """Every bot the paper run has: the running ones first, then those taken off."""
     keys = list(BOTS) + [k for k in ALL_BOTS if k not in BOTS]
     return [{k: v for k, v in r.items() if k not in ("family", "version")} for r in bot_rows(led, keys)]
+
+
+BOT_FILLS = 40    # latest fills kept per bot for the bot detail panel
+
+
+def _about(bot) -> str:
+    """The first paragraph of the nearest docstring the bot's class (or a base) has."""
+    for cls in type(bot).__mro__:
+        if cls.__name__ in ("Bot", "object"):
+            break
+        doc = (cls.__doc__ or "").strip()
+        if doc and not doc.startswith(cls.__name__ + "("):   # dataclass default docstring
+            return " ".join(doc.split("\n\n")[0].split())
+    return ""
+
+
+def bot_info_rows() -> list[dict]:
+    """What each bot is: its title, what it does, and what it trades."""
+    rows = []
+    for key in list(BOTS) + [k for k in ALL_BOTS if k not in BOTS]:
+        b = ALL_BOTS[key]
+        rows.append({
+            "bot": key, "group": GROUP_OF.get(key, "Other"), "running": key in BOTS,
+            "title": getattr(b, "title", "") or key, "about": _about(b),
+            "markets": ", ".join(b.kinds), "live": b.trades_live, "pregame": b.trades_pregame,
+            "max_per_market_pct": round(b.max_market_frac * 100, 1),
+        })
+    return rows
+
+
+def holding_rows(led: Ledger) -> list[dict]:
+    """What each bot holds now (open positions in unsettled markets) and its resting orders."""
+    rows = []
+    started = {}
+    for f in led.fills:
+        started.setdefault((f["bot"], f["slug"]), f["t"])
+    for key, ms in led.positions.items():
+        for slug, p in ms.items():
+            if slug in led.settled or abs(p.contracts) < 1e-9:
+                continue
+            n = abs(p.contracts)
+            side = "long" if p.contracts > 0 else "short"
+            # Average price paid per contract of the side held, fees included.
+            avg = -p.cash / n if side == "long" else 1 - p.cash / n
+            mark = led.marks.get(slug)
+            rows.append({
+                "bot": key, "what": "holding", "market": slug, "side": side,
+                "contracts": round(n, 2), "price": round(avg, 4),
+                "now": None if mark is None else round(mark if side == "long" else 1 - mark, 4),
+                "open_pnl": None if mark is None else round(p.cash + p.contracts * mark, 2),
+                "since": started.get((key, slug)),
+            })
+    for o in led.orders:
+        rows.append({"bot": o.bot, "what": "resting order", "market": o.slug, "side": o.side,
+                     "contracts": round(o.contracts, 2), "price": round(o.price, 4), "now": None,
+                     "open_pnl": None, "since": o.placed_at})
+    rows.sort(key=lambda r: (r["bot"], r["what"], r["since"] or ""))
+    return [dict(r, id=i) for i, r in enumerate(rows)]
+
+
+def bot_fill_rows(led: Ledger) -> list[dict]:
+    """The latest BOT_FILLS fills of every bot, newest first."""
+    kept: dict[str, list] = {}
+    for i in range(len(led.fills) - 1, -1, -1):
+        f = led.fills[i]
+        got = kept.setdefault(f["bot"], [])
+        if len(got) < BOT_FILLS:
+            got.append((i, f))
+    rows = []
+    for key in sorted(kept):
+        for i, f in kept[key]:
+            rows.append({"id": i, "t": f["t"], "bot": f["bot"], "market": f["slug"],
+                         "side": f["side"], "price": f["price"], "contracts": f["contracts"],
+                         "dollars": round(f["contracts"] * f["price"], 2), "fee": f["fee"],
+                         "how": f["kind"], "tag": f["tag"]})
+    return rows
 
 
 def idea_rows(led: Ledger) -> list[dict]:
@@ -271,7 +350,9 @@ def main(argv=None) -> None:
             {"label": "Input", "value": "paper-results/ledger.json (paper only, no real orders)"},
             {"label": "Paper bankroll per bot", "value": f"${led.bankroll:,.0f}"}]
     for name, rows in (("bots", bot_rows(led)), ("all-bots", all_bot_rows(led)), ("games", game_rows(led)),
-                       ("fills", fill_rows(led)), ("ideas", idea_rows(led))):
+                       ("fills", fill_rows(led)), ("ideas", idea_rows(led)),
+                       ("bot-info", bot_info_rows()), ("holdings", holding_rows(led)),
+                       ("bot-fills", bot_fill_rows(led))):
         (out / f"{name}.json").write_text(json.dumps({"rows": rows, "meta": meta}))
         print(f"{out / name}.json: {len(rows)} rows")
 

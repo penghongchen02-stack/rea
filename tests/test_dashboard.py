@@ -83,3 +83,31 @@ def test_all_bot_rows_cover_the_registry_with_groups():
     assert not by["ferrarichampions2026"]["running"]           # taken off on Nov 19
     assert all(r["group"] != "Other" for r in rows)
     assert "version" not in by[BOT]
+
+
+def test_bot_detail_rows_holdings_resting_orders_and_fills():
+    led = paper.Ledger(bankroll=1000.0, started_at="2026-11-17T00:00:00Z")
+    led.record(BOT, "nba-a-b", "long", 0.40, 10, 0.0, "taker", "t", 0.45, NOW)       # open, marked
+    led.record(BOT, "nba-c-d", "short", 0.30, 5, 0.0, "taker", "t", None, NOW)       # open short
+    led.record(BOT, "nba-e-f", "long", 0.50, 2, 0.0, "taker", "t", None, NOW)        # settled
+    led.settled["nba-e-f"] = 1.0
+    led.marks["nba-a-b"] = 0.55
+    led.orders.append(paper.Order(BOT, "nba-g-h", "long", 0.2, 3, "probe", "2026-11-17T12:05:00Z", None))
+    rows = {(r["what"], r["market"]): r for r in dashboard.holding_rows(led)}
+    assert set(rows) == {("holding", "nba-a-b"), ("holding", "nba-c-d"), ("resting order", "nba-g-h")}
+    a = rows["holding", "nba-a-b"]
+    assert (a["side"], a["contracts"], a["price"], a["now"], a["open_pnl"]) == ("long", 10, 0.4, 0.55, 1.5)
+    c = rows["holding", "nba-c-d"]
+    assert (c["side"], c["contracts"], c["price"], c["now"], c["open_pnl"]) == ("short", 5, 0.3, None, None)
+    for i in range(45):
+        led.record("s01-us-intl-lag", "nba-x-y", "long", 0.5, 1, 0.0, "taker", f"n{i}", None, NOW)
+    fills = [r for r in dashboard.bot_fill_rows(led) if r["bot"] == "s01-us-intl-lag"]
+    assert len(fills) == dashboard.BOT_FILLS and fills[0]["tag"] == "n44"          # newest first
+
+
+@pytest.mark.running_bots
+def test_bot_info_says_what_each_bot_does():
+    rows = {r["bot"]: r for r in dashboard.bot_info_rows()}
+    assert set(rows) == set(dashboard.ALL_BOTS)
+    assert rows["s19-tennis-set-fade"]["about"].startswith("Live tennis")
+    assert rows[BOT]["title"] and rows[BOT]["markets"]
