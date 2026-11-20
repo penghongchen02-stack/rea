@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper Bot Desk</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --panel: #ffffff; --border: #e3e2de; --fg: #1d1d1b; --muted: #6b6a66;
+    --up: #1a7f4b; --down: #c4322b; --chip: #efeeea; --focus: #1d1d1b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1b1b1a; --panel: #242423; --border: #363634; --fg: #ecebe7; --muted: #a3a29d;
+            --up: #4cc787; --down: #ff6b61; --chip: #2f2f2d; --focus: #ecebe7; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; display: flex; flex-direction: column; gap: 28px; }
+  h1 { font-size: 26px; margin: 0; font-weight: 650; }
+  h2 { font-size: 18px; margin: 0 0 10px; font-weight: 650; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .pill { display: inline-block; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--up); color: var(--up); }
+  .take { font-size: 17px; margin: 6px 0 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; text-align: left; color: inherit; font: inherit; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  button.card { cursor: pointer; }
+  button.card:hover { border-color: var(--muted); }
+  button:focus-visible, select:focus-visible, tr:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .name { font-weight: 650; overflow-wrap: anywhere; }
+  .big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; padding: 0 6px; margin-right: 4px; border-radius: 4px; background: var(--chip); color: var(--muted); font-size: 12px; letter-spacing: .03em; text-transform: uppercase; }
+  .badge.ok { color: var(--up); } .badge.real { color: var(--down); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  select, .btn { font: inherit; font-size: 14px; color: var(--fg); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; }
+  .btn { cursor: pointer; }
+  .scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); }
+  th.l, td.l { text-align: left; }
+  tbody tr:last-child td { border-bottom: 0; }
+  #bots tbody tr { cursor: pointer; }
+  #bots tbody tr:hover td, #bots tbody tr.sel td { background: var(--chip); }
+  .tag { display: inline-block; padding: 0 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); }
+  .tag.on { border-color: var(--up); color: var(--up); }
+  #detail { display: flex; flex-direction: column; gap: 14px; }
+  #detail[hidden] { display: none; }
+  .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .head h2 { margin: 0 auto 0 0; overflow-wrap: anywhere; }
+  .err { color: var(--down); }
+  footer { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="pill">Paper trading · no real orders</span>
+    <h1>Paper Bot Desk</h1>
+    <p class="take" id="take">Loading…</p>
+    <p class="muted small" id="source"></p>
+  </header>
+
+  <section>
+    <h2>Paper bots by group</h2>
+    <div class="grid" id="groups"></div>
+  </section>
+
+  <section>
+    <h2>Live bot on Polymarket US</h2>
+    <div class="grid" id="live"></div>
+    <p class="muted small" id="limits"></p>
+    <p class="muted small" id="why"></p>
+  </section>
+
+  <section>
+    <h2>Latest live orders</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Time (UTC)</th><th class="l">Mode</th><th class="l">Sent</th><th class="l">Market</th><th class="l">Type</th><th class="l">Side</th><th>Price</th><th>Contracts</th><th>Amount</th></tr></thead>
+        <tbody id="orders"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Every bot</h2>
+    <div class="controls">
+      <select id="group-filter" aria-label="Group"><option value="">All groups</option></select>
+      <select id="status-filter" aria-label="Status">
+        <option value="running">Running</option>
+        <option value="off">Taken off</option>
+        <option value="all">Running and taken off</option>
+      </select>
+      <span class="muted small">Pick a bot to see what it does, what it holds and what it traded.</span>
+    </div>
+    <div class="scroll">
+      <table id="bots">
+        <thead><tr><th class="l">Bot</th><th class="l">Group</th><th class="l">Status</th><th>Settled P&amp;L</th><th>Equity</th><th>Fees</th><th>Taker</th><th>Maker</th><th>Settled</th><th>Won</th><th>Open</th><th>Cash free</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="detail" hidden>
+    <div class="head">
+      <h2 id="d-name"></h2>
+      <select id="d-pick" aria-label="Bot"></select>
+      <button class="btn" id="d-close" type="button">Close</button>
+    </div>
+    <div>
+      <div class="name" id="d-title"></div>
+      <p id="d-about"></p>
+      <p class="muted small" id="d-facts"></p>
+    </div>
+    <div class="grid" id="d-stats"></div>
+    <div>
+      <h2>What it holds now</h2>
+      <p class="muted small">Open bets in unsettled markets and orders waiting on the book. Paid is the average price per contract, fees included; Now is the current US mid for that side.</p>
+      <div class="scroll"><table>
+        <thead><tr><th class="l">What</th><th class="l">Market</th><th class="l">Side</th><th>Contracts</th><th>Paid / limit</th><th>Now</th><th>Open P&amp;L</th><th>Since (UTC)</th></tr></thead>
+        <tbody id="d-holdings"></tbody>
+      </table></div>
+    </div>
+    <div>
+      <h2>Latest trades</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>Time (UTC)</th><th class="l">Market</th><th class="l">Side</th><th>Price</th><th>Contracts</th><th>Amount</th><th>Fee</th><th class="l">How</th><th class="l">Leg</th></tr></thead>
+        <tbody id="d-fills"></tbody>
+      </table></div>
+    </div>
+    <div>
+      <h2>Recent settled games</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>Settled (UTC)</th><th class="l">Market</th><th class="l">Sport</th><th>P&amp;L</th><th>Fees</th></tr></thead>
+        <tbody id="d-games"></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const money = (v) => v == null || isNaN(v) ? '—' : (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const signed = (v) => v == null || isNaN(v) ? '—' : (v > 0 ? '+' : '') + money(v);
+const cls = (v) => v == null ? '' : v > 0.005 ? 'up' : v < -0.005 ? 'down' : '';
+const when = (s) => {
+  if (!s) return '—';
+  const d = new Date(s);
+  return d.toLocaleString('en-US', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC'});
+};
+const el = (tag, text, className) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (className) e.className = className; return e; };
+const td = (tr, text, className) => tr.appendChild(el('td', text, className));
+const fix = (v, n) => v == null ? '—' : Number(v).toFixed(n);
+
+let data = null;
+let selected = null;
+
+function card(parent, {name, big, bigCls, meta, onClick}) {
+  const c = el(onClick ? 'button' : 'div', null, 'card');
+  if (onClick) { c.type = 'button'; c.addEventListener('click', onClick); }
+  c.appendChild(el('div', name, 'name'));
+  c.appendChild(el('div', big, 'big ' + (bigCls || '')));
+  for (const m of meta || []) c.appendChild(m);
+  parent.appendChild(c);
+  return c;
+}
+
+function meta(parts) {
+  const m = el('div', null, 'meta');
+  for (const p of parts) m.appendChild(typeof p === 'string' ? document.createTextNode(p) : p);
+  return m;
+}
+
+function render() {
+  const d = data;
+  const f = d.fleet;
+  const lead = d.bots.filter((b) => b.running).sort((a, b) => b.settled_pnl - a.settled_pnl)[0];
+  const take = $('take');
+  take.replaceChildren(el('b', String(f.up)), document.createTextNode(` of ${f.running} running bots are up on settled games, `),
+    el('b', signed(f.pnl), cls(f.pnl)), document.createTextNode(' between them.'));
+  if (lead) take.append(' ', el('span', lead.bot), document.createTextNode(' leads with '), el('b', signed(lead.settled_pnl), cls(lead.settled_pnl)), '.');
+  $('source').textContent = `Paper results through ${when(d.paper_through)} UTC, from ${d.paper_source}. $1,000 paper bankroll per bot. Updates every minute.`;
+
+  // Groups
+  const g = $('groups');
+  g.replaceChildren();
+  for (const r of d.groups) {
+    card(g, {name: r.group, big: signed(r.pnl), bigCls: cls(r.pnl),
+      meta: [meta([`${r.bots} bots · `, el('span', String(r.up), 'up'), ' up / ', el('span', String(r.down), 'down'), ' down'])],
+      onClick: () => { $('group-filter').value = r.group; $('status-filter').value = 'running'; renderBots(); $('bots').scrollIntoView({behavior: 'smooth', block: 'start'}); }});
+  }
+
+  // Live
+  const lv = $('live');
+  lv.replaceChildren();
+  const a = d.account;
+  if (a) {
+    if (a.connected) {
+      card(lv, {name: 'Your Polymarket US account', big: money(a.buying_power),
+        meta: [meta([el('span', 'Keys work', 'badge ok'), ` available to trade · ${money(a.cash)} cash · ${a.open_orders} open orders`]),
+               meta([`Checked ${when(a.checked_at)} UTC`])]});
+    } else {
+      card(lv, {name: 'Your Polymarket US account', big: 'Not connected', bigCls: 'down',
+        meta: [meta([el('span', 'Keys failed', 'badge real'), ' ' + (a.error || '')]), meta([`Checked ${when(a.checked_at)} UTC`])]});
+    }
+  } else {
+    card(lv, {name: 'Your Polymarket US account', big: 'Not checked',
+      meta: [meta(['Run: open ~/psb/scripts/check_account.command'])]});
+  }
+  d.live.forEach((r, i) => {
+    const real = i === 0;
+    if (!r.has_run) {
+      card(lv, {name: real ? 'Real money' : 'Shadow', big: 'Not run yet',
+        meta: [meta([el('span', real ? 'Not armed' : 'Shadow', 'badge'), real ? ' no real orders have been sent' : ''])]});
+      return;
+    }
+    const m = [meta([el('span', real ? 'Real money' : 'Shadow', 'badge' + (real ? ' real' : '')),
+      ` ${money(r.exposure)} at risk · ${(r.taker_fills || 0) + (r.maker_fills || 0)} fills · ${r.settled_markets ?? 0} settled · ${r.won_markets ?? 0} won`]),
+      meta([`Updated ${when(r.last_seen)} UTC`])];
+    if (r.halted) m.push(meta([el('span', 'Stopped itself: ' + r.halted, 'down')]));
+    card(lv, {name: `${r.bot}, ${real ? 'real money' : 'shadow'}`, big: signed(r.settled_pnl), bigCls: cls(r.settled_pnl), meta: m});
+  });
+  const L = d.live[0] || {};
+  $('limits').textContent = `Safety limits in live.json: ${money(L.max_order_usd)} per order, ${money(L.max_exposure_usd)} at risk in total, and a stop for the day after a ${money(L.max_daily_loss_usd)} loss.`;
+  const why = d.live[1] && d.live[1].not_armed_because;
+  $('why').textContent = why ? `The last shadow run did not trade for real because: ${why}.` : '';
+
+  const ob = $('orders');
+  ob.replaceChildren();
+  if (!d.live_orders.length) { const tr = ob.insertRow(); const c = td(tr, 'No orders yet, real or shadow.', 'l muted'); c.colSpan = 9; }
+  for (const o of d.live_orders) {
+    const tr = ob.insertRow();
+    td(tr, when(o.t)); td(tr, o.mode, 'l'); td(tr, o.sent ? 'Yes' : 'No', 'l'); td(tr, o.market, 'l');
+    td(tr, o.kind, 'l'); td(tr, o.side, 'l'); td(tr, fix(o.price, 2)); td(tr, String(o.contracts)); td(tr, money(o.dollars));
+  }
+
+  // Group filter choices
+  const gf = $('group-filter');
+  const keep = gf.value;
+  gf.replaceChildren(new Option('All groups', ''), ...[...new Set(d.bots.map((b) => b.group))].sort().map((x) => new Option(x, x)));
+  gf.value = keep;
+  renderBots();
+  $('foot').textContent = `Last refreshed ${new Date().toLocaleTimeString()}. Paper money only; nothing on this page trades.`;
+}
+
+function renderBots() {
+  const status = $('status-filter').value, group = $('group-filter').value;
+  const rows = data.bots
+    .filter((b) => status === 'all' || (status === 'running') === b.running)
+    .filter((b) => !group || b.group === group)
+    .sort((a, b) => b.settled_pnl - a.settled_pnl);
+  const tb = $('bots').tBodies[0];
+  tb.replaceChildren();
+  for (const b of rows) {
+    const tr = tb.insertRow();
+    tr.tabIndex = 0;
+    tr.dataset.bot = b.bot;
+    if (b.bot === selected) tr.className = 'sel';
+    td(tr, b.bot, 'l'); td(tr, b.group, 'l');
+    td(tr, null, 'l').appendChild(el('span', b.running ? 'running' : 'taken off', 'tag' + (b.running ? ' on' : '')));
+    td(tr, signed(b.settled_pnl), cls(b.settled_pnl)); td(tr, money(b.equity)); td(tr, money(b.fees));
+    td(tr, String(b.taker_fills)); td(tr, String(b.maker_fills)); td(tr, String(b.settled_markets));
+    td(tr, String(b.won_markets)); td(tr, String(b.open)); td(tr, money(b.cash_free));
+  }
+  // Bot picker in the detail panel
+  const pick = $('d-pick');
+  pick.replaceChildren(...data.bots.filter((b) => b.running || b.bot === selected).map((b) => b.bot).sort().map((k) => new Option(k, k)));
+  if (selected) pick.value = selected;
+}
+
+async function openBot(key, scroll = true) {
+  selected = key;
+  for (const tr of $('bots').tBodies[0].rows) tr.classList.toggle('sel', tr.dataset.bot === key);
+  const det = $('detail');
+  det.hidden = false;
+  $('d-name').textContent = key;
+  $('d-pick').value = key;
+  if (scroll) det.scrollIntoView({behavior: 'smooth', block: 'start'});
+  let b;
+  try {
+    const r = await fetch('/api/bot?key=' + encodeURIComponent(key));
+    b = await r.json();
+    if (!r.ok) throw new Error(b.error || r.status);
+  } catch (e) {
+    $('d-about').replaceChildren(el('span', 'Failed to load: ' + e.message, 'err'));
+    return;
+  }
+  if (selected !== key) return;
+  const i = b.info, s = b.bot;
+  $('d-title').textContent = i.title && i.title !== key ? i.title : '';
+  $('d-about').textContent = i.about || 'No description recorded for this bot.';
+  $('d-facts').textContent = `${i.group} · ${i.running ? 'running' : 'taken off on Nov 19'} · trades ${i.markets} markets · live games: ${i.live ? 'yes' : 'no'} · before games: ${i.pregame ? 'yes' : 'no'} · at most ${i.max_per_market_pct}% of bankroll per market`;
+  const st = $('d-stats');
+  st.replaceChildren();
+  card(st, {name: 'Settled P&L', big: signed(s.settled_pnl), bigCls: cls(s.settled_pnl), meta: [meta([`${s.settled_markets} settled · ${s.won_markets} won`])]});
+  card(st, {name: 'Equity', big: money(s.equity), meta: [meta(['from a $1,000 paper bankroll, open bets at the US mid'])]});
+  card(st, {name: 'Open bets', big: String(s.open), meta: [meta([`${money(s.cash_free)} cash free`])]});
+  card(st, {name: 'Trades', big: String(s.taker_fills + s.maker_fills), meta: [meta([`${s.taker_fills} taker · ${s.maker_fills} maker · ${money(s.fees)} fees`])]});
+
+  const fill = (id, rows, cells, empty, cols) => {
+    const tb = $(id);
+    tb.replaceChildren();
+    if (!rows.length) { const c = td(tb.insertRow(), empty, 'l muted'); c.colSpan = cols; return; }
+    for (const r of rows) cells(tb.insertRow(), r);
+  };
+  fill('d-holdings', b.holdings, (tr, r) => {
+    td(tr, r.what, 'l'); td(tr, r.market, 'l'); td(tr, r.side, 'l'); td(tr, String(r.contracts));
+    td(tr, fix(r.price, 3)); td(tr, fix(r.now, 3)); td(tr, r.open_pnl == null ? '—' : signed(r.open_pnl), cls(r.open_pnl)); td(tr, when(r.since));
+  }, 'Nothing open right now.', 8);
+  fill('d-fills', b.fills, (tr, r) => {
+    td(tr, when(r.t)); td(tr, r.market, 'l'); td(tr, r.side, 'l'); td(tr, fix(r.price, 3)); td(tr, String(r.contracts));
+    td(tr, money(r.dollars)); td(tr, money(r.fee)); td(tr, r.how, 'l'); td(tr, r.tag, 'l');
+  }, 'No trades yet.', 9);
+  fill('d-games', b.games, (tr, r) => {
+    td(tr, when(r.settled_at)); td(tr, r.market, 'l'); td(tr, r.sport, 'l'); td(tr, signed(r.pnl), cls(r.pnl)); td(tr, money(r.fees));
+  }, 'No settled games yet.', 5);
+}
+
+async function load() {
+  try {
+    const r = await fetch('/api/summary');
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    data = d;
+    render();
+    if (selected && !$('detail').hidden) openBot(selected, false);
+  } catch (e) {
+    $('take').replaceChildren(el('span', 'Could not load the data: ' + e.message + '. Is python3 -m psb.serve still running?', 'err'));
+  }
+}
+
+$('group-filter').addEventListener('change', renderBots);
+$('status-filter').addEventListener('change', renderBots);
+$('bots').tBodies[0].addEventListener('click', (e) => { const tr = e.target.closest('tr[data-bot]'); if (tr) openBot(tr.dataset.bot); });
+$('bots').tBodies[0].addEventListener('keydown', (e) => { if (e.key === 'Enter') { const tr = e.target.closest('tr[data-bot]'); if (tr) openBot(tr.dataset.bot); } });
+$('d-pick').addEventListener('change', (e) => openBot(e.target.value, false));
+$('d-close').addEventListener('click', () => { $('detail').hidden = true; selected = null; renderBots(); });
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
