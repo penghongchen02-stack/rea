@@ -3,6 +3,7 @@
     python3 -m psb.dashboard [--ledger paper-results/ledger.json] [--out paper-results/dashboard]
 
 bots.json     one row per original and v2 bot: totals as in the report
+all-bots.json one row per bot in the registry, running or taken off, with its group
 games.json    one row per bot and settled market: P&L and when it settled
 fills.json    the most recent fills, with the fair value each was judged against
 ideas.json    the 50 simple bot ideas: status, rule, and totals for those that trade
@@ -22,8 +23,9 @@ import json
 import re
 from pathlib import Path
 
+from . import registry
 from .bots import FIXED, ORIGINALS
-from .registry import BOTS
+from .registry import ALL_BOTS, BOTS
 from .simple_bots import IDEAS
 from .markets import category_of
 from .paper import Ledger, _entry_long_px, paired_cost
@@ -31,6 +33,19 @@ from .paper import Ledger, _entry_long_px, paired_cost
 RECENT_FILLS = 300
 FIXED_KEYS = {b.key for b in FIXED}
 IDEA_KEYS = {i.key for i in IDEAS if i.key}
+
+
+# Which registry group each bot comes from, as a short label for the dashboard.
+GROUPS = (("ORIGINALS", "Copied wallets"), ("FIXED", "Copied wallets"), ("RUNNING", "Simple ideas (s01-s50)"),
+          ("VARIANTS", "Variants of #19, #15, swisstony"), ("EXITS", "#19 profit locks"),
+          ("LIVE19", "Live_19 versions"), ("CLOCKS", "Live_ clock bots"), ("HOURS", "Live_ best-hours bots"),
+          ("TWINS", "Live_ copies"), ("UNDERDOG", "Underdog"), ("UD_VERSIONS", "Underdog"),
+          ("TENNIS_BOTS", "Tennis"), ("IDEAS6", "Six more ideas"), ("FIFTY", "Fifty more (n01-n50)"),
+          ("GAPS", "Gaps (g01-g12)"), ("ALL15", "All-sports (a01-a15)"))
+GROUP_OF: dict[str, str] = {}
+for _name, _label in GROUPS:
+    for _b in getattr(registry, _name):
+        GROUP_OF.setdefault(_b.key, _label)
 
 
 def _family(key: str) -> str:
@@ -73,6 +88,7 @@ def bot_rows(led: Ledger, keys=None) -> list[dict]:
         rows.append({
             "bot": key, "family": _family(key),
             "version": "v2" if key in FIXED_KEYS else "original",
+            "group": GROUP_OF.get(key, "Other"), "running": key in BOTS,
             # Ledgers from before per-bot start times: only the originals existed.
             "since": led.bot_started.get(key) or (None if key in FIXED_KEYS else led.started_at),
             "settled_pnl": round(settled_pnl, 2), "equity": round(equity, 2),
@@ -83,6 +99,12 @@ def bot_rows(led: Ledger, keys=None) -> list[dict]:
             "avg_pair_cost": round(sum(pcs) / len(pcs), 4) if pcs else None,
         })
     return rows
+
+
+def all_bot_rows(led: Ledger) -> list[dict]:
+    """Every bot the paper run has: the running ones first, then those taken off."""
+    keys = list(BOTS) + [k for k in ALL_BOTS if k not in BOTS]
+    return [{k: v for k, v in r.items() if k not in ("family", "version")} for r in bot_rows(led, keys)]
 
 
 def idea_rows(led: Ledger) -> list[dict]:
@@ -248,8 +270,8 @@ def main(argv=None) -> None:
     meta = [{"label": "dashboard.py", "value": code, "type": "code", "lang": "python"},
             {"label": "Input", "value": "paper-results/ledger.json (paper only, no real orders)"},
             {"label": "Paper bankroll per bot", "value": f"${led.bankroll:,.0f}"}]
-    for name, rows in (("bots", bot_rows(led)), ("games", game_rows(led)), ("fills", fill_rows(led)),
-                       ("ideas", idea_rows(led))):
+    for name, rows in (("bots", bot_rows(led)), ("all-bots", all_bot_rows(led)), ("games", game_rows(led)),
+                       ("fills", fill_rows(led)), ("ideas", idea_rows(led))):
         (out / f"{name}.json").write_text(json.dumps({"rows": rows, "meta": meta}))
         print(f"{out / name}.json: {len(rows)} rows")
 

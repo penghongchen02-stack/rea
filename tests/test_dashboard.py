@@ -1,6 +1,8 @@
 """Dashboard export of the live runner's state. No test touches the network."""
 import json
 
+import pytest
+
 from psb import dashboard, paper
 from tests.test_paper import NOW
 
@@ -65,3 +67,19 @@ def test_live_orders_newest_first_and_export(tmp_path):
     out = json.loads((state / "dashboard" / "live.json").read_text())
     assert len(out["rows"]) == 2 and out["meta"][0]["label"] == "dashboard.py"
     assert len(json.loads((state / "dashboard" / "live-orders.json").read_text())["rows"]) == 2
+
+
+@pytest.mark.running_bots
+def test_all_bot_rows_cover_the_registry_with_groups():
+    led = paper.Ledger(bankroll=1000.0, started_at="2026-11-17T00:00:00Z")
+    led.record(BOT, "nba-a-b", "long", 0.40, 10, 0.1, "taker", "t", 0.45, NOW)
+    led.settled["nba-a-b"] = 1.0
+    rows = dashboard.all_bot_rows(led)
+    assert [r["bot"] for r in rows] == list(dashboard.BOTS) + [
+        k for k in dashboard.ALL_BOTS if k not in dashboard.BOTS]
+    by = {r["bot"]: r for r in rows}
+    assert by[BOT]["running"] and by[BOT]["settled_pnl"] == 5.9
+    assert by["ferrarichampions2026"]["group"] == "Copied wallets"
+    assert not by["ferrarichampions2026"]["running"]           # taken off on Nov 19
+    assert all(r["group"] != "Other" for r in rows)
+    assert "version" not in by[BOT]
