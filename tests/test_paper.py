@@ -1296,13 +1296,13 @@ def test_live19_versions_sized_by_money_or_contracts():
     assert a.dollars == pytest.approx(10.0)                 # shrinks after losses
 
 
-def test_live19_44_bets_ten_dollars_of_every_hundred_it_has():
+def test_live19_44_bets_25_dollars_whatever_its_cash():
     bot = registry.ALL_BOTS["Live_19-44"]
     st = {"fair0": 0.30}
-    for cash, want in ((100.0, 10.0), (1000.0, 100.0), (2500.0, 250.0)):
+    for cash in (400.0, 1000.0, 2500.0):
         v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True, cash=cash)
         (a,) = bot.step(v, dict(st))
-        assert a.dollars == pytest.approx(want)
+        assert a.dollars == pytest.approx(25.0)
 
 
 def test_profit_guard_cashes_out_at_half_of_a_100_dollar_gain():
