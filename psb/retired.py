@@ -136,4 +136,10 @@ IDLE = (
     "n33-steam-fade",
 )
 
-RETIRED = frozenset(LOSING + IDLE)
+# Taken off on 2026-11-21 at about 17:15 UTC at the user's request.
+LOSING_NOV21 = (
+    "n27-range",          # -929 settled over 319, $64 left of $1,000
+    "Live_tn-maker-1c",   # -493 settled over 299
+)
+
+RETIRED = frozenset(LOSING + IDLE + LOSING_NOV21)
