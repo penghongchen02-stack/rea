@@ -7,11 +7,10 @@ from __future__ import annotations
 
 import json
 import re
-import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from .polydata import GAMMA_API, TRANSIENT, USER_AGENT, FetchError, get_json
+from .polydata import GAMMA_API, TRANSIENT, FetchError, get_json, request
 from .usmarket import UsMarket
 
 CLOB_API = "https://clob.polymarket.com"
@@ -195,12 +194,12 @@ def gamma_fair(ln: Link) -> float | None:
 
 
 def _post_json(url: str, body):
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
-                                 headers={"Content-Type": "application/json",
-                                          "User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.load(resp)
+        status, data = request("POST", url, json.dumps(body).encode(),
+                               {"Content-Type": "application/json"}, timeout=30)
+        if not 200 <= status < 300:
+            raise FetchError(f"POST {url}: HTTP {status}")
+        return json.loads(data)
     except TRANSIENT as e:
         raise FetchError(f"POST {url}: {e}") from e
 

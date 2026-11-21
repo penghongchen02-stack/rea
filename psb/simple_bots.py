@@ -18,6 +18,7 @@ from datetime import datetime
 
 from . import fees
 from .bots import SIDES, Bot, Rest, Take, View, other
+from .markets import category_of
 
 
 @dataclass(frozen=True)
@@ -305,6 +306,18 @@ class S19TennisSetFade(Simple):
     live_only = True
     drop = 0.15
     edge = 0.01            # minimum edge after the fee
+
+    def fast_watch(self, m, st):
+        # Only after a normal poll has recorded the first price (fair0), and while
+        # an entry is still allowed.
+        if self.cats is not None and category_of(m.event_slug) not in self.cats:
+            return False
+        if not st or st.get("fair0") is None:
+            return False
+        return (st.get("fills_by_tag") or {}).get("entry", 0) < self.max_entries
+
+    def fast_signal(self, fair_long, st):
+        return abs(fair_long - st["fair0"]) >= self.drop - EPS
 
     def pick(self, v, st):
         f0 = st.get("fair0")

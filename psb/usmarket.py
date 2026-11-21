@@ -13,23 +13,33 @@ from datetime import datetime
 from .polydata import FetchError, get_json
 
 GATEWAY = "https://gateway.polymarket.us"
-# Docs: 25 requests/s shared per IP. Stay well under it.
-_MIN_INTERVAL = 1 / 12
-_lock = threading.Lock()
-_last = 0.0
+
+
+class Throttle:
+    """At most `rate` requests per second through this lane."""
+
+    def __init__(self, rate: float):
+        self.interval, self._lock, self._last = 1 / rate, threading.Lock(), 0.0
+
+    def wait(self) -> None:
+        with self._lock:
+            wait = self._last + self.interval - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            self._last = time.monotonic()
+
+
+# Docs: 25 requests/s shared per IP. The main polling lane and the fast lane
+# (paper.Engine.fast_lane) together stay under it: 12 + 8 = 20.
+LANES = {"main": Throttle(12), "fast": Throttle(8)}
 
 # Lower-level periods (halves, quarters, sets, maps) are left out: the bots
 # trade full-game lines only.
 _PARTIAL = re.compile(r"half|quarter|period|inning|set_\d|_set|map_\d|game_\d|first|1st|2nd|3rd")
 
 
-def _get(path: str, params=None):
-    global _last
-    with _lock:
-        wait = _last + _MIN_INTERVAL - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        _last = time.monotonic()
+def _get(path: str, params=None, lane: str = "main"):
+    LANES[lane].wait()
     return get_json(f"{GATEWAY}{path}", params)
 
 
@@ -203,8 +213,8 @@ def _amount(x) -> float | None:
         return None
 
 
-def book(slug: str) -> Book:
-    md = _get(f"/v1/markets/{slug}/book").get("marketData") or {}
+def book(slug: str, lane: str = "main") -> Book:
+    md = _get(f"/v1/markets/{slug}/book", lane=lane).get("marketData") or {}
 
     def levels(raw, reverse):
         lv = []

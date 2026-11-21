@@ -128,6 +128,21 @@ def _active(bot) -> bool:
 LIVE19 = tuple(b for b in (_make(*s) for s in SPECS) if _active(b))
 
 
+def _fast(num: int):
+    """A copy of Live_19-<num> that also uses the engine's fast lane: the same
+    rules and sizes, checked about every second instead of every poll round."""
+    base = next(b for b in LIVE19 if b.key == f"Live_19-{num:02d}")
+    desc = base.title.split(": ", 1)[1]
+    cls = type(f"{type(base).__name__}_Fast", (type(base),),
+               {"key": f"{base.key}-fast", "title": f"{base.key}-fast: {desc}, fast lane",
+                "fast_lane": True})
+    return cls()
+
+
+# Added 2026-11-21 to test faster checks against Live_19-29 on the same matches.
+LIVE19 = LIVE19 + (_fast(29),)
+
+
 def report(led) -> str:
     from .dashboard import bot_rows
     from .livesim import counts
@@ -141,7 +156,7 @@ def report(led) -> str:
     for r in ranked:
         c = counts(led, r["bot"])
         title = next(b.title for b in LIVE19 if b.key == r["bot"]).split(": ", 1)[1]
-        out.append(f"| {r['bot'][-2:]} | {title} | {r['equity'] - led.bankroll:+,.2f} "
+        out.append(f"| {r['bot'].removeprefix('Live_19-')} | {title} | {r['equity'] - led.bankroll:+,.2f} "
                    f"| {r['settled_pnl']:+,.2f} | {r['won_markets']}/{r['settled_markets']} | {r['open']} "
                    f"| {c.get('orders', 0)} | {c.get('missed', 0)} |")
     return "\n".join(out)

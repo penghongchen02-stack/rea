@@ -139,6 +139,15 @@ class Bot:
     trades_pregame: bool = True
     kinds: tuple[str, ...] = ("moneyline",)
     max_market_frac: float = 0.10   # per-market cap as a share of bankroll
+    fast_lane: bool = False         # also checked between normal polls (Engine.fast_lane)
+
+    def fast_watch(self, m: UsMarket, st: dict | None) -> bool:
+        """Fast lane: is this live market worth a quick international read?"""
+        return False
+
+    def fast_signal(self, fair_long: float, st: dict) -> bool:
+        """Fast lane: does this fresh international price call for reading the US book?"""
+        return False
 
     @property
     def rules_key(self) -> str:

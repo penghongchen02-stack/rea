@@ -555,7 +555,7 @@ def test_poll_reads_live_games_first_and_never_acts_on_a_stale_price(monkeypatch
     order = []
     monkeypatch.setattr(paper, "_now", lambda: NOW)
     monkeypatch.setattr(paper.reference, "live_mids", lambda links: {"t0": 0.6})
-    monkeypatch.setattr(paper.usmarket, "book", lambda slug: order.append(slug) or _book(0.5, 0.52))
+    monkeypatch.setattr(paper.usmarket, "book", lambda slug, lane="main": order.append(slug) or _book(0.5, 0.52))
     monkeypatch.setattr(paper.livesim.time, "sleep", lambda s: None)
     eng.poll(5, 60)
     assert order[0] == "live"                                   # live first
@@ -609,18 +609,18 @@ def test_live_like_copy_misses_a_price_that_is_gone_when_its_order_arrives(monke
     monkeypatch.setattr(livesim.time, "sleep", lambda s: None)
     monkeypatch.setattr(livesim, "SHARE_READ_S", 0.0)   # each order below is sent separately
     # The 12c offer is gone when the order arrives: nothing fills.
-    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.30, 0.40))
+    monkeypatch.setattr(livesim.usmarket, "book", lambda slug, lane="main": _book(0.30, 0.40))
     eng._apply("Live_19", bot, t, _book(0.10, 0.12), 0.20,
                [bots.Take("long", 10.0, 0.15, "entry")], NOW)
     c = livesim.counts(led, "Live_19")
     assert led.fills == [] and c["missed"] == 1 and c["missed_price_gone"] == 1
     # Still there: whole contracts, the bot's own $10 size, half the shown size.
-    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.10, 0.12, qty=200))
+    monkeypatch.setattr(livesim.usmarket, "book", lambda slug, lane="main": _book(0.10, 0.12, qty=200))
     eng._apply("Live_19", bot, t, _book(0.10, 0.12), 0.20,
                [bots.Take("long", 10.0, 0.15, "entry")], NOW)
     assert [f["contracts"] for f in led.fills] == [66]          # $10 / 0.15 = 66, half of 200 shown
     # One contract shown: half rounds to none, counted as lost to competition.
-    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.10, 0.12, qty=1))
+    monkeypatch.setattr(livesim.usmarket, "book", lambda slug, lane="main": _book(0.10, 0.12, qty=1))
     eng._apply("Live_19", bot, t, _book(0.10, 0.12), 0.20,
                [bots.Take("long", 10.0, 0.15, "entry")], NOW)
     assert livesim.counts(led, "Live_19")["missed_competition"] == 1
@@ -696,7 +696,7 @@ def test_copies_ordering_one_market_together_share_one_fresh_read(monkeypatch):
     t = paper.Tracked(m, None)
     reads = []
     monkeypatch.setattr(livesim.usmarket, "book",
-                        lambda slug: reads.append(slug) or _book(0.10, 0.12, qty=200))
+                        lambda slug, lane="main": reads.append(slug) or _book(0.10, 0.12, qty=200))
     for key in ("Live_19", "Live_19-00", "Live_19-10"):
         eng._apply(key, registry.ALL_BOTS[key], t, _book(0.10, 0.12), 0.20,
                    [bots.Take("long", 10.0, 0.15, "entry")], NOW)
@@ -711,7 +711,7 @@ def test_forty_live19_versions_and_a_control_with_their_own_settings():
     from psb import livesim
     keys = [b.key for b in live19.LIVE19]
     assert len(keys) == len(set(keys)) and all(k in registry.ALL_BOTS for k in keys)
-    assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 45
+    assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 46   # 45 + Live_19-29-fast
     assert all(registry.ALL_BOTS[k].live_sim for k in keys)
     st = {"fair0": 0.30}
     v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True)         # 15c fall to a 12c ask
@@ -882,7 +882,7 @@ def test_every_live_copy_decides_exactly_like_its_paper_bot():
 
 def test_every_live_copy_fills_through_the_engine(monkeypatch):
     from psb import livesim
-    monkeypatch.setattr(livesim.usmarket, "book", lambda slug: _book(0.29, 0.30, qty=400))
+    monkeypatch.setattr(livesim.usmarket, "book", lambda slug, lane="main": _book(0.29, 0.30, qty=400))
     for twin in livesim.BASE_OF:
         eng, led = _engine()
         t = paper.Tracked(_tennis(), None)
@@ -1071,7 +1071,7 @@ def test_a_bot_that_errors_is_taken_off_and_the_others_keep_trading(monkeypatch)
     eng.markets[m.slug] = paper.Tracked(m, link)
     monkeypatch.setattr(paper, "_now", lambda: NOW)
     monkeypatch.setattr(paper.reference, "live_mids", lambda links: {"t0": 0.6})
-    monkeypatch.setattr(paper.usmarket, "book", lambda slug: _book(0.5, 0.52))
+    monkeypatch.setattr(paper.usmarket, "book", lambda slug, lane="main": _book(0.5, 0.52))
     broken = registry.ALL_BOTS["n50-even-money"]
     monkeypatch.setattr(type(broken), "step", lambda self, v, st: 1 / 0)
     eng.poll(5, 60)
@@ -1264,21 +1264,62 @@ def test_retired_bots_are_not_run_but_the_clock_and_hours_bots_they_copy_are():
     assert all(b.target in registry.BOTS for b in hours.HOURS)
 
 
+class _FakeConn:
+    """Stands in for a kept-open HTTPS connection: replies from a script."""
+
+    def __init__(self, script, calls):
+        self.script, self.calls = script, calls
+
+    def request(self, method, path, body=None, headers=None):
+        self.calls.append((method, path))
+        step = self.script.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        self._reply = step
+
+    def getresponse(self):
+        status, data = self._reply
+
+        class R:
+            will_close = False
+
+            def read(self):
+                return data
+        r = R()
+        r.status = status
+        return r
+
+    def close(self):
+        pass
+
+
 def test_a_connection_reset_while_reading_is_retried_then_reported(monkeypatch):
     from psb import polydata
     calls = []
-
-    def reset(req, timeout):
-        calls.append(1)
-        raise ConnectionResetError(104, "Connection reset by peer")
-    monkeypatch.setattr(polydata.urllib.request, "urlopen", reset)
+    reset = ConnectionResetError(104, "Connection reset by peer")
+    monkeypatch.setattr(polydata, "_connection",
+                        lambda host, timeout: _FakeConn([reset] * 20, calls))
     monkeypatch.setattr(polydata.time, "sleep", lambda s: None)
     with pytest.raises(polydata.FetchError):
         polydata.get_json("https://example.invalid/x", retries=2)
-    assert len(calls) == 3
-    monkeypatch.setattr(reference.urllib.request, "urlopen", reset)
+    assert len(calls) == 6   # 3 tries, each also retried once on a fresh connection
     with pytest.raises(polydata.FetchError):
         reference._post_json("https://example.invalid/y", {})
+
+
+def test_a_stale_kept_open_connection_is_replaced_and_errors_keep_their_meaning(monkeypatch):
+    from psb import polydata
+    calls = []
+    script = [ConnectionResetError(104, "stale"), (200, b'{"ok": 1}'),
+              (404, b"no"), (503, b"busy"), (200, b"[1]")]
+    monkeypatch.setattr(polydata, "_connection", lambda host, timeout: _FakeConn(script, calls))
+    monkeypatch.setattr(polydata.time, "sleep", lambda s: None)
+    assert polydata.get_json("https://example.invalid/a", [("q", "1")]) == {"ok": 1}
+    assert calls[-1] == ("GET", "/a?q=1")
+    with pytest.raises(polydata.FetchError, match="404"):   # 4xx: no retry
+        polydata.get_json("https://example.invalid/b")
+    assert polydata.get_json("https://example.invalid/c") == [1]   # 5xx: retried
+    assert len(calls) == 5
 
 
 def test_live19_versions_sized_by_money_or_contracts():
@@ -1316,3 +1357,44 @@ def test_profit_guard_cashes_out_at_half_of_a_100_dollar_gain():
     (a,) = hold(0.34, 0.36, 0.35)           # up $62.50: half of the best, cash out
     assert (a.side, a.tag) == ("short", "lock") and a.dollars / a.limit == pytest.approx(n)
     assert st["locking"] is True
+
+
+def test_fast_lane_lets_only_the_fast_copy_act_on_a_drop_between_polls(monkeypatch):
+    from psb import livesim
+    eng, led = _engine()
+    eng.bots = {k: registry.ALL_BOTS[k] for k in ("Live_19-29", "Live_19-29-fast")}
+    t = paper.Tracked(_tennis(), object())
+    eng.markets[t.m.slug] = t
+    for k in eng.bots:   # a normal poll already saw the match at 30c
+        led.state(k, t.m.slug)["fair0"] = 0.30
+    lanes = []
+
+    def book(slug, lane="main"):
+        lanes.append(lane)
+        return _book(0.11, 0.12, qty=400)
+    monkeypatch.setattr(paper.usmarket, "book", book)
+    monkeypatch.setattr(livesim.usmarket, "book", book)
+    monkeypatch.setattr(paper.reference, "live_top", lambda ln: None)
+    monkeypatch.setattr(paper.reference, "live_mids", lambda links: {})
+    fair = [0.25]   # only a 5c fall: no signal, so no US book read
+    monkeypatch.setattr(paper.reference, "live_fair", lambda ln, mids: fair[0])
+    eng.fast_lane()
+    assert lanes == [] and not led.fills
+    fair[0] = 0.15   # a 15c fall seen between normal polls
+    eng.fast_lane()
+    assert {f["bot"] for f in led.fills} == {"Live_19-29-fast"}
+    assert set(lanes) == {"fast"} and eng.lane == "main"
+    assert eng.series == {} and t.prev_fair_long is None   # nothing shared recorded
+    n = len(lanes)
+    eng.fast_lane()   # the one entry is made: the market is no longer watched
+    assert len(lanes) == n
+
+
+def test_fast_copy_is_live_19_29_with_the_fast_lane_only():
+    a, b = registry.ALL_BOTS["Live_19-29"], registry.ALL_BOTS["Live_19-29-fast"]
+    assert b.fast_lane and not a.fast_lane and b.key in registry.BOTS
+    assert (a.max_entries, a.clip, a.drop, a.edge, a.rules_key) == \
+        (b.max_entries, b.clip, b.drop, b.edge, b.rules_key)
+    st = {"fair0": 0.30}
+    v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True)
+    assert a.step(v, dict(st)) == b.step(v, dict(st))

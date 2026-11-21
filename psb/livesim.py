@@ -47,7 +47,7 @@ def _arrival_book(engine, slug: str):
     mono = time.monotonic()
     if hit is not None and mono - hit[0] < SHARE_READ_S:
         return hit[1]
-    bk = usmarket.book(slug)
+    bk = usmarket.book(slug, lane=getattr(engine, "lane", "main"))
     cache[slug] = (mono, bk)
     return bk
 

@@ -55,7 +55,7 @@ def main() -> None:
     tmp.write_bytes(gzip.compress(json.dumps(gone).encode(), 9))
     tmp.replace(archive)
     tmp = ledger.with_suffix(".tmp")
-    tmp.write_text(json.dumps(keep))
+    tmp.write_text(json.dumps(keep, separators=(",", ":")))
     tmp.replace(ledger)
     bots = set(gone["positions"]) | set(gone["states"]) | {f["bot"] for f in gone["fills"]}
     print(f"archived {len(bots)} removed bots, {len(gone['fills'])} bets -> {archive}; "

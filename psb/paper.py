@@ -70,6 +70,7 @@ STATS_CACHE_S = 30.0      # seconds a bot's own results (bot_stats) are reused
 LEARN_EVERY_S = 600       # how often learn.learn() re-reads settled history
 SERIES_S = 75 * 60        # seconds of per-market samples kept in memory
 MAX_FAIR_AGE = 3.0        # seconds: an older international price is not acted on
+FAST_LANE_S = 1.0         # seconds between the fast lane's international reads
 _BOOK_POOL = ThreadPoolExecutor(max_workers=4)   # usmarket's throttle still caps the rate
 
 
@@ -231,6 +232,8 @@ class Engine:
         self._next_learn = 0.0
         self.removed: dict[str, str] = {}             # bots taken off this run, and why
         self._stats_cache: dict[str, tuple[float, dict]] = {}
+        self._next_fast = 0.0
+        self.lane = "main"   # US request lane for reads made now (livesim's arrival reads)
         ledger.states.setdefault(learn.MARKET, {}).setdefault("_meta", {"since": _iso(_now())})
         if livesim.migrate_keys(ledger):
             log("renamed live-like copies to Live_19, Live_15, Live_swisstony-v2")
@@ -329,6 +332,72 @@ class Engine:
             self._next_learn = mono + LEARN_EVERY_S
         for i in range(0, len(due), POLL_GROUP):
             self._poll_group(due[i:i + POLL_GROUP])
+            self.maybe_fast()
+
+    # -- fast lane -----------------------------------------------------------
+    def maybe_fast(self) -> None:
+        mono = time.monotonic()
+        if mono >= self._next_fast:
+            self._next_fast = mono + FAST_LANE_S
+            self.fast_lane()
+
+    def fast_lane(self) -> None:
+        """Bots with fast_lane also act between normal polls: every FAST_LANE_S, one
+        international read covers the live markets they watch, and only a market
+        whose fresh price gives a signal costs a US book read, on its own request
+        lane so the other bots' polling keeps its pace. Only those bots act on it,
+        and nothing shared is recorded (series, first-live prices, resting fills),
+        so every other bot sees exactly what it would without the fast lane."""
+        fast = {k: b for k, b in self.bots.items() if b.fast_lane}
+        if not fast:
+            return
+        now = _now()
+        watch = []
+        for t in self.markets.values():
+            if t.link is None or t.m.start > now:
+                continue
+            keys = [k for k, b in fast.items()
+                    if allowed(b, t.m) and b.wants(t.m, True)
+                    and b.fast_watch(t.m, self.ledger.states.get(k, {}).get(t.m.slug))]
+            if keys:
+                watch.append((t, keys))
+        if not watch:
+            return
+        mids = reference.live_mids([t.link for t, _ in watch])
+        read_at = time.monotonic()
+        self.stats["fast_reads"] = self.stats.get("fast_reads", 0) + 1
+        for t, keys in watch:
+            fair = reference.live_fair(t.link, mids)
+            if fair is None:
+                continue
+            keys = [k for k in keys if fast[k].fast_signal(fair, self.ledger.state(k, t.m.slug))]
+            if not keys:
+                continue
+            try:
+                bk = usmarket.book(t.m.slug, lane="fast")
+            except Exception as e:
+                self.log(f"fast book {t.m.slug}: {e}")
+                continue
+            self.stats["fast_books"] = self.stats.get("fast_books", 0) + 1
+            if time.monotonic() - read_at > MAX_FAIR_AGE:
+                self.stats["stale"] = self.stats.get("stale", 0) + 1
+                return   # the rest of this read is older still
+            if bk.state not in (None, "MARKET_STATE_OPEN"):
+                continue
+            rec = self.ledger.states.get(learn.MARKET, {}).get(t.m.slug) or {}
+            ctx = {"intl": reference.live_top(t.link), "others": (), "market": dict(rec),
+                   "series": tuple(self.series.get(t.m.slug, ())), "learned": self.learned}
+            self.lane = "fast"
+            try:
+                for key in keys:
+                    try:
+                        self._step_bot(key, fast[key], t, bk, fair, True, _now(), ctx)
+                    except Exception as e:   # one broken bot must not stop the others
+                        self.bots.pop(key, None)
+                        self.removed[key] = f"{type(e).__name__}: {e}"
+                        self.log(f"removed bot {key} for this run: {type(e).__name__}: {e}")
+            finally:
+                self.lane = "main"
 
     def _poll_group(self, group: list[Tracked]) -> None:
         mids = reference.live_mids([t.link for t in group])
@@ -674,7 +743,10 @@ def main(argv=None):
                 led.save(path)
                 log(f"stats {json.dumps(eng.stats)} resting={len(led.orders)}")
                 next_save = mono + 120
-            time.sleep(1.0)
+            pause_end = time.monotonic() + 1.0
+            while time.monotonic() < pause_end and not stop:
+                eng.maybe_fast()
+                time.sleep(min(0.2, max(0.0, pause_end - time.monotonic())))
     n = eng.settle()
     led.save(path)
     log(f"final settle {n}; stats {json.dumps(eng.stats)}")
