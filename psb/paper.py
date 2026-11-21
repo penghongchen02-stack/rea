@@ -148,8 +148,25 @@ class Ledger:
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(asdict(self)))
+        tmp.write_text(json.dumps(asdict(self), separators=(",", ":")))
         tmp.replace(path)
+
+    def drop_dead_state(self) -> int:
+        """Forget bots' scan state on settled markets they never traded.
+
+        A settled market never trades again, and only traded markets' state is
+        read afterwards (rule check, paired cost, first-fill hour, siblings).
+        Bot-wide keys such as "_market" and "_livesim" are not market slugs."""
+        n = 0
+        for bot, ms in self.states.items():
+            if bot.startswith("_"):
+                continue
+            held = self.positions.get(bot, {})
+            dead = [s for s in ms if s in self.settled and s not in held]
+            for s in dead:
+                del ms[s]
+            n += len(dead)
+        return n
 
     def position(self, bot: str, slug: str) -> Position:
         return self.positions.setdefault(bot, {}).setdefault(slug, Position())
@@ -551,6 +568,7 @@ class Engine:
                 self.ledger.settled[slug] = px
                 self.ledger.settled_at[slug] = _iso(_now())
                 n += 1
+        self.ledger.drop_dead_state()
         return n
 
 
