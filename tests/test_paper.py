@@ -1400,11 +1400,11 @@ def test_fast_copy_is_live_19_29_with_the_fast_lane_only():
     assert a.step(v, dict(st)) == b.step(v, dict(st))
 
 
-def test_live_50_25_is_live_50_with_25_dollar_bets():
+def test_live_50_25_is_live_50_with_one_25_dollar_bet_per_match():
     a, b = registry.ALL_BOTS["Live_50"], registry.ALL_BOTS["Live_50-25"]
     assert b.key in registry.BOTS and b.live_sim and isinstance(b, type(a))
     assert (a.clip, a.max_entries, a.max_market_frac) == (10.0, 3, 0.03)
-    assert (b.clip, b.max_entries, b.max_market_frac) == (25.0, 3, 0.075)
+    assert (b.clip, b.max_entries, b.max_market_frac) == (25.0, 1, 0.025)
     assert a.rules_key == b.rules_key and a.members == b.members
 
 

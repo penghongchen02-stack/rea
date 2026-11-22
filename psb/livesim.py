@@ -94,12 +94,12 @@ PAUSED = frozenset({
     "Live_n49-re-entry", "Live_n48-half-lock",
 })
 TWINS = tuple(b for b in TWINS if b.key not in PAUSED)
-# Added 2026-11-22 at the user's request: Live_50 with $25 bets instead of $10,
-# still up to 3 per match (so up to $75 a match). Not in BASE_OF: its sizes differ
-# from the paper #50, so it is compared with Live_50 instead.
+# Added 2026-11-22 at the user's request: Live_50 with one $25 bet per match
+# instead of up to three $10 bets. Not in BASE_OF: its sizes differ from the
+# paper #50, so it is compared with Live_50 instead.
 _LIVE50_25 = type("LiveSim_Live_50_25", (type(next(b for b in TWINS if b.key == "Live_50")),),
-                  {"key": "Live_50-25", "title": "Live_50-25: Live_50 with flat $25 bets",
-                   "clip": 25.0, "max_market_frac": 0.075})
+                  {"key": "Live_50-25", "title": "Live_50-25: Live_50 with 1 bet of $25 per match",
+                   "clip": 25.0, "max_entries": 1, "max_market_frac": 0.025})
 TWINS = TWINS + (_LIVE50_25(),)
 BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
            "Live_swisstony-v2": "swisstony-v2", "Live_19-lock70": "s19-lock70",
