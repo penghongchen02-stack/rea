@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 
 from .exits import ProfitLock
-from .simple_bots import S19TennisSetFade
+from .simple_bots import EPS, S19TennisSetFade
 from .variants import TENNIS_ESPORTS, _AllSports
 
 TRAIL = {"trail_rise": 0.25, "trail_drop": 0.10}
@@ -139,8 +139,31 @@ def _fast(num: int):
     return cls()
 
 
+class _SmallerInBand:
+    """Bet band_clip instead of the usual size when the ask is in [lo, hi)."""
+    band: tuple[float, float] = (0.60, 0.70)
+    band_clip = 15.0
+
+    def size(self, v, st, side):
+        a = v.ask(side)
+        lo, hi = self.band
+        if a is not None and lo - EPS <= a < hi - EPS:
+            return self.band_clip
+        return super().size(v, st, side)
+
+
+def _smaller_60s(num: int):
+    """A copy of Live_19-<num> that bets $15 when the price is 60-69c; all else the same."""
+    base = next(b for b in LIVE19 if b.key == f"Live_19-{num:02d}")
+    desc = base.title.split(": ", 1)[1]
+    cls = type(f"{type(base).__name__}_15at60", (_SmallerInBand, type(base)),
+               {"key": f"{base.key}-15at60", "title": f"{base.key}-15at60: {desc}, $15 at 60-70c"})
+    return cls()
+
+
 # Added 2026-11-21 to test faster checks against Live_19-29 on the same matches.
-LIVE19 = LIVE19 + (_fast(29),)
+# Added 2026-11-22: $15 instead of $25 on 60-70c bets, at the user's request.
+LIVE19 = LIVE19 + (_fast(29), _smaller_60s(29))
 
 
 def report(led) -> str:

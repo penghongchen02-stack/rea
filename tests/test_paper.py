@@ -711,7 +711,7 @@ def test_forty_live19_versions_and_a_control_with_their_own_settings():
     from psb import livesim
     keys = [b.key for b in live19.LIVE19]
     assert len(keys) == len(set(keys)) and all(k in registry.ALL_BOTS for k in keys)
-    assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 46   # 45 + Live_19-29-fast
+    assert len(keys) + sum(k.startswith("Live_19-") and k != "Live_19-lock70" for k in livesim.PAUSED) == 47   # 45 + Live_19-29-fast + Live_19-29-15at60
     assert all(registry.ALL_BOTS[k].live_sim for k in keys)
     st = {"fair0": 0.30}
     v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True)         # 15c fall to a 12c ask
@@ -1398,3 +1398,16 @@ def test_fast_copy_is_live_19_29_with_the_fast_lane_only():
     st = {"fair0": 0.30}
     v = _view(_tennis(), _book(0.11, 0.12), 0.15, live=True)
     assert a.step(v, dict(st)) == b.step(v, dict(st))
+
+
+def test_15at60_copy_bets_15_only_when_the_price_is_60_to_70c():
+    a, b = registry.ALL_BOTS["Live_19-29"], registry.ALL_BOTS["Live_19-29-15at60"]
+    assert b.key in registry.BOTS and not b.fast_lane
+    assert (a.max_entries, a.clip, a.drop, a.edge, a.rules_key) == \
+        (b.max_entries, b.clip, b.drop, b.edge, b.rules_key)
+    for ask, want in ((0.12, 25.0), (0.59, 25.0), (0.60, 15.0), (0.65, 15.0), (0.69, 15.0), (0.70, 25.0)):
+        st = {"fair0": ask + 0.25}
+        v = _view(_tennis(), _book(ask - 0.01, ask), ask + 0.05, live=True)
+        got_a, got_b = a.step(v, dict(st)), b.step(v, dict(st))
+        assert got_a and got_b and got_a[0].dollars == 25.0 and got_b[0].dollars == want, ask
+        assert (got_a[0].side, got_a[0].limit) == (got_b[0].side, got_b[0].limit)
