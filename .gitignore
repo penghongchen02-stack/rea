@@ -7,3 +7,4 @@ __pycache__/
 paper-results/.lock
 paper-results/*.tmp
 live-results/
+paper-results/ledger.json

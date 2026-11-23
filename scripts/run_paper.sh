@@ -4,8 +4,9 @@
 #   auto: run until 3 minutes before the next scheduled start (every 2 hours at
 #   :17 UTC), capped at 115 minutes so it always finishes inside the
 #   2-hour limit on background jobs.
-# Reads and writes paper-results/ledger.json, then commits and pushes the
-# ledger and report so the next run (possibly in a fresh container) resumes.
+# Reads and writes paper-results/ledger.json, then commits and pushes a gzipped
+# copy (ledger.json.gz; the plain file is over GitHub's 100 MB limit) and the
+# report so the next run (possibly in a fresh container) resumes.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 MINUTES="${1:-auto}"
@@ -30,6 +31,11 @@ mkdir -p paper-results
 exec 9>paper-results/.lock
 flock -n 9 || { echo "another paper run is active; skipping"; exit 0; }
 git pull --ff-only origin "$BRANCH" || true
+# A fresh container has only the pushed gzipped ledger.
+if [ ! -f paper-results/ledger.json ] && [ -f paper-results/ledger.json.gz ]; then
+  gzip -dc paper-results/ledger.json.gz > paper-results/ledger.json.tmp
+  mv paper-results/ledger.json.tmp paper-results/ledger.json
+fi
 # The replay data is not needed for paper trading, only the league list.
 mkdir -p data && python3 -I -c "import json,urllib.request;open('data/sports.json','w').write(json.dumps(json.load(urllib.request.urlopen(urllib.request.Request('https://gamma-api.polymarket.com/sports',headers={'User-Agent':'psb-research/0.1'}),timeout=60))))" 2>/dev/null \
   || mkdir -p data
@@ -39,6 +45,8 @@ python3 -m psb.paper --minutes "$MINUTES" --fast "$FAST" --slow "$SLOW" --ledger
 mv paper-results/report.md.tmp paper-results/report.md
 # Data files for the dashboard (bots, settled games, recent fills).
 python3 -m psb.dashboard --ledger paper-results/ledger.json --out paper-results/dashboard || true
+gzip -c paper-results/ledger.json > paper-results/ledger.json.gz.tmp
+mv paper-results/ledger.json.gz.tmp paper-results/ledger.json.gz
 git add paper-results
 git -c user.name="psb" -c user.email="noreply@anthropic.com" \
   commit -q -m "chore(paper): results through $(date -u +%Y-%m-%dT%H:%MZ)" || true
