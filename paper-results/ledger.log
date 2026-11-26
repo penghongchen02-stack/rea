@@ -7392,3 +7392,75 @@
 2026-11-26T02:10:41Z settled 5 markets
 2026-11-26T02:11:58Z stats {"polls": 41788, "takes": 2659, "maker_fills": 615, "no_cash": 5011, "fast_reads": 4503, "fast_books": 2956} resting=809
 2026-11-26T02:13:45Z final settle 3; stats {"polls": 42389, "takes": 2773, "maker_fills": 634, "no_cash": 5078, "fast_reads": 4564, "fast_books": 2956}
+2026-11-26T02:18:35Z dropped 810 resting orders from the previous run
+2026-11-26T02:19:07Z settled 5 markets
+2026-11-26T02:19:14Z stats {"polls": 24, "takes": 0, "maker_fills": 0, "no_cash": 0} resting=73
+2026-11-26T02:20:56Z stats {"polls": 422, "takes": 13, "maker_fills": 11, "no_cash": 19} resting=488
+2026-11-26T02:23:03Z stats {"polls": 1211, "takes": 46, "maker_fills": 31, "no_cash": 71} resting=556
+2026-11-26T02:25:11Z stats {"polls": 2122, "takes": 60, "maker_fills": 37, "no_cash": 157} resting=589
+2026-11-26T02:29:03Z stats {"polls": 2887, "takes": 98, "maker_fills": 71, "no_cash": 231, "fast_reads": 55, "fast_books": 55} resting=776
+2026-11-26T02:29:41Z settled 4 markets
+2026-11-26T02:30:42Z stats {"polls": 3237, "takes": 101, "maker_fills": 84, "no_cash": 253, "fast_reads": 100, "fast_books": 118} resting=787
+2026-11-26T02:32:07Z discovered 715 markets, 427 linked, 98 linked and live
+2026-11-26T02:32:47Z stats {"polls": 3950, "takes": 163, "maker_fills": 96, "no_cash": 312, "fast_reads": 180, "fast_books": 198} resting=789
+2026-11-26T02:34:57Z stats {"polls": 4764, "takes": 231, "maker_fills": 105, "no_cash": 392, "fast_reads": 280, "fast_books": 298} resting=792
+2026-11-26T02:37:10Z stats {"polls": 5653, "takes": 262, "maker_fills": 113, "no_cash": 495, "fast_reads": 381, "fast_books": 418} resting=785
+2026-11-26T02:39:16Z stats {"polls": 6451, "takes": 327, "maker_fills": 124, "no_cash": 576, "fast_reads": 480, "fast_books": 579} resting=788
+2026-11-26T02:39:56Z settled 15 markets
+2026-11-26T02:41:26Z stats {"polls": 7143, "takes": 369, "maker_fills": 136, "no_cash": 655, "fast_reads": 561, "fast_books": 671} resting=804
+2026-11-26T02:43:37Z stats {"polls": 8056, "takes": 425, "maker_fills": 149, "no_cash": 751, "fast_reads": 661, "fast_books": 740} resting=807
+2026-11-26T02:45:47Z stats {"polls": 8968, "takes": 492, "maker_fills": 174, "no_cash": 839, "fast_reads": 748, "fast_books": 767} resting=788
+2026-11-26T02:47:59Z stats {"polls": 9898, "takes": 544, "maker_fills": 181, "no_cash": 920, "fast_reads": 841, "fast_books": 767} resting=788
+2026-11-26T02:49:59Z settled 23 markets
+2026-11-26T02:50:23Z stats {"polls": 10718, "takes": 566, "maker_fills": 192, "no_cash": 994, "fast_reads": 925, "fast_books": 788} resting=811
+2026-11-26T02:52:26Z stats {"polls": 11434, "takes": 605, "maker_fills": 199, "no_cash": 1063, "fast_reads": 995, "fast_books": 790} resting=800
+2026-11-26T02:54:37Z stats {"polls": 12358, "takes": 640, "maker_fills": 214, "no_cash": 1165, "fast_reads": 1083, "fast_books": 790} resting=802
+2026-11-26T02:55:13Z discovered 703 markets, 424 linked, 99 linked and live
+2026-11-26T02:56:41Z stats {"polls": 13182, "takes": 662, "maker_fills": 218, "no_cash": 1235, "fast_reads": 1164, "fast_books": 861} resting=794
+2026-11-26T02:58:47Z stats {"polls": 13989, "takes": 674, "maker_fills": 222, "no_cash": 1329, "fast_reads": 1260, "fast_books": 957} resting=803
+2026-11-26T03:00:02Z settled 17 markets
+2026-11-26T03:00:59Z stats {"polls": 14642, "takes": 704, "maker_fills": 236, "no_cash": 1423, "fast_reads": 1348, "fast_books": 1133} resting=799
+2026-11-26T03:03:05Z stats {"polls": 15370, "takes": 775, "maker_fills": 250, "no_cash": 1533, "fast_reads": 1446, "fast_books": 1325} resting=811
+2026-11-26T03:05:04Z stats {"polls": 16074, "takes": 781, "maker_fills": 261, "no_cash": 1638, "fast_reads": 1538, "fast_books": 1509} resting=799
+2026-11-26T03:07:19Z stats {"polls": 16881, "takes": 857, "maker_fills": 271, "no_cash": 1732, "fast_reads": 1646, "fast_books": 1712} resting=785
+2026-11-26T03:09:32Z stats {"polls": 17679, "takes": 908, "maker_fills": 287, "no_cash": 1842, "fast_reads": 1751, "fast_books": 1922} resting=789
+2026-11-26T03:10:08Z settled 12 markets
+2026-11-26T03:11:39Z stats {"polls": 18290, "takes": 931, "maker_fills": 302, "no_cash": 1901, "fast_reads": 1833, "fast_books": 2086} resting=801
+2026-11-26T03:13:46Z stats {"polls": 18981, "takes": 977, "maker_fills": 312, "no_cash": 1980, "fast_reads": 1918, "fast_books": 2171} resting=813
+2026-11-26T03:15:49Z stats {"polls": 19763, "takes": 1025, "maker_fills": 327, "no_cash": 2061, "fast_reads": 2011, "fast_books": 2264} resting=799
+2026-11-26T03:17:00Z discovered 662 markets, 385 linked, 78 linked and live
+2026-11-26T03:17:59Z stats {"polls": 20627, "takes": 1081, "maker_fills": 335, "no_cash": 2144, "fast_reads": 2108, "fast_books": 2361} resting=816
+2026-11-26T03:20:04Z settled 22 markets
+2026-11-26T03:20:23Z stats {"polls": 21413, "takes": 1137, "maker_fills": 349, "no_cash": 2231, "fast_reads": 2207, "fast_books": 2464} resting=828
+2026-11-26T03:22:30Z stats {"polls": 22221, "takes": 1187, "maker_fills": 368, "no_cash": 2316, "fast_reads": 2304, "fast_books": 2561} resting=835
+2026-11-26T03:24:43Z stats {"polls": 23053, "takes": 1277, "maker_fills": 378, "no_cash": 2388, "fast_reads": 2409, "fast_books": 2677} resting=822
+2026-11-26T03:26:50Z stats {"polls": 23864, "takes": 1305, "maker_fills": 385, "no_cash": 2470, "fast_reads": 2503, "fast_books": 2781} resting=828
+2026-11-26T03:28:55Z stats {"polls": 24672, "takes": 1317, "maker_fills": 392, "no_cash": 2537, "fast_reads": 2601, "fast_books": 2887} resting=829
+2026-11-26T03:30:12Z settled 22 markets
+2026-11-26T03:31:04Z stats {"polls": 25292, "takes": 1319, "maker_fills": 403, "no_cash": 2586, "fast_reads": 2685, "fast_books": 3055} resting=839
+2026-11-26T03:33:02Z stats {"polls": 25977, "takes": 1335, "maker_fills": 413, "no_cash": 2639, "fast_reads": 2770, "fast_books": 3152} resting=834
+2026-11-26T03:35:06Z stats {"polls": 26657, "takes": 1529, "maker_fills": 420, "no_cash": 2683, "fast_reads": 2857, "fast_books": 3263} resting=831
+2026-11-26T03:36:31Z discovered 646 markets, 366 linked, 64 linked and live
+2026-11-26T03:37:11Z stats {"polls": 27480, "takes": 1590, "maker_fills": 425, "no_cash": 2756, "fast_reads": 2950, "fast_books": 3356} resting=818
+2026-11-26T03:39:19Z stats {"polls": 28313, "takes": 1621, "maker_fills": 429, "no_cash": 2850, "fast_reads": 3041, "fast_books": 3391} resting=805
+2026-11-26T03:40:16Z settled 20 markets
+2026-11-26T03:41:23Z stats {"polls": 29030, "takes": 1651, "maker_fills": 432, "no_cash": 2947, "fast_reads": 3120, "fast_books": 3391} resting=841
+2026-11-26T03:43:30Z stats {"polls": 29835, "takes": 1683, "maker_fills": 434, "no_cash": 3040, "fast_reads": 3217, "fast_books": 3484} resting=841
+2026-11-26T03:45:36Z stats {"polls": 30629, "takes": 1747, "maker_fills": 435, "no_cash": 3158, "fast_reads": 3316, "fast_books": 3583} resting=845
+2026-11-26T03:47:39Z stats {"polls": 31408, "takes": 1804, "maker_fills": 439, "no_cash": 3266, "fast_reads": 3413, "fast_books": 3694} resting=844
+2026-11-26T03:49:42Z stats {"polls": 32201, "takes": 1810, "maker_fills": 449, "no_cash": 3374, "fast_reads": 3505, "fast_books": 3786} resting=837
+2026-11-26T03:51:49Z stats {"polls": 32849, "takes": 1827, "maker_fills": 460, "no_cash": 3450, "fast_reads": 3583, "fast_books": 3864} resting=834
+2026-11-26T03:53:57Z stats {"polls": 33514, "takes": 1860, "maker_fills": 469, "no_cash": 3511, "fast_reads": 3670, "fast_books": 4026} resting=841
+2026-11-26T03:55:24Z discovered 635 markets, 356 linked, 53 linked and live
+2026-11-26T03:56:01Z stats {"polls": 34297, "takes": 1872, "maker_fills": 481, "no_cash": 3612, "fast_reads": 3762, "fast_books": 4118} resting=839
+2026-11-26T03:58:03Z stats {"polls": 35065, "takes": 1877, "maker_fills": 482, "no_cash": 3701, "fast_reads": 3856, "fast_books": 4212} resting=827
+2026-11-26T04:00:20Z settled 3 markets
+2026-11-26T04:00:25Z stats {"polls": 35882, "takes": 1894, "maker_fills": 490, "no_cash": 3788, "fast_reads": 3949, "fast_books": 4305} resting=828
+2026-11-26T04:02:16Z stats {"polls": 36598, "takes": 1931, "maker_fills": 498, "no_cash": 3862, "fast_reads": 4031, "fast_books": 4387} resting=823
+2026-11-26T04:04:23Z stats {"polls": 37396, "takes": 2016, "maker_fills": 505, "no_cash": 3933, "fast_reads": 4126, "fast_books": 4482} resting=831
+2026-11-26T04:06:29Z stats {"polls": 38196, "takes": 2058, "maker_fills": 507, "no_cash": 4013, "fast_reads": 4224, "fast_books": 4580} resting=826
+2026-11-26T04:08:37Z stats {"polls": 39010, "takes": 2079, "maker_fills": 517, "no_cash": 4082, "fast_reads": 4321, "fast_books": 4662} resting=835
+2026-11-26T04:10:21Z settled 5 markets
+2026-11-26T04:10:48Z stats {"polls": 39749, "takes": 2107, "maker_fills": 521, "no_cash": 4161, "fast_reads": 4401, "fast_books": 4662} resting=832
+2026-11-26T04:12:59Z stats {"polls": 40484, "takes": 2161, "maker_fills": 528, "no_cash": 4222, "fast_reads": 4481, "fast_books": 4662} resting=835
+2026-11-26T04:14:01Z final settle 11; stats {"polls": 40758, "takes": 2204, "maker_fills": 533, "no_cash": 4244, "fast_reads": 4512, "fast_books": 4662}
