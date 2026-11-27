@@ -845,7 +845,8 @@ def _grid_views():
     import itertools
     out = []
     leagues = [("atp", "atp-a-b-2026-11-18"), ("itfme", "itfme-a-b-2026-11-18"),
-               ("nba", "nba-ny-tor-2026-11-17"), ("epl", "epl-mnc-ful-2026-11-21")]
+               ("nba", "nba-ny-tor-2026-11-17"), ("epl", "epl-mnc-ful-2026-11-21"),
+               ("cbb", "cbb-a-b-2026-11-18")]
     for (lg, ev), start, fair, prev, ask, spread in itertools.product(
             leagues, (NOW + timedelta(hours=1), NOW - timedelta(minutes=30),
                       NOW - timedelta(minutes=130)),
@@ -1419,3 +1420,24 @@ def test_15at60_copy_bets_15_only_when_the_price_is_60_to_70c():
         got_a, got_b = a.step(v, dict(st)), b.step(v, dict(st))
         assert got_a and got_b and got_a[0].dollars == 25.0 and got_b[0].dollars == want, ask
         assert (got_a[0].side, got_a[0].limit) == (got_b[0].side, got_b[0].limit)
+
+
+def test_kch123_v3_bots_trade_football_and_college_basketball_at_40_to_70c():
+    from psb import kch
+    for b in kch.KCH:
+        assert b.key in registry.BOTS and registry.BOTS[f"Live_{b.key}"].live_sim
+    cbb = dict(league="cbb", event="cbb-duke-unc-2026-11-17", title="Duke vs. UNC", teams=("Duke", "UNC"))
+    bot = registry.BOTS["kch123-v3"]
+    (a,) = bot.step(_view(_m(**cbb, name="Duke"), _book(0.49, 0.50), 0.55), {})    # 5c under fair
+    assert (a.side, a.dollars, a.tag) == ("long", 5.0, "entry") and a.limit == pytest.approx(0.54)
+    assert bot.wants(_m(**cbb, kind="spreads", name="Duke", line=-3.5), False)
+    assert bot.step(_view(_m(**{**NBA_EVENT, "name": "Knicks"}), _book(0.49, 0.50), 0.55), {}) == []
+    assert bot.step(_view(_m(**cbb, name="Duke"), _book(0.74, 0.75), 0.80), {}) == []   # over 70c
+    assert bot.step(_view(_m(**cbb, name="Duke"), _book(0.49, 0.50), 0.505), {}) == []  # under 1c edge
+    assert bot.step(_view(_m(**cbb, name="Duke"), _book(0.49, 0.50), 0.55), {"fills_by_tag": {"entry": 6}}) == []
+    # kch123-v3-hours: 4:30pm US Eastern (21:30 UTC in November) is one of his weak hours.
+    hrs = registry.BOTS["kch123-v3-hours"]
+    assert hrs.step(_view(_m(**cbb, name="Duke"), _book(0.49, 0.50), 0.55), {})
+    late = NOW.replace(hour=21, minute=30)
+    assert hrs.step(_view(_m(**cbb, name="Duke"), _book(0.49, 0.50), 0.55, now=late), {}) == []
+    assert bot.step(_view(_m(**cbb, name="Duke"), _book(0.49, 0.50), 0.55, now=late), {})

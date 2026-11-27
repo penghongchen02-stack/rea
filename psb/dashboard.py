@@ -44,7 +44,7 @@ GROUPS = (("ORIGINALS", "Copied wallets"), ("FIXED", "Copied wallets"), ("RUNNIN
           ("LIVE19", "Live_19 versions"), ("CLOCKS", "Live_ clock bots"), ("HOURS", "Live_ best-hours bots"),
           ("TWINS", "Live_ copies"), ("UNDERDOG", "Underdog"), ("UD_VERSIONS", "Underdog"),
           ("TENNIS_BOTS", "Tennis"), ("IDEAS6", "Six more ideas"), ("FIFTY", "Fifty more (n01-n50)"),
-          ("GAPS", "Gaps (g01-g12)"), ("ALL15", "All-sports (a01-a15)"))
+          ("GAPS", "Gaps (g01-g12)"), ("ALL15", "All-sports (a01-a15)"), ("KCH", "kch123 report"))
 GROUP_OF: dict[str, str] = {}
 for _name, _label in GROUPS:
     for _b in getattr(registry, _name):

@@ -28,6 +28,7 @@ from .allsports import ALL_CLASSES
 from .fifty import FIFTY_CLASSES
 from .gaps import GAP_CLASSES
 from .ideas import IDEA_CLASSES
+from .kch import KCH_CLASSES
 from .tennis import TENNIS_BOTS, TnPre1, TnPre2
 from .underdog import UD_CLASSES, Underdog
 from .variants import VARIANTS
@@ -80,6 +81,7 @@ TWINS = (
     *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in GAP_CLASSES),
     *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in ALL_CLASSES),
     *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in UD_CLASSES),
+    *(_twin(c, f"Live_{c.key}", f"Live_{c.key}") for c in KCH_CLASSES),   # added 2026-11-27 at the user's request
 )
 # Live_ copies paused on 2026-11-19 at 14:06 UTC, the weakest by total then: each
 # Live_ order re-reads the US book, and with 144 copies those reads slowed every
@@ -112,7 +114,8 @@ BASE_OF = {"Live_19": "s19-tennis-set-fade", "Live_15": "s15-momentum",
            **{f"Live_{c.key}": c.key for c in FIFTY_CLASSES},
            **{f"Live_{c.key}": c.key for c in GAP_CLASSES},
            **{f"Live_{c.key}": c.key for c in ALL_CLASSES},
-           **{f"Live_{c.key}": c.key for c in UD_CLASSES}}
+           **{f"Live_{c.key}": c.key for c in UD_CLASSES},
+           **{f"Live_{c.key}": c.key for c in KCH_CLASSES}}
 BASE_OF = {k: v for k, v in BASE_OF.items() if k not in PAUSED}
 # Keys these copies had before 2026-11-18 17:50 UTC (see migrate_keys).
 OLD_KEYS = {"s19-livesim": "Live_19", "s15-livesim": "Live_15",

@@ -15,10 +15,11 @@ from .allsports import ALL15
 from .fifty import FIFTY
 from .gaps import GAPS
 from .ideas import IDEAS6
+from .kch import KCH
 from .tennis import TENNIS_BOTS
 from .underdog import UD_VERSIONS, UNDERDOG
 from .variants import VARIANTS
 
-ALL_BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING + VARIANTS + EXITS + TWINS + LIVE19 + UNDERDOG + TENNIS_BOTS + IDEAS6 + FIFTY + GAPS + ALL15 + UD_VERSIONS + CLOCKS + HOURS}
+ALL_BOTS: dict[str, Bot] = {b.key: b for b in ORIGINALS + FIXED + RUNNING + VARIANTS + EXITS + TWINS + LIVE19 + UNDERDOG + TENNIS_BOTS + IDEAS6 + FIFTY + GAPS + ALL15 + UD_VERSIONS + CLOCKS + HOURS + KCH}
 # Bots taken off for not working or losing (retired.py); ALL_BOTS keeps them for tests.
 BOTS: dict[str, Bot] = {k: b for k, b in ALL_BOTS.items() if k not in RETIRED}
