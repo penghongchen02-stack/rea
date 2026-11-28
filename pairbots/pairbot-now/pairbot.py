@@ -218,8 +218,8 @@ class Book:
     @staticmethod
     def _match(o: Order, px: float, qty: float, taker_buys: bool) -> int:
         through = px > o.px + EPS if taker_buys else px < o.px - EPS
-        if through:
-            return o.left
+        if through:   # a real trade only fills as many shares as it traded (fixed 2026-11-28)
+            return min(o.left, int(math.floor(qty + EPS)))
         if abs(px - o.px) <= EPS:
             use = min(o.queue_ahead, qty)       # those ahead of us are served first
             o.queue_ahead -= use
