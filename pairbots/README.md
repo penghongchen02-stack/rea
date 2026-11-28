@@ -27,3 +27,9 @@ the fills a real trader would pick us off on). `pair_report.py` there adds that 
 
     PAIR_CLIP=25 PAIR_STRICT=0 pairbots/run.sh check 110
     PAIR_CLIP=25 PAIR_STRICT=1 PAIR_ORDER_DELAY=1.0 pairbots/run.sh strict 110
+
+`pairbot-sized/` is pairbot-strict with one fix: a trade THROUGH our price fills only as many
+shares as actually traded (before, it filled the whole order whatever the trade size). Each
+fill also records `order_shares` and `trade_qty`.
+
+    PAIR_CLIP=25 PAIR_STRICT=1 PAIR_ORDER_DELAY=1.0 pairbots/run.sh sized 110
