@@ -11,7 +11,7 @@ and are not committed.
 Run in a cloud session whose environment allows api.polymarket.us and
 ws-subscriptions-clob.polymarket.com and sets `PM_US_KEY_ID` / `PM_US_SECRET_KEY`:
 
-    pip install websockets cryptography
+    pip install "websockets==13.1" cryptography   # 14+ renamed extra_headers; the bot needs 13.x
     pairbots/run.sh now 110      # or: before
 
 It uses this repo's `psb` package in place of psb-live50.zip (identical code).
